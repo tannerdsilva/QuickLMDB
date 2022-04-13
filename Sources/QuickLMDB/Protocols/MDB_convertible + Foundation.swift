@@ -18,6 +18,7 @@ extension ContiguousBytes where Self:MDB_encodable {
 }
 
 ///The `Data` struct directly conforms to the `MDB_convertible` protocol.
+///Since the `MDB_encodable` functionality is already inherited through the `ContiguousBytes` extension, we only need to define the functions for `MDB_decodable`.
 extension Data:MDB_convertible {
 	public init?(_ value:MDB_val) {
 		self = Data(bytes:value.mv_data, count:value.mv_size)

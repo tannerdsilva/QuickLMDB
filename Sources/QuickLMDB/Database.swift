@@ -49,7 +49,7 @@ public struct Database {
 	}
 	
 	public func cursor(tx:Transaction) throws -> Cursor {
-		return try Cursor(tx_handle:tx.txn_handle, db:self.db_handle, readOnly:tx.readOnly)
+		return try Cursor(txn_handle:tx.txn_handle, db:self.db_handle, readOnly:tx.readOnly)
 	}
 	
 	/*

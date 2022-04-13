@@ -50,6 +50,8 @@ try someEnvironment.transact(readOnly:false) { thisTransaction in
 
 ### Retrieving Entries
 
+- ``Cursor/Operation``
+
 - ``Cursor/getEntry(_:key:value:)``
 
 - ``Cursor/getEntry(_:key:)``
@@ -68,4 +70,12 @@ try someEnvironment.transact(readOnly:false) { thisTransaction in
 
 - ``Cursor/deleteEntry(flags:)``
 
+### Sequence Protocol
 
+- ``Cursor/makeIterator()``
+
+- ``Cursor/CursorIterator``
+
+- ``Cursor/Element``
+
+- ``Cursor/Iterator``

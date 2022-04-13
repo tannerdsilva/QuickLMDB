@@ -1,48 +1,7 @@
 import CLMDB
 import Foundation
 
-public class Cursor:Sequence {
-	public func makeIterator() -> CursorIterator {
-		var statObject = MDB_stat()
-		guard mdb_stat(tx_handle, db_handle, &statObject) == MDB_SUCCESS else {
-			fatalError("[ERROR] QuickLMDB.Cursor.makeIterator() - unable to retrieve entry count")
-		}
-		return CursorIterator(count:Int(statObject.ms_entries), cursor_handle:cursor_handle)
-	}
-	
-	public typealias Element = (key:MDB_val, value:MDB_val)
-	public typealias Iterator = CursorIterator
-	
-	public struct CursorIterator:IteratorProtocol {
-		internal let cursor_handle:OpaquePointer?
-		var first:Bool = true
-		public var count:Int
-		
-		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
-			self.cursor_handle = cursor_handle
-			self.count = count
-		}
-		
-		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
-			let cursorOp:MDB_cursor_op
-			if (first == true) {
-				cursorOp = MDB_FIRST
-				first = false
-			} else {
-				cursorOp = MDB_NEXT
-			}
-			
-			var captureKey = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			var captureVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			let cursorResult = mdb_cursor_get(cursor_handle, &captureKey, &captureVal, cursorOp)
-			guard cursorResult == 0 else {
-				return nil
-			}
-			
-			return (key:captureKey, value:captureVal)
-		}
-	}
-	
+public class Cursor {
 	///This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
 	public enum Operation {
 		
@@ -226,21 +185,27 @@ public class Cursor:Sequence {
 		}
 	}
 	
-	
+	///This is the pointer to the `MDB_cursor` object
 	public let cursor_handle:OpaquePointer?
+	
+	///This is the database that this cursor is associated with.
 	public let db_handle:MDB_dbi
-	public let tx_handle:OpaquePointer?
+	
+	///This is the transaction that this cursor is associated with
+	public let txn_handle:OpaquePointer?
+	
+	///Used to determine if the cursor needs to close itself when it is deinitialized.
 	internal let readOnly:Bool
 	
-	internal init(tx_handle:OpaquePointer?, db:MDB_dbi, readOnly:Bool) throws {
+	internal init(txn_handle:OpaquePointer?, db:MDB_dbi, readOnly:Bool) throws {
 		var buildCursor:OpaquePointer? = nil
-		let openCursorResult = mdb_cursor_open(tx_handle, db, &buildCursor)
+		let openCursorResult = mdb_cursor_open(txn_handle, db, &buildCursor)
 		guard openCursorResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:openCursorResult)
 		}
 		self.cursor_handle = buildCursor
 		self.db_handle = db
-		self.tx_handle = tx_handle
+		self.txn_handle = txn_handle
 		self.readOnly = readOnly
 	}
 	
@@ -376,6 +341,24 @@ public class Cursor:Sequence {
 		guard deleteResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:deleteResult)
 		}
+	}
+	
+	///Compare two data items according to the database that this cursor is assigned.
+	public func compareKeys<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, _ dataR:R) -> Int32 {
+		return dataL.asMDB_val({ lVal in
+			return dataR.asMDB_val({ rVal in
+				return mdb_cmp(self.txn_handle, self.db_handle, &lVal, &rVal)
+			})
+		})
+	}
+	
+	///Compare two data items according to the database that this cursor is assigned.
+	public func compareValues<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, dataR:R) -> Int32 {
+		return dataL.asMDB_val({ lVal in
+			return dataR.asMDB_val({ rVal in
+				return mdb_dcmp(self.txn_handle, self.db_handle, &lVal, &rVal)
+			})
+		})
 	}
 	
 	deinit {
