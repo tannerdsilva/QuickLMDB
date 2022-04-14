@@ -1,6 +1,6 @@
 #  ``QuickLMDB/Cursor``
 
-``QuickLMDB/Cursor`` enables complex navigation and traversal of ``QuickLMDB/Database`` contents.
+Enables complex navigation and traversal of ``QuickLMDB/Database`` contents.
 
 ## Creating a Cursor
 

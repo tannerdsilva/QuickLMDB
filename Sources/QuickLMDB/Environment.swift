@@ -23,10 +23,10 @@ public class Environment:Transactable {
 		///Disables the `fsync` on the metapage that typically executes after a transaction is committed.
 		public static let noMetaSync = Flags(rawValue:UInt32(MDB_NOMETASYNC))
 		
-		///Use a writable memorymap
+		///Use a writable memorymap.
 		public static let writeMap = Flags(rawValue:UInt32(MDB_WRITEMAP))
 		
-		///Sync the memorymap to disk asynchronously when used in combination with the ``Environment.Flags.writeMap`` flag.
+		///Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags/writeMap`` flag.
 		public static let mapAsync = Flags(rawValue:UInt32(MDB_MAPASYNC))
 		
 		///Associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
@@ -42,7 +42,8 @@ public class Environment:Transactable {
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
 	
-	///This is an opaque pointer to the underlying `MDB_env` object for this environment. This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
+	///This is an opaque pointer to the underlying `MDB_env` object for this environment.
+	/// - This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
 	public var env_handle:OpaquePointer?
 	
 	/// Initialize an LMDB environment at the specified path string.
@@ -94,8 +95,13 @@ public class Environment:Transactable {
 		self.env_handle = environmentHandle
 	}
 	
-	///Open a database in the environment.
-	public func openDatabase(named databaseName:String?, flags:Database.Flags = [.create], tx:Transaction?) throws -> Database {
+	/// Open a database in the environment.
+	/// - Parameters:
+	///   - databaseName: The name of the database to open. If only a single database is needed in the environment, this value may be `nil`.
+	///   - flags: Special options for the database.
+	///   - tx: The transaction in which this Database is to be opened. If `nil` is specified, a read/write transaction will be conveniently opened behind the scenes.
+	/// - Returns: The newly created Database structure.
+	public func openDatabase(named databaseName:String? = nil, flags:Database.Flags = [.create], tx:Transaction? = nil) throws -> Database {
 		if tx != nil {
 			return try Database(environment:env_handle, name:databaseName, flags:flags, tx:tx!)
 		} else {
@@ -125,7 +131,7 @@ public class Environment:Transactable {
 		}
 	}
 	
-	///``Environment`` conformws to ``Transactable``
+	///Open a new transaction in the environment.
 	public func transact<R>(readOnly:Bool = true, _ txFunc:(Transaction) throws -> R) throws -> R {
 		return try Transaction.instantTransaction(environment:self.env_handle, readOnly:readOnly, parent:nil, txFunc)
 	}

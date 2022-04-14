@@ -20,7 +20,7 @@ public class Transaction:Transactable {
 			throw error
 		}
 		if newTransaction.isOpen == true {
-			try! newTransaction.commit()
+			try newTransaction.commit()
 		}
 		return captureReturn
 	}

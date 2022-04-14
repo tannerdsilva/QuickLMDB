@@ -41,9 +41,9 @@ public struct Database {
 	
 	/// Primary initializer. Opens a database.
 	/// - Parameters:
-	///   - environment: The environment that
+	///   - environment: The environment that the database belongs to..
 	///   - name: The name of the database to open. if only a single database is needed in the environment, this value may be `nil`.
-	///   - flags: Special 
+	///   - flags: Special options for this database.
 	///   - tx: The transaction in which this Database is to be opened.
 	internal init(environment:OpaquePointer?, name:String?, flags:Flags, tx:Transaction) throws {
 		var captureHandle = MDB_dbi()
@@ -231,5 +231,10 @@ public struct Database {
 		guard valueResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:valueResult)
 		}
+	}
+	
+	/// Close a database handle. **NOT NEEDED IN MOST USE CASES**
+	public func closeDatabase() {
+		mdb_dbi_close(env_handle, db_handle);
 	}
 }
