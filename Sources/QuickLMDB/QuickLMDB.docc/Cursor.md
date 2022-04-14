@@ -22,13 +22,17 @@ try someEnvironment.transact(readOnly:false) { thisTransaction in
 
 ## Considerations
 
+- Cursors have an exclusive relationship with the Transaction and Database in which they were created.
+
+	- Cursors cannot exist outside of their associated Transaction.
+
 - Unlike ``QuickLMDB/Database``, ``QuickLMDB/Cursor`` does **NOT** integrate any decoding functionality.
 
 	- Lack of binary decoding (and requisite copying of data through the decoding process) allows for much higher performance in traversing a database.
 
 - ``QuickLMDB/Cursor`` faithfully returns `MDB_val` objects as provided from LMDB. No other types are returned.
 
-	- You are responsible for safely handling these `MDB_val` objects within their transactions.
+	- You are responsible for safely handling these `MDB_val` objects within their transactions. These values point to data directly in the memorymap.
 
 	- You are responsible for any deserialization that may need to be done with the returned values.
 
@@ -36,11 +40,23 @@ try someEnvironment.transact(readOnly:false) { thisTransaction in
 
 - QuickLMDB takes ``MDB_encodable`` objects as function arguments for keys and values.
 
-	- Cursor will also accept unserialized, raw `MDB_val`'s as arguments for keys and values, since this type has been extended to conform to ``MDB_encodable``.
+	- Cursor will also accept raw `MDB_val`'s as arguments for keys and values, since this type has been extended to conform to ``MDB_encodable``.
 
 - ``QuickLMDB/Cursor`` conveniently conforms to the `Sequence` protocol.
 
 	- Loops can be written with a single line of code.
+
+## Looping Database Contents with Cursor
+
+```
+// define a cursor for the sake of demonstration
+let thisCursor = try someDatabase.cursor(tx:currentTransaction)
+
+// this is a database loop
+for curKeyValueEntry in thisCursor {
+	// process each entry in the database here
+}
+```
 
 ## Topics
 
@@ -69,6 +85,20 @@ try someEnvironment.transact(readOnly:false) { thisTransaction in
 ### Removing Entries
 
 - ``Cursor/deleteEntry(flags:)``
+
+### Comparing Values
+
+- ``Cursor/compareKeys(_:_:)``
+
+- ``Cursor/compareValues(_:_:)``
+
+### CLMDB Interoperability
+
+- ``Cursor/cursor_handle``
+
+- ``Cursor/txn_handle``
+
+- ``Cursor/db_handle``
 
 ### Sequence Protocol
 

@@ -11,12 +11,18 @@ extension Cursor:Sequence {
 		return CursorIterator(count:Int(statObject.ms_entries), cursor_handle:cursor_handle)
 	}
 
+	///The element that the cursor iterator will be returning to represent each entry in the database.
 	public typealias Element = (key:MDB_val, value:MDB_val)
+	
+	///The iterator type.
 	public typealias Iterator = CursorIterator
 
+	///CursorIterator is the `IteratorProtocol` conformant object that is used execute the complete iteration of database contents.
 	public struct CursorIterator:IteratorProtocol {
 		internal let cursor_handle:OpaquePointer?
-		var first:Bool = true
+		internal var first:Bool = true
+		
+		///The number of entries in the database
 		public var count:Int
 		
 		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
@@ -24,6 +30,7 @@ extension Cursor:Sequence {
 			self.count = count
 		}
 		
+		///Returns the next entry in the database, or `nil` when iteration has been completed.
 		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
 			let cursorOp:MDB_cursor_op
 			if (first == true) {
@@ -36,7 +43,7 @@ extension Cursor:Sequence {
 			var captureKey = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			var captureVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let cursorResult = mdb_cursor_get(cursor_handle, &captureKey, &captureVal, cursorOp)
-			guard cursorResult == 0 else {
+			guard cursorResult == MDB_SUCCESS else {
 				return nil
 			}
 			

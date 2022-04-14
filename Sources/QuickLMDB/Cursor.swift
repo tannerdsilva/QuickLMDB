@@ -16,7 +16,7 @@ public class Cursor {
 				self.rawValue = rawValue
 			}
 
-			///Do not write the entry if the key alrady exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
+			///Do not write the entry if the key already exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
 			public static let noOverwrite = Flags(rawValue:UInt32(MDB_NOOVERWRITE))
 			
 			///Only for use with ``Database/Flags/dupSort``
@@ -33,7 +33,7 @@ public class Cursor {
 			///Pre-sorted keys are being stored in the database. Don't split full pages.
 			public static let append = Flags(rawValue:UInt32(MDB_APPEND))
 			
-			////Pre-sorted key/value entires are being stored in the database. Don't split full pages.
+			///Pre-sorted key/value entires are being stored in the database. Don't split full pages.
 			public static let appendDup = Flags(rawValue:UInt32(MDB_APPENDDUP))
 			
 			///Store multiple data items in one call. Only for ``Database/Flags/dupFixed``.
@@ -343,7 +343,11 @@ public class Cursor {
 		}
 	}
 	
-	///Compare two data items according to the database that this cursor is assigned.
+	/// Compare two data items according to the database compare function.
+	/// - Parameters:
+	///   - dataL: Data to compare from the left hand side.
+	///   - dataR: Data to compare from the right hand side.
+	/// - Returns: A 32 bit integer value `< 0` if the left value is less than the right value, `> 0` if the left value is greater than the right value, and  exactly `0` if the left and right values are identical.
 	public func compareKeys<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, _ dataR:R) -> Int32 {
 		return dataL.asMDB_val({ lVal in
 			return dataR.asMDB_val({ rVal in
@@ -353,7 +357,11 @@ public class Cursor {
 	}
 	
 	///Compare two data items according to the database that this cursor is assigned.
-	public func compareValues<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, dataR:R) -> Int32 {
+	/// - Parameters:
+	///   - dataL: Data to compare from the left hand side.
+	///   - dataR: Data to compare from the right hand side.
+	/// - Returns: A 32 bit integer value `< 0` if the left value is less than the right value, `> 0` if the left value is greater than the right value, and  exactly `0` if the left and right values are identical.
+	public func compareValues<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, _ dataR:R) -> Int32 {
 		return dataL.asMDB_val({ lVal in
 			return dataR.asMDB_val({ rVal in
 				return mdb_dcmp(self.txn_handle, self.db_handle, &lVal, &rVal)
