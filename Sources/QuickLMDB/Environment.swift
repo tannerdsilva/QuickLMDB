@@ -54,7 +54,7 @@ public class Environment:Transactable {
 	///   - maxReaders: Specify the number of concurrent read transactions that can happen in this environment.
 	///   - maxDBs: Specify the number of named databases that can exist in the environment. It is recommended to specify a low to moderate maxumum value, as each named database costs between 7 to 120 words per transaction. It is NOT recommended to specify a huge value for the maximum database count.
 	///   - mode: The UNIX permissions to be set on on created files and semaphores. These permissions are not applied to files that already exist on the system.
-	init(path:String, flags:Flags = [], mapSize:size_t? = nil, maxReaders:MDB_dbi = 128, maxDBs:MDB_dbi = 16, mode:FilePermissions = [.ownerReadWriteExecute, .groupRead, .groupExecute]) throws {
+	public init(path:String, flags:Flags = [], mapSize:size_t? = nil, maxReaders:MDB_dbi = 128, maxDBs:MDB_dbi = 16, mode:FilePermissions = [.ownerReadWriteExecute, .groupRead, .groupExecute]) throws {
 		
 		//create the environment variable
 		var environmentHandle:OpaquePointer? = nil;
