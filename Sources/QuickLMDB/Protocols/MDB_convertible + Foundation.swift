@@ -75,7 +75,7 @@ extension Date:MDB_convertible {
 		guard let asTI = TimeInterval(value) else {
 			return nil
 		}
-		self = Date(timeIntervalSince1970:asTI)
+		self = Date(timeIntervalSinceReferenceDate:asTI)
 	}
 	public init?(noCopy value:MDB_val) {
 		guard let asTI = TimeInterval(noCopy:value) else {
@@ -84,7 +84,7 @@ extension Date:MDB_convertible {
 		self = Date(timeIntervalSince1970:asTI)
 	}
 	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
-		return try timeIntervalSince1970.asMDB_val(valFunc)
+		return try timeIntervalSinceReferenceDate.asMDB_val(valFunc)
 	}
 }
 
