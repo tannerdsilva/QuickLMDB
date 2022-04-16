@@ -101,7 +101,7 @@ public class Environment:Transactable {
 	///   - flags: Special options for the database.
 	///   - tx: The transaction in which this Database is to be opened. If `nil` is specified, a read/write transaction will be conveniently opened behind the scenes.
 	/// - Returns: The newly created Database structure.
-	public func openDatabase(named databaseName:String? = nil, flags:Database.Flags = [.create], tx:Transaction? = nil) throws -> Database {
+	public func openDatabase(named databaseName:String? = nil, flags:Database.Flags = [], tx:Transaction? = nil) throws -> Database {
 		if tx != nil {
 			return try Database(environment:env_handle, name:databaseName, flags:flags, tx:tx!)
 		} else {
