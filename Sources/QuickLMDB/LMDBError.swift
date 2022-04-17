@@ -1,4 +1,5 @@
 import CLMDB
+import Foundation
 
 public enum LMDBError:Error {
 
