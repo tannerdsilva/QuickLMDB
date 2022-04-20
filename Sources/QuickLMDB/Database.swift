@@ -151,12 +151,13 @@ public struct Database {
 	
 	public func containsEntry<K:MDB_convertible>(key:K, tx:Transaction?) throws -> Bool {
 		return try key.asMDB_val { keyVal in
+			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let valueResult:Int32
 			if tx != nil {
-				valueResult = mdb_get(tx!.txn_handle, db_handle, &keyVal, nil)
+				valueResult = mdb_get(tx!.txn_handle, db_handle, &keyVal, &dataVal)
 			} else {
 				valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:true, parent:nil) { someTrans -> Int32 in
-					return mdb_get(someTrans.txn_handle, db_handle, &keyVal, nil)
+					return mdb_get(someTrans.txn_handle, db_handle, &keyVal, &dataVal)
 				}
 			}
 			switch valueResult {
