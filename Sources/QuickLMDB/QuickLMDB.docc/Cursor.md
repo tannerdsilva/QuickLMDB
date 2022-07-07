@@ -4,7 +4,7 @@ Enables complex navigation and traversal of ``QuickLMDB/Database`` contents.
 
 ## Creating a Cursor
 
-A ``Cursor`` can be created by calling ``QuickLMDB/Database/cursor(tx:)`` on a given ``QuickLMDB/Database`` object.
+A ``Cursor`` can be created by calling ``QuickLMDB/Database/cursor(tx:)`` on a given ``QuickLMDB/Database`` object. This must be done under the existence of an active Transaction.
 
 ```
 // Open a transaction from your environment, configured as apropriate.
