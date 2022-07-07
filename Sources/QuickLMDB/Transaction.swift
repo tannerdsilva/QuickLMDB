@@ -25,7 +25,11 @@ public class Transaction:Transactable {
 		return captureReturn
 	}
 	
-	internal init(environment env_handle:OpaquePointer?, readOnly:Bool, parent:OpaquePointer? = nil) throws {
+	convenience init(environment:Environment, readOnly:Bool, parent:Transaction? = nil) throws {
+		try self.init(environment:environment.env_handle, readOnly:readOnly, parent:parent?.env_handle)
+	}
+	
+	required internal init(environment env_handle:OpaquePointer?, readOnly:Bool, parent:OpaquePointer? = nil) throws {
 		self.env_handle = env_handle
 		self.readOnly = readOnly
 		var start_handle:OpaquePointer? = nil
@@ -80,5 +84,11 @@ public class Transaction:Transactable {
 	public func abort() {
 		mdb_txn_abort(txn_handle)
 		self.isOpen = false
+	}
+	
+	deinit {
+		if self.isOpen == true {
+			mdb_txn_abort(txn_handle)
+		}
 	}
 }
