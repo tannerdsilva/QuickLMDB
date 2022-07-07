@@ -66,7 +66,7 @@ public struct Database {
 		self.name = name
 	}
 	
-	///Create a cursor from this Database/
+	///Create a cursor from this Database.
 	public func cursor(tx:Transaction) throws -> Cursor {
 		return try Cursor(txn_handle:tx.txn_handle, db:self.db_handle, readOnly:tx.readOnly)
 	}
@@ -112,7 +112,14 @@ public struct Database {
 	}
 	
 	
-	//Functions for managing the entires that are stored in a database
+	
+	/// Return the value of an entry with a specified key.
+	/// - Parameters:
+	///   - type: The value type to return from the database.
+	///   - key: The key of the entry that is to be retrieved.
+	///   - tx: The transaction that is to be used to retrieve this entry.
+	/// - Throws: Will throw ``LMDBError.notFound`` if an entry with the given key could not be found.
+	/// - Returns: Returns `nil` if the entry exists but could not be deserialized to the specified type. Otherwise, the value of the specified type is returned.
 	public func getEntry<K:MDB_convertible, V:MDB_convertible>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
 		return try key.asMDB_val { keyVal -> V? in
 			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
@@ -131,15 +138,15 @@ public struct Database {
 		}
 	}
 	
-	public func setEntry<K:MDB_convertible, V:MDB_convertible>(value:V, forKey key:K, flags:Cursor.Operation.Flags? = nil, tx:Transaction?) throws {
+	public func setEntry<K:MDB_convertible, V:MDB_convertible>(value:V, forKey key:K, flags:Cursor.Operation.Flags = [], tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
 				let valueResult:Int32
 				if tx != nil {
-					valueResult = mdb_put(tx!.txn_handle, db_handle, &keyVal, &valueVal, flags?.rawValue ?? 0)
+					valueResult = mdb_put(tx!.txn_handle, db_handle, &keyVal, &valueVal, flags.rawValue)
 				} else {
 					valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-						return mdb_put(someTrans.txn_handle, db_handle, &keyVal, &valueVal, flags?.rawValue ?? 0)
+						return mdb_put(someTrans.txn_handle, db_handle, &keyVal, &valueVal, flags.rawValue)
 					}
 				}
 				guard valueResult == MDB_SUCCESS else {
