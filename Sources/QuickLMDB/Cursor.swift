@@ -217,7 +217,7 @@ public class Cursor {
 	///   - inputValue: The value to retrieve from the database.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry<K:MDB_encodable, V:MDB_encodable>(_ operation:Operation, key inputKey:K, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry<K:MDB_encodable, V:MDB_encodable>(_ operation:Operation, key inputKey:K, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
 		return try inputKey.asMDB_val({ keyVal in
 			return try inputValue.asMDB_val({ valueVal in
 				let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -235,7 +235,7 @@ public class Cursor {
 	///   - inputKey: The key to retrieve from the database.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry<K:MDB_encodable>(_ operation:Operation, key inputKey:K) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry<K:MDB_encodable>(_ operation:Operation, key inputKey:K) throws -> (key:MDB_val, value:MDB_val) {
 		return try inputKey.asMDB_val({ keyVal in
 			var valueVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -252,7 +252,7 @@ public class Cursor {
 	///   - inputValue: The value to retrieve from the database.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry<V:MDB_encodable>(_ operation:Operation, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry<V:MDB_encodable>(_ operation:Operation, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
 		return try inputValue.asMDB_val({ valueVal in
 			var keyVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -267,7 +267,7 @@ public class Cursor {
 	/// - Parameter operation: The operation to use when retrieving this entry.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry(_ operation:Operation) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry(_ operation:Operation) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 		var valueVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 		let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
