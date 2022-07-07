@@ -27,3 +27,52 @@ extension MDB_val:MDB_encodable {
 		return try valFunc(&copyVal)
 	}
 }
+
+extension MDB_val:Sequence {
+	public struct Iterator:IteratorProtocol {
+		public typealias Element = UInt8
+		let memory:UnsafeMutablePointer<UInt8>
+		var size:size_t
+		var i:size_t = 0
+		init(_ val:MDB_val) {
+			self.memory = val.mv_data.assumingMemoryBound(to:UInt8.self)
+			self.size = val.mv_size
+		}
+		public mutating func next() -> Self.Element? {
+			if (i >= size) {
+				return nil
+			} else {
+				defer {
+					i += 1;
+				}
+				return memory[i]
+			}
+		}
+	}
+	public typealias Element = UInt8
+	public func makeIterator() -> Iterator {
+		return Iterator(self)
+	}
+}
+
+extension MDB_val:Collection {
+	public func index(after i:size_t) -> size_t {
+		return i + 1;
+	}
+	
+	public subscript(position:size_t) -> UInt8 {
+		get {
+			self.mv_data.assumingMemoryBound(to:UInt8.self)[position]
+		}
+	}
+	
+	public var startIndex:size_t {
+		return 0
+	}
+	
+	public var endIndex:size_t {
+		return self.mv_size
+	}
+	
+	public typealias Index = size_t
+}
