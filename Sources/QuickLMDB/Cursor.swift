@@ -1,6 +1,7 @@
 import CLMDB
 import Foundation
 
+/// LMDB Cursor. This is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memories.
 public class Cursor {
 	///This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
 	public enum Operation {
@@ -282,10 +283,10 @@ public class Cursor {
 	///   - key: The key to associate with the specified value.
 	///   - flags: Options for this operation.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
-	public func setEntry<K:MDB_encodable, V:MDB_encodable>(value:V, forKey key:K, flags:Operation.Flags? = nil) throws {
+	public func setEntry<K:MDB_encodable, V:MDB_encodable>(value:V, forKey key:K, flags:Operation.Flags = []) throws {
 		try key.asMDB_val({ keyVal in
 			try value.asMDB_val({ valueVal in
-				let putResult = mdb_cursor_put(cursor_handle, &keyVal, &valueVal, ((flags != nil) ? flags!.rawValue : 0))
+				let putResult = mdb_cursor_put(cursor_handle, &keyVal, &valueVal, flags.rawValue)
 				guard putResult == MDB_SUCCESS else {
 					throw LMDBError(returnCode:putResult)
 				}
