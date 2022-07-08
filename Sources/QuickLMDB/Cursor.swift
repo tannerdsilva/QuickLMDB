@@ -370,6 +370,20 @@ public class Cursor {
 		})
 	}
 	
+	
+	/// Counts the number of duplicate entries that exist for the current key.
+	/// - Returns: The number of duplicate entries that exist
+	public func dupCount() throws -> size_t {
+		var dupCount = size_t()
+		let countResult = mdb_cursor_count(self.cursor_handle, &dupCount)
+		switch countResult { 
+			case MDB_SUCCESS:
+				return dupCount
+			default:
+				throw LMDBError(returnCode:countResult)
+		}
+	}
+	
 	deinit {
 		///LMDB documentation specifies that cursors must be closed in read transactions.
 		if (readOnly) {
