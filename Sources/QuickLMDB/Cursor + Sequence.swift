@@ -2,7 +2,7 @@ import Foundation
 import CLMDB
 
 extension Cursor:Sequence {
-	///Procuces an object that is conformant to `IteratorProtocol`. You usually wont need to call this function directly.
+	/// Procuces an object that is conformant to `IteratorProtocol`. You usually wont need to call this function directly.
 	public func makeIterator() -> CursorIterator {
 		var statObject = MDB_stat()
 		guard mdb_stat(txn_handle, db_handle, &statObject) == MDB_SUCCESS else {
@@ -11,18 +11,18 @@ extension Cursor:Sequence {
 		return CursorIterator(count:Int(statObject.ms_entries), cursor_handle:cursor_handle)
 	}
 
-	///The element that the cursor iterator will be returning to represent each entry in the database.
+	/// The element that the cursor iterator will be returning to represent each entry in the database.
 	public typealias Element = (key:MDB_val, value:MDB_val)
 	
-	///The iterator type.
+	/// The iterator type.
 	public typealias Iterator = CursorIterator
 
-	///CursorIterator is the `IteratorProtocol` conformant object that is used execute the complete iteration of database contents.
-	public struct CursorIterator:IteratorProtocol {
+	/// CursorIterator is the `IteratorProtocol` conformant object that is used execute the complete iteration of database contents.
+	public struct CursorIterator:IteratorProtocol, Sequence {
 		internal let cursor_handle:OpaquePointer?
 		internal var first:Bool = true
 		
-		///The number of entries in the database
+		/// The number of entries in the database
 		public var count:Int
 		
 		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
@@ -30,7 +30,7 @@ extension Cursor:Sequence {
 			self.count = count
 		}
 		
-		///Returns the next entry in the database, or `nil` when iteration has been completed.
+		/// Returns the next entry in the database, or `nil` when iteration has been completed.
 		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
 			let cursorOp:MDB_cursor_op
 			if (first == true) {
@@ -51,7 +51,7 @@ extension Cursor:Sequence {
 		}
 	}
 	
-	///Procuces an object that is conformant to `IteratorProtocol`. This object will only iterate over the duplicate items of the current key
+	/// Procuces an object that is conformant to `IteratorProtocol`. This object will only iterate over the duplicate items of the current key
 	/// 
 	public func makeDupIterator<K:MDB_encodable>(key:K) throws -> CursorDupIterator {
 		try self.getEntry(.set, key:key)
@@ -60,8 +60,8 @@ extension Cursor:Sequence {
 	}
 
 	
-	///CursorDupIterator is the `IteratorProtocol` conformant object that is used execute the complete iteration of duplicate key entries of a given database.
-	public struct CursorDupIterator:IteratorProtocol {
+	/// CursorDupIterator is the `IteratorProtocol` conformant object that is used execute the complete iteration of duplicate key entries of a given database.
+	public struct CursorDupIterator:IteratorProtocol, Sequence {
 		internal let cursor_handle:OpaquePointer?
 		internal var first:Bool = true
 		
@@ -73,7 +73,7 @@ extension Cursor:Sequence {
 			self.count = count
 		}
 		
-		///Returns the next entry in the database, or `nil` when iteration has been completed.
+		/// Returns the next entry in the database, or `nil` when iteration has been completed.
 		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
 			let cursorOp:MDB_cursor_op
 			if (first == true) {
