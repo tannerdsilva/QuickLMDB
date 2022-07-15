@@ -1,17 +1,38 @@
 import CLMDB
+import Foundation
 
 public enum LMDBError:Error {
 
 	//LMDB specific errors
+	
+	///The key/value pair already exists.
 	case keyExists
+	
+	///The key/value pair was not found (EOF)
 	case notFound
+	
+	///Requested page not found - this usually indicates corruption.
 	case pageNotFound
+	
+	///Located page was wrong type.
 	case corrupted
+	
+	///Update of meta page failed or the environment had a fatal error.
 	case panic
+	
+	///Environment version mismatch.
 	case versionMismatch
+	
+	///File is not a valid LMDB file.
 	case invalid
+	
+	///Environment mapsize has been reached.
 	case mapFull
+	
+	///Environment maximum database count has been reached.
 	case dbsFull
+	
+	///Environment maximum reader count has been reached.
 	case readersFull
 	case tlsFull
 	case txnFull

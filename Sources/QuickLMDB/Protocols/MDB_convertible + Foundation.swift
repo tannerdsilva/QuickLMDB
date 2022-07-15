@@ -18,6 +18,7 @@ extension ContiguousBytes where Self:MDB_encodable {
 }
 
 ///The `Data` struct directly conforms to the `MDB_convertible` protocol.
+///Since the `MDB_encodable` functionality is already inherited through the `ContiguousBytes` extension, we only need to define the functions for `MDB_decodable`.
 extension Data:MDB_convertible {
 	public init?(_ value:MDB_val) {
 		self = Data(bytes:value.mv_data, count:value.mv_size)
@@ -74,7 +75,7 @@ extension Date:MDB_convertible {
 		guard let asTI = TimeInterval(value) else {
 			return nil
 		}
-		self = Date(timeIntervalSince1970:asTI)
+		self = Date(timeIntervalSinceReferenceDate:asTI)
 	}
 	public init?(noCopy value:MDB_val) {
 		guard let asTI = TimeInterval(noCopy:value) else {
@@ -83,7 +84,7 @@ extension Date:MDB_convertible {
 		self = Date(timeIntervalSince1970:asTI)
 	}
 	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
-		return try timeIntervalSince1970.asMDB_val(valFunc)
+		return try timeIntervalSinceReferenceDate.asMDB_val(valFunc)
 	}
 }
 

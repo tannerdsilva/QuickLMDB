@@ -1,48 +1,8 @@
 import CLMDB
 import Foundation
 
-public class Cursor:Sequence {
-	public func makeIterator() -> CursorIterator {
-		var statObject = MDB_stat()
-		guard mdb_stat(tx_handle, db_handle, &statObject) == MDB_SUCCESS else {
-			fatalError("[ERROR] QuickLMDB.Cursor.makeIterator() - unable to retrieve entry count")
-		}
-		return CursorIterator(count:Int(statObject.ms_entries), cursor_handle:cursor_handle)
-	}
-	
-	public typealias Element = (key:MDB_val, value:MDB_val)
-	public typealias Iterator = CursorIterator
-	
-	public struct CursorIterator:IteratorProtocol {
-		internal let cursor_handle:OpaquePointer?
-		var first:Bool = true
-		public var count:Int
-		
-		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
-			self.cursor_handle = cursor_handle
-			self.count = count
-		}
-		
-		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
-			let cursorOp:MDB_cursor_op
-			if (first == true) {
-				cursorOp = MDB_FIRST
-				first = false
-			} else {
-				cursorOp = MDB_NEXT
-			}
-			
-			var captureKey = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			var captureVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			let cursorResult = mdb_cursor_get(cursor_handle, &captureKey, &captureVal, cursorOp)
-			guard cursorResult == 0 else {
-				return nil
-			}
-			
-			return (key:captureKey, value:captureVal)
-		}
-	}
-	
+/// LMDB Cursor. This is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memories.
+public class Cursor {
 	///This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
 	public enum Operation {
 		
@@ -57,7 +17,7 @@ public class Cursor:Sequence {
 				self.rawValue = rawValue
 			}
 
-			///Do not write the entry if the key alrady exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
+			///Do not write the entry if the key already exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
 			public static let noOverwrite = Flags(rawValue:UInt32(MDB_NOOVERWRITE))
 			
 			///Only for use with ``Database/Flags/dupSort``
@@ -74,7 +34,7 @@ public class Cursor:Sequence {
 			///Pre-sorted keys are being stored in the database. Don't split full pages.
 			public static let append = Flags(rawValue:UInt32(MDB_APPEND))
 			
-			////Pre-sorted key/value entires are being stored in the database. Don't split full pages.
+			///Pre-sorted key/value entires are being stored in the database. Don't split full pages.
 			public static let appendDup = Flags(rawValue:UInt32(MDB_APPENDDUP))
 			
 			///Store multiple data items in one call. Only for ``Database/Flags/dupFixed``.
@@ -226,21 +186,27 @@ public class Cursor:Sequence {
 		}
 	}
 	
-	
+	///This is the pointer to the `MDB_cursor` object
 	public let cursor_handle:OpaquePointer?
+	
+	///This is the database that this cursor is associated with.
 	public let db_handle:MDB_dbi
-	public let tx_handle:OpaquePointer?
+	
+	///This is the transaction that this cursor is associated with
+	public let txn_handle:OpaquePointer?
+	
+	///Used to determine if the cursor needs to close itself when it is deinitialized.
 	internal let readOnly:Bool
 	
-	internal init(tx_handle:OpaquePointer?, db:MDB_dbi, readOnly:Bool) throws {
+	internal init(txn_handle:OpaquePointer?, db:MDB_dbi, readOnly:Bool) throws {
 		var buildCursor:OpaquePointer? = nil
-		let openCursorResult = mdb_cursor_open(tx_handle, db, &buildCursor)
+		let openCursorResult = mdb_cursor_open(txn_handle, db, &buildCursor)
 		guard openCursorResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:openCursorResult)
 		}
 		self.cursor_handle = buildCursor
 		self.db_handle = db
-		self.tx_handle = tx_handle
+		self.txn_handle = txn_handle
 		self.readOnly = readOnly
 	}
 	
@@ -251,7 +217,7 @@ public class Cursor:Sequence {
 	///   - inputValue: The value to retrieve from the database.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry<K:MDB_encodable, V:MDB_encodable>(_ operation:Operation, key inputKey:K, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry<K:MDB_encodable, V:MDB_encodable>(_ operation:Operation, key inputKey:K, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
 		return try inputKey.asMDB_val({ keyVal in
 			return try inputValue.asMDB_val({ valueVal in
 				let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -269,7 +235,7 @@ public class Cursor:Sequence {
 	///   - inputKey: The key to retrieve from the database.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry<K:MDB_encodable>(_ operation:Operation, key inputKey:K) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry<K:MDB_encodable>(_ operation:Operation, key inputKey:K) throws -> (key:MDB_val, value:MDB_val) {
 		return try inputKey.asMDB_val({ keyVal in
 			var valueVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -286,7 +252,7 @@ public class Cursor:Sequence {
 	///   - inputValue: The value to retrieve from the database.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry<V:MDB_encodable>(_ operation:Operation, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry<V:MDB_encodable>(_ operation:Operation, value inputValue:V) throws -> (key:MDB_val, value:MDB_val) {
 		return try inputValue.asMDB_val({ valueVal in
 			var keyVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -301,7 +267,7 @@ public class Cursor:Sequence {
 	/// - Parameter operation: The operation to use when retrieving this entry.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
 	/// - Returns: The key/value pairing that was retrieved from the database as `MDB_val`'s.
-	public func getEntry(_ operation:Operation) throws -> (key:MDB_val, value:MDB_val) {
+	@discardableResult public func getEntry(_ operation:Operation) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 		var valueVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 		let cursorResult = mdb_cursor_get(cursor_handle, &keyVal, &valueVal, operation.mdbValue)
@@ -317,10 +283,10 @@ public class Cursor:Sequence {
 	///   - key: The key to associate with the specified value.
 	///   - flags: Options for this operation.
 	/// - Throws: This function will throw an ``LMDBError`` if the cursor operation does not return `MDB_SUCCESS`.
-	public func setEntry<K:MDB_encodable, V:MDB_encodable>(value:V, forKey key:K, flags:Operation.Flags? = nil) throws {
+	public func setEntry<K:MDB_encodable, V:MDB_encodable>(value:V, forKey key:K, flags:Operation.Flags = []) throws {
 		try key.asMDB_val({ keyVal in
 			try value.asMDB_val({ valueVal in
-				let putResult = mdb_cursor_put(cursor_handle, &keyVal, &valueVal, ((flags != nil) ? flags!.rawValue : 0))
+				let putResult = mdb_cursor_put(cursor_handle, &keyVal, &valueVal, flags.rawValue)
 				guard putResult == MDB_SUCCESS else {
 					throw LMDBError(returnCode:putResult)
 				}
@@ -375,6 +341,46 @@ public class Cursor:Sequence {
 		let deleteResult = mdb_cursor_del(cursor_handle, flags.rawValue)
 		guard deleteResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:deleteResult)
+		}
+	}
+	
+	/// Compare two data items according to the database compare function.
+	/// - Parameters:
+	///   - dataL: Data to compare from the left hand side.
+	///   - dataR: Data to compare from the right hand side.
+	/// - Returns: A 32 bit integer value `< 0` if the left value is less than the right value, `> 0` if the left value is greater than the right value, and  exactly `0` if the left and right values are identical.
+	public func compareKeys<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, _ dataR:R) -> Int32 {
+		return dataL.asMDB_val({ lVal in
+			return dataR.asMDB_val({ rVal in
+				return mdb_cmp(self.txn_handle, self.db_handle, &lVal, &rVal)
+			})
+		})
+	}
+	
+	///Compare two data items according to the database that this cursor is assigned.
+	/// - Parameters:
+	///   - dataL: Data to compare from the left hand side.
+	///   - dataR: Data to compare from the right hand side.
+	/// - Returns: A 32 bit integer value `< 0` if the left value is less than the right value, `> 0` if the left value is greater than the right value, and  exactly `0` if the left and right values are identical.
+	public func compareValues<L:MDB_encodable, R:MDB_encodable>(_ dataL:L, _ dataR:R) -> Int32 {
+		return dataL.asMDB_val({ lVal in
+			return dataR.asMDB_val({ rVal in
+				return mdb_dcmp(self.txn_handle, self.db_handle, &lVal, &rVal)
+			})
+		})
+	}
+	
+	
+	/// Counts the number of duplicate entries that exist for the current key.
+	/// - Returns: The number of duplicate entries that exist
+	public func dupCount() throws -> size_t {
+		var dupCount = size_t()
+		let countResult = mdb_cursor_count(self.cursor_handle, &dupCount)
+		switch countResult { 
+			case MDB_SUCCESS:
+				return dupCount
+			default:
+				throw LMDBError(returnCode:countResult)
 		}
 	}
 	

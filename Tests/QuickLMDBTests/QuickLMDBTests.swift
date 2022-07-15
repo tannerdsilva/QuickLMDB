@@ -40,9 +40,21 @@ final class QuickLMDBTests:XCTestCase {
 		//create the environment
 		_ = try executeEnvTest(writeIt:true)
 
-		
-
 		//read the environment
 		XCTAssertEqual(try executeEnvTest(writeIt:false), true)
 	}
+    
+    func testDatabaseSort() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("QuickLMDB_tests", isDirectory:true)
+        try? FileManager.default.removeItem(at:tempDir)
+        try FileManager.default.createDirectory(at:tempDir, withIntermediateDirectories:false)
+        let makeEnv = try Environment(path:tempDir.path)
+        try makeEnv.transact(readOnly:false) { someTrans in
+            let checkDatabase = try makeEnv.openDatabase(named:nil, flags:[.create], tx:someTrans)
+            let compareCursor = try checkDatabase.cursor(tx:someTrans)
+            
+			XCTAssertEqual(compareCursor.compareKeys("672857148.331025", "672857147.99631405"), 1)
+        }
+        
+    }
 }

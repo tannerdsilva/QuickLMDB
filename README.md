@@ -18,3 +18,4 @@ The basic object relationship for QuickLMDB is as follows
 	
 	- Databases can open Cursors
 
+QuickLMDB implements two protocols for storing and retrieving data from the database.
