@@ -111,9 +111,6 @@ public struct Database {
 		}
 	}
 	
-	
-<<<<<<< HEAD
-	
 	/// Return the value of an entry with a specified key.
 	/// - Parameters:
 	///   - type: The value type to return from the database.
@@ -121,16 +118,6 @@ public struct Database {
 	///   - tx: The transaction that is to be used to retrieve this entry.
 	/// - Throws: Will throw ``LMDBError.notFound`` if an entry with the given key could not be found.
 	/// - Returns: Returns `nil` if the entry exists but could not be deserialized to the specified type. Otherwise, the value of the specified type is returned.
-=======
-	//Functions for managing the entires that are stored in a database
-    /// Retrieve an entry with a provided value type and key
-    ///  - Parameters:
-    ///     - type: The value type of the value being retrieved.
-    ///     - key: The key to retrieve from the database.
-    ///     - tx: The transaction to use to get the entry from the database. If `nil` is specified, a read-only transaction is opened to retrieve the entry.
-    ///  - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-    ///  - Returns: The value that was retrieved from the database
->>>>>>> documentation
 	public func getEntry<K:MDB_convertible, V:MDB_convertible>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
 		return try key.asMDB_val { keyVal -> V? in
 			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
