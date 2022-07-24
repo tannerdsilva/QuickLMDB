@@ -118,7 +118,7 @@ public struct Database {
     ///     - type: The value type of the value being retrieved.
     ///     - key: The key to retrieve from the database.
     ///     - tx: The transaction to use to get the entry from the database. If `nil` is specified, a read-only transaction is opened to retrieve the entry.
-    ///  - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS
+    ///  - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
     ///  - Returns: The value that was retrieved from the database
 	public func getEntry<K:MDB_convertible, V:MDB_convertible>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
 		return try key.asMDB_val { keyVal -> V? in
@@ -145,7 +145,7 @@ public struct Database {
     ///   - key: The key to assosiate with the specified value
     ///   - flags: Options for this operation
     ///   - tx: The transaction to use to set the entry into the database. If `nil` is specified, a read-write transaction is opened to set the entry.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func setEntry<K:MDB_convertible, V:MDB_convertible>(value:V, forKey key:K, flags:Cursor.Operation.Flags? = nil, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
@@ -196,7 +196,7 @@ public struct Database {
     /// - Parameters:
     ///   - key: The key to be deleted
     ///   - tx: The transaction to use to delete the entry for the specified key. If `nil` is specified, a read-write transaction is opened to delete the entry.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func deleteEntry<K:MDB_convertible>(key:K, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			let valueResult:Int32
@@ -218,7 +218,7 @@ public struct Database {
     ///   - key: The key to be deleted
     ///   - value: The value that must assosiate with the key
     ///   - tx: The transaction to use to delete the entry for the specified key and value. If `nil` is specified, a read-write transaction is opened to delete the entry.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func deleteEntry<K:MDB_convertible, V:MDB_convertible>(key:K, value:V, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
@@ -240,7 +240,7 @@ public struct Database {
     
     /// Deletes all entries in the database
     /// - Parameter tx: The transaction to use to delete all entries. If `nil` is specified, a read-write transaction is opened to delete all entries.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func deleteAllEntries(tx:Transaction?) throws {
 		let valueResult:Int32
 		if tx != nil {
@@ -257,7 +257,7 @@ public struct Database {
     
     /// Removes this database from its current environment
     /// - Parameter tx: The transaction to use to remove this database. If `nil` is specified, a read-write transaction is opened to delete this database.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func removeDatabase(tx:Transaction?) throws {
 		let valueResult:Int32
 		if tx != nil {
