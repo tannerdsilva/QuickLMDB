@@ -1,6 +1,8 @@
 import CLMDB
 import Foundation
 
+public typealias MDB_val = CLMDB.MDB_val
+
 public class Cursor {
 	///This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
 	public enum Operation {
