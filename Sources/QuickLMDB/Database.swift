@@ -7,12 +7,27 @@ public struct Database {
 		public let rawValue:UInt32
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
 
+		/// Use reverse string keys
 		public static let reverseKey = Flags(rawValue:UInt32(MDB_REVERSEKEY))
+		
+		/// Use sorted duplicates
 		public static let dupSort = Flags(rawValue:UInt32(MDB_DUPSORT))
+		
+		/// Numeric keys in native byte order. The keys must all be of the same size.
 		public static let integerKey = Flags(rawValue:UInt32(MDB_INTEGERKEY))
+		
+		/// Duplicate items have a fixed size
+		/// - Use with ``dupSort``
 		public static let dupFixed = Flags(rawValue:UInt32(MDB_DUPFIXED))
+		
+		/// Duplicate item are integers (``integerKey`` for duplicate items)
 		public static let integerDup = Flags(rawValue:UInt32(MDB_INTEGERDUP))
+		
+		/// Use reverse string duplicate keys
+		/// - Use with ``QuickLMDB/Database``
 		public static let reverseDup = Flags(rawValue:UInt32(MDB_REVERSEDUP))
+		
+		/// Create the database if it does not already exist
 		public static let create = Flags(rawValue:UInt32(MDB_CREATE))
 	}
 	
