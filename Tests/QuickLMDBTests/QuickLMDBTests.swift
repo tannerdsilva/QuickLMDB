@@ -52,8 +52,7 @@ final class QuickLMDBTests:XCTestCase {
         try makeEnv.transact(readOnly:false) { someTrans in
             let checkDatabase = try makeEnv.openDatabase(named:nil, flags:[.create], tx:someTrans)
             let compareCursor = try checkDatabase.cursor(tx:someTrans)
-            
-			XCTAssertEqual(compareCursor.compareKeys("672857148.331025", "672857147.99631405"), 1)
+			XCTAssertEqual(try compareCursor.compareKeys("672857148.331025", "672857147.99631405"), 1)
         }
         
     }

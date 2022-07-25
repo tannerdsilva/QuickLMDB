@@ -65,6 +65,8 @@ public class Transaction:Transactable {
 	/*
 	Actions that can be taken on a transaction object.
 	*/
+    /// Commit all the operations of a transaction into the database.
+    /// - Throws: This function will throw an ``LMDBError`` if the commit fails.
 	public func commit() throws {
 		let commitResult = mdb_txn_commit(txn_handle)
 		guard commitResult == 0 else {
@@ -72,15 +74,23 @@ public class Transaction:Transactable {
 		}
 		self.isOpen = false
 	}
+    
+    // *cursurs  opened within the transaction must not be used again after this call, except with mdb_cursor_renew()*
+    /// Resets a read-only transaction. The renew() function must follow a reset() call.
 	public func reset() {
 		mdb_txn_reset(txn_handle)
 	}
+    
+    /// Renews a read-only transaction that has been released by reset(). This must be called before a reset transaction can be used again.
+    /// - Throws: This function will throw an ``LMDBError`` if renewing fails.
 	public func renew() throws {
 		let renewResult = mdb_txn_renew(txn_handle)
 		guard renewResult == 0 else {
 			throw LMDBError(returnCode:renewResult)
 		}
-	}
+    }
+    
+    /// Abandon all operations of the transaction. Frees the transaction.
 	public func abort() {
 		mdb_txn_abort(txn_handle)
 		self.isOpen = false

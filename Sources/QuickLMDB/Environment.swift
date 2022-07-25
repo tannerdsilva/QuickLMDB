@@ -115,6 +115,7 @@ public class Environment:Transactable {
 	/// - Parameters:
 	///   - database: The database that is to be removed from the environment.
 	///   - tx: The transaction in which to apply this action. If `nil` is specified, a writable transaction is
+    /// - Throws: This function will throw an ``LMDBError`` if the environment operation does not return `MDB_SUCCESS`.
 	public func deleteDatabase(_ database:Database, tx:Transaction?) throws {
 		if tx != nil {
 			let result = mdb_drop(env_handle, database.db_handle, 1)
@@ -131,7 +132,12 @@ public class Environment:Transactable {
 		}
 	}
 	
-	///Open a new transaction in the environment.
+    /// Open a new transaction in the environment.
+    /// - Parameters:
+    ///   - readOnly: If true the transaction is read-only. If false the transaction is read-write.
+    ///   - txFunc: The handler transaction.
+    /// - Throws: The function will throw if the transaction can't be created.
+    /// - Returns: The opened transaction.
 	public func transact<R>(readOnly:Bool = true, _ txFunc:(Transaction) throws -> R) throws -> R {
 		return try Transaction.instantTransaction(environment:self.env_handle, readOnly:readOnly, parent:nil, txFunc)
 	}
@@ -146,7 +152,12 @@ public class Environment:Transactable {
 			throw LMDBError(returnCode:mdbSetResult)
 		}
 	}
-	
+    
+    /// Copy an LMDB environment to a specified path.
+    /// - Parameters:
+    ///   - path: The path where the environment is to be copied.
+    ///   - performCompaction: If true, the operation preforms compation while copying (consumes more CPU and runs slower). If false, the operation does not preform compation.
+    /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
 	public func copyTo(path:String, performCompaction:Bool) throws {
 		try path.withCString { pathCString in
 			let copyFlags:UInt32 = (performCompaction == true) ? UInt32(MDB_CP_COMPACT) : 0
@@ -156,14 +167,20 @@ public class Environment:Transactable {
 			}
 		}
 	}
-	
+    
+    /// Flush the data buffers to disk.
+    /// - Parameter force: If true, the operation forces a synchronus flush. If false, an asynchronus flush is preformed.
+    /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
 	public func sync(force:Bool = true) throws {
 		let syncStatus = mdb_env_sync(env_handle, (force == true ? 1 : 0))
 		guard syncStatus == 0 else {
 			throw LMDBError(returnCode:syncStatus)
 		}
 	}
-	
+    
+    /// Checks for stale entries in the reader lock table.
+    /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
+    /// - Returns: The number of stale slots that were cleared.
 	@discardableResult public func readerCheck() throws -> Int32 {
 		var deadCheck:Int32 = 0
 		let clearCheck = mdb_reader_check(self.env_handle, &deadCheck)

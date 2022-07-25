@@ -1,7 +1,9 @@
 import CLMDB
 import Foundation
 
-/// LMDB Cursor. This is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memories.
+public typealias MDB_val = CLMDB.MDB_val
+
+/// LMDB Cursor. This is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memory.
 public class Cursor {
 	///This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
 	public enum Operation {

@@ -11,7 +11,7 @@ A ``Cursor`` can be created by calling ``QuickLMDB/Database/cursor(tx:)`` on a g
 try someEnvironment.transact(readOnly:false) { thisTransaction in
 
 	// Open a database with the newly opened transaction.
-	let myDatabase = try someEnvironment.openDatabase(named:nil, tx:Transaction)
+	let myDatabase = try someEnvironment.openDatabase(named:nil, tx:thisTransaction)
 
 	// Create a cursor from the database and transaction.
 	let myCursor = try myDatabase.cursor(tx:thisTransaction)

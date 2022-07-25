@@ -7,12 +7,27 @@ public struct Database {
 		public let rawValue:UInt32
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
 
+		/// Use reverse string keys
 		public static let reverseKey = Flags(rawValue:UInt32(MDB_REVERSEKEY))
+		
+		/// Use sorted duplicates
 		public static let dupSort = Flags(rawValue:UInt32(MDB_DUPSORT))
+		
+		/// Numeric keys in native byte order. The keys must all be of the same size.
 		public static let integerKey = Flags(rawValue:UInt32(MDB_INTEGERKEY))
+		
+		/// Duplicate items have a fixed size
+		/// - Use with ``dupSort``
 		public static let dupFixed = Flags(rawValue:UInt32(MDB_DUPFIXED))
+		
+		/// Duplicate item are integers (``integerKey`` for duplicate items)
 		public static let integerDup = Flags(rawValue:UInt32(MDB_INTEGERDUP))
+		
+		/// Use reverse string duplicate keys
+		/// - Use with ``QuickLMDB/Database``
 		public static let reverseDup = Flags(rawValue:UInt32(MDB_REVERSEDUP))
+		
+		/// Create the database if it does not already exist
 		public static let create = Flags(rawValue:UInt32(MDB_CREATE))
 	}
 	
@@ -111,8 +126,6 @@ public struct Database {
 		}
 	}
 	
-	
-	
 	/// Return the value of an entry with a specified key.
 	/// - Parameters:
 	///   - type: The value type to return from the database.
@@ -138,6 +151,13 @@ public struct Database {
 		}
 	}
 	
+    /// Sets an entry with a specified key and value for that key
+    /// - Parameters:
+    ///   - value: The value (or data) to be stored in the database
+    ///   - key: The key to assosiate with the specified value
+    ///   - flags: Options for this operation
+    ///   - tx: The transaction to use to set the entry into the database. If `nil` is specified, a read-write transaction is opened to set the entry.
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func setEntry<K:MDB_convertible, V:MDB_convertible>(value:V, forKey key:K, flags:Cursor.Operation.Flags = [], tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
@@ -155,7 +175,13 @@ public struct Database {
 			}
 		}
 	}
-	
+    
+    /// Checks if the database contains a specified key
+    /// - Parameters:
+    ///   - key: The key to search for
+    ///   - tx: The transaction to use to search for the specified key. If `nil` is specified, a read-only transaction is opened to search for the key.
+    /// - Throws: This function will throw an ``LMDBError`` if any value other than `MDB_SUCCESS` or `MDB_NOTFOUND` are returned.
+    /// - Returns: True if the database contains the key. False otherwise.
 	public func containsEntry<K:MDB_convertible>(key:K, tx:Transaction?) throws -> Bool {
 		return try key.asMDB_val { keyVal in
 			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
@@ -177,7 +203,12 @@ public struct Database {
 			}
 		}
 	}
-	
+    
+    /// Deletes an entry in the database for a specified key
+    /// - Parameters:
+    ///   - key: The key to be deleted
+    ///   - tx: The transaction to use to delete the entry for the specified key. If `nil` is specified, a read-write transaction is opened to delete the entry.
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func deleteEntry<K:MDB_convertible>(key:K, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			let valueResult:Int32
@@ -194,6 +225,12 @@ public struct Database {
 		}
 	}
 	
+    /// Deletes an entry in the database for a specified key and value
+    /// - Parameters:
+    ///   - key: The key to be deleted
+    ///   - value: The value that must assosiate with the key
+    ///   - tx: The transaction to use to delete the entry for the specified key and value. If `nil` is specified, a read-write transaction is opened to delete the entry.
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func deleteEntry<K:MDB_convertible, V:MDB_convertible>(key:K, value:V, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
@@ -212,7 +249,10 @@ public struct Database {
 			}
 		}
 	}
-	
+    
+    /// Deletes all entries in the database
+    /// - Parameter tx: The transaction to use to delete all entries. If `nil` is specified, a read-write transaction is opened to delete all entries.
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func deleteAllEntries(tx:Transaction?) throws {
 		let valueResult:Int32
 		if tx != nil {
@@ -226,7 +266,10 @@ public struct Database {
 			throw LMDBError(returnCode:valueResult)
 		}
 	}
-	
+    
+    /// Removes this database from its current environment
+    /// - Parameter tx: The transaction to use to remove this database. If `nil` is specified, a read-write transaction is opened to delete this database.
+    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
 	public func removeDatabase(tx:Transaction?) throws {
 		let valueResult:Int32
 		if tx != nil {
