@@ -42,7 +42,7 @@ public class Environment:Transactable {
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
 	
-	///This is an opaque pointer to the underlying `MDB_env` object for this environment.
+	/// This is an opaque pointer to the underlying `MDB_env` object for this environment.
 	/// - This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
 	public var env_handle:OpaquePointer?
 	

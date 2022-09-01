@@ -35,14 +35,36 @@ public enum LMDBError:Error {
 	///Environment maximum reader count has been reached.
 	case readersFull
 	case tlsFull
-	case txnFull
+	
+	/// Transaction has too many dirty
+	case txFull
+	
+	/// Cursor stack too deep - internal error
 	case cursorFull
+	
+	/// Page does not have enough space - internal error
 	case pageFull
+	
+	/// Database contents grew beyond environment mapsize.
 	case mapResized
+	
+	/// Operation and database incompatible, or database type changed. This can mean...
+	/// - The operation expects an ``QuickLMDB/Database/Flags/dupSort``/``QuickLMDB/Database/Flags/dupFixed`` database.
+	/// - Opening a named database when the unnamed database has ``QuickLMDB/Database/Flags/dupSort`` / ``QuickLMDB/Database/Flags/integerKey``
+	/// - Accessing a data entry as a database, or vice versa.
+	/// - The database was dropped and recreated with different flags.
 	case incompatible
+	
+	/// Invalid reuse of reader locktable slot
 	case badReaderSlot
+	
+	/// Transaction must abort, has a child, or is invalid
 	case badTransaction
+	
+	/// Unsupported size of the key/db name/data, or wrong ``QuickLMDB/Database/Flags/dupFixed`` size
 	case badValueSize
+	
+	/// The specified database was changed unexpectedly
 	case badDBI
 	case problem
 
@@ -69,7 +91,7 @@ public enum LMDBError:Error {
 			case MDB_DBS_FULL: self = .dbsFull
 			case MDB_READERS_FULL: self = .readersFull
 			case MDB_TLS_FULL: self = .tlsFull
-			case MDB_TXN_FULL: self = .txnFull
+			case MDB_TXN_FULL: self = .txFull
 			case MDB_CURSOR_FULL: self = .cursorFull
 			case MDB_PAGE_FULL:  self = .pageFull
 			case MDB_MAP_RESIZED: self = .mapResized

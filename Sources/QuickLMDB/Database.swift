@@ -133,7 +133,7 @@ public struct Database {
 	///   - tx: The transaction that is to be used to retrieve this entry.
 	/// - Throws: Will throw ``LMDBError.notFound`` if an entry with the given key could not be found.
 	/// - Returns: Returns `nil` if the entry exists but could not be deserialized to the specified type. Otherwise, the value of the specified type is returned.
-	public func getEntry<K:MDB_convertible, V:MDB_convertible>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
+	public func getEntry<K:MDB_encodable, V:MDB_decodable>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
 		return try key.asMDB_val { keyVal -> V? in
 			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let valueResult:Int32
@@ -158,7 +158,7 @@ public struct Database {
     ///   - flags: Options for this operation
     ///   - tx: The transaction to use to set the entry into the database. If `nil` is specified, a read-write transaction is opened to set the entry.
     /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func setEntry<K:MDB_convertible, V:MDB_convertible>(value:V, forKey key:K, flags:Cursor.Operation.Flags = [], tx:Transaction?) throws {
+	public func setEntry<K:MDB_encodable, V:MDB_encodable>(value:V, forKey key:K, flags:Cursor.Operation.Flags = [], tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
 				let valueResult:Int32
@@ -182,7 +182,7 @@ public struct Database {
     ///   - tx: The transaction to use to search for the specified key. If `nil` is specified, a read-only transaction is opened to search for the key.
     /// - Throws: This function will throw an ``LMDBError`` if any value other than `MDB_SUCCESS` or `MDB_NOTFOUND` are returned.
     /// - Returns: True if the database contains the key. False otherwise.
-	public func containsEntry<K:MDB_convertible>(key:K, tx:Transaction?) throws -> Bool {
+	public func containsEntry<K:MDB_encodable>(key:K, tx:Transaction?) throws -> Bool {
 		return try key.asMDB_val { keyVal in
 			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			let valueResult:Int32
@@ -209,7 +209,7 @@ public struct Database {
     ///   - key: The key to be deleted
     ///   - tx: The transaction to use to delete the entry for the specified key. If `nil` is specified, a read-write transaction is opened to delete the entry.
     /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func deleteEntry<K:MDB_convertible>(key:K, tx:Transaction?) throws {
+	public func deleteEntry<K:MDB_encodable>(key:K, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			let valueResult:Int32
 			if tx != nil {
@@ -231,7 +231,7 @@ public struct Database {
     ///   - value: The value that must assosiate with the key
     ///   - tx: The transaction to use to delete the entry for the specified key and value. If `nil` is specified, a read-write transaction is opened to delete the entry.
     /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func deleteEntry<K:MDB_convertible, V:MDB_convertible>(key:K, value:V, tx:Transaction?) throws {
+	public func deleteEntry<K:MDB_encodable, V:MDB_encodable>(key:K, value:V, tx:Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			return try value.asMDB_val { valueVal in
 				let valueResult:Int32
