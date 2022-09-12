@@ -23,9 +23,6 @@ extension Data:MDB_convertible {
 	public init?(_ value:MDB_val) {
 		self = Data(bytes:value.mv_data, count:value.mv_size)
 	}
-	public init?(noCopy value:MDB_val) {
-		self = Data(bytesNoCopy:value.mv_data, count:value.mv_size, deallocator:.none)
-	}
 }
 
 ///Any object that conforms to `LosslessStringConvertible` and declares `MDB_convertible` will automatically inherit this implementation.
@@ -34,13 +31,6 @@ extension LosslessStringConvertible where Self:MDB_convertible {
 	public init?(_ value:MDB_val) {
 		let dataCopy = Data(bytes:value.mv_data, count:value.mv_size)
 		guard let asString = String(data:dataCopy, encoding:.utf8), let asSelf = Self(asString) else {
-			return nil
-		}
-		self = asSelf
-	}
-	public init?(noCopy value:MDB_val) {
-		let dataNoCopy = Data(bytesNoCopy:value.mv_data, count:value.mv_size, deallocator:.none)
-		guard let asString = String(data:dataNoCopy, encoding:.utf8), let asSelf = Self(asString) else {
 			return nil
 		}
 		self = asSelf
@@ -77,12 +67,6 @@ extension Date:MDB_convertible {
 		}
 		self = Date(timeIntervalSinceReferenceDate:asTI)
 	}
-	public init?(noCopy value:MDB_val) {
-		guard let asTI = TimeInterval(noCopy:value) else {
-			return nil
-		}
-		self = Date(timeIntervalSince1970:asTI)
-	}
 	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
 		return try timeIntervalSinceReferenceDate.asMDB_val(valFunc)
 	}
@@ -93,14 +77,6 @@ extension Dictionary:MDB_convertible where Key:Codable, Value:Codable {
 	public init?(_ value:MDB_val) {
 		do {
 			self = try JSONDecoder().decode(Self.self, from:Data(bytes:value.mv_data, count:value.mv_size))
-		} catch _ {
-			return nil
-		}
-	}
-	
-	public init?(noCopy value:MDB_val) {
-		do {
-			self = try JSONDecoder().decode(Self.self, from:Data(bytesNoCopy:value.mv_data, count:value.mv_size, deallocator:.none))
 		} catch _ {
 			return nil
 		}
@@ -122,14 +98,6 @@ extension Array:MDB_convertible where Element:Codable {
 		}
 	}
 	
-	public init?(noCopy value:MDB_val) {
-		do {
-			self = try JSONDecoder().decode(Self.self, from:Data(bytesNoCopy:value.mv_data, count:value.mv_size, deallocator:.none))
-		} catch _ {
-			return nil
-		}
-	}
-	
 	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
 		let encodedData = try! JSONEncoder().encode(self)
 		return try encodedData.asMDB_val(valFunc)
@@ -145,15 +113,7 @@ extension Set:MDB_convertible where Element:Codable {
 			return nil
 		}
 	}
-	
-	public init?(noCopy value:MDB_val) {
-		do {
-			self = try JSONDecoder().decode(Self.self, from:Data(bytesNoCopy:value.mv_data, count:value.mv_size, deallocator:.none))
-		} catch _ {
-			return nil
-		}
-	}
-	
+		
 	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
 		let encodedData = try! JSONEncoder().encode(self)
 		return try encodedData.asMDB_val(valFunc)
