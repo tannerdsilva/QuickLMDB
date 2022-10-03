@@ -66,7 +66,6 @@ public enum LMDBError:Error {
 	
 	/// The specified database was changed unexpectedly
 	case badDBI
-	case problem
 
 	//OS specific errors
 	case invalidParameter
@@ -100,7 +99,6 @@ public enum LMDBError:Error {
 			case MDB_BAD_TXN: self = .badTransaction
 			case MDB_BAD_VALSIZE: self = .badValueSize
 			case MDB_BAD_DBI: self = .badDBI
-		
 			case EINVAL: self = .invalidParameter
 			case ENOSPC: self = .outOfDiskSpace
 			case ENOMEM: self = .outOfMemory
@@ -108,6 +106,72 @@ public enum LMDBError:Error {
 			case EACCES: self = .accessViolation
 			
 			default: self = .other(returnCode: returnCode)
+		}
+	}
+	
+	public var returnCode:Int32 {
+		get {
+			switch self {
+			case .keyExists:
+				return MDB_KEYEXIST
+			case .notFound:
+				return MDB_NOTFOUND
+			case .pageNotFound:
+				return MDB_PAGE_NOTFOUND
+			case .corrupted:
+				return MDB_CORRUPTED
+			case .panic:
+				return MDB_PANIC
+			case .versionMismatch:
+				return MDB_VERSION_MISMATCH
+			case .invalid:
+				return MDB_INVALID
+			case .mapFull:
+				return MDB_MAP_FULL
+			case .dbsFull:
+				return MDB_DBS_FULL
+			case .readersFull:
+				return MDB_READERS_FULL
+			case .tlsFull:
+				return MDB_TLS_FULL
+			case .txFull:
+				return MDB_TXN_FULL
+			case .cursorFull:
+				return MDB_CURSOR_FULL
+			case .pageFull:
+				return MDB_PAGE_FULL
+			case .mapResized:
+				return MDB_MAP_RESIZED
+			case .incompatible:
+				return MDB_INCOMPATIBLE
+			case .badReaderSlot:
+				return MDB_BAD_RSLOT
+			case .badTransaction:
+				return MDB_BAD_TXN
+			case .badValueSize:
+				return MDB_BAD_VALSIZE
+			case .badDBI:
+				return MDB_BAD_DBI
+			case .invalidParameter:
+				return EINVAL
+			case .outOfDiskSpace:
+				return ENOSPC
+			case .outOfMemory:
+				return ENOMEM
+			case .ioError:
+				return EIO
+			case .accessViolation:
+				return EACCES
+			case let .other(returnCode:rc):
+				return rc
+			}
+		}
+	}
+		
+	public var description:String {
+		get {
+			let strPtr = mdb_strerror(self.returnCode)!
+			return String(cString:strPtr)
 		}
 	}
 }
