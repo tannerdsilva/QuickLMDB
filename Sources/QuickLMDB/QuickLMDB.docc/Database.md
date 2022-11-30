@@ -80,4 +80,4 @@ try someEnvironment.transact(readOnly:false) { someTransaction in
 
 - ``Database/closeDatabase()``
 
-- ``Database/removeDatabase(tx:)``
+- ``Database/deleteDatabase(tx:)``

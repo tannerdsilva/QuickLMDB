@@ -131,7 +131,7 @@ public struct Database {
 	///   - type: The value type to return from the database.
 	///   - key: The key of the entry that is to be retrieved.
 	///   - tx: The transaction that is to be used to retrieve this entry.
-	/// - Throws: Will throw ``QuickLMDB\LMDBError.notFound`` if an entry with the given key could not be found.
+	/// - Throws: Will throw ``QuickLMDB/LMDBError/notFound`` if an entry with the given key could not be found.
 	/// - Returns: Returns `nil` if the entry exists but could not be deserialized to the specified type. Otherwise, the value of the specified type is returned.
 	public func getEntry<K:MDB_encodable, V:MDB_decodable>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
 		return try key.asMDB_val { keyVal -> V? in
@@ -270,7 +270,7 @@ public struct Database {
     /// Removes this database from its current environment
     /// - Parameter tx: The transaction to use to remove this database. If `nil` is specified, a read-write transaction is opened to delete this database.
     /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func removeDatabase(tx:Transaction?) throws {
+	public func deleteDatabase(tx:Transaction?) throws {
 		let valueResult:Int32
 		if tx != nil {
 			valueResult = mdb_drop(tx!.txn_handle, db_handle, 1)

@@ -70,4 +70,4 @@ QuickLMDB has reasonable default behavior when managing the lifecycle of ``Quick
 
 - Transaction blocks that throw an error will cause the transaction to abort.
 
-- At any time within a transaction block, a developer may call ``Transaction/commit``, ``Transaction/abort``, ``Transaction/reset``, or ``Transaction/renew`` to force their own behavior.
+- At any time within a transaction block, a developer may call ``QuickLMDB/Transaction/commit()``, ``QuickLMDB/Transaction/abort()``, ``QuickLMDB/Transaction/reset()``, or ``QuickLMDB/Transaction/renew()`` to force their own behavior on a transaction.
