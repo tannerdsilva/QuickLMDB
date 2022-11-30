@@ -10,65 +10,18 @@ QuickLMDB is designed to be a easy, efficient, and uncompromising integration of
 
 QuickLMDB is fully documented. This documentation is available [HERE](https://quicklmdb.com/documentation). Documentation may be generated from source using `swift-docc`.
 
-## LMDB basics
+## Compatibility
 
-The basic object relationship for QuickLMDB is as follows:
+QuickLMDB is fully supported on all platforms capable of running Swift, including:
 
-- Environments are the foundation of QuickLMDB, as they are in LMDB. Environments are created with a system path. 
+- Linux
 
-	- Envrionments create Transactions
-	
-	- Environments can open Databases under the existence of a Transaction
-	
-		- Databases can store and retreive key/value pairs
+- MacOS
 
-	- Transactions may open child transactions, in certain contexts
-	
-	- Databases can open Cursors
+- iOS
 
-## Notes on API
+## License
 
-### MDB_convertible protocol
+QuickLMDB is available with an MIT license.
 
-This is the native serialization and deserialization protocol for QuickLMDB.
-
-- Required when using Database (for convenience). 
-
-- Optional when using Cursor (allowing for zero-copy data access).
-
-- Custom objects (classes and structs) can conform to this protocol with minimal code.
-
-	- Objects that conform to `LosslessStringConvertible` can conform to `MDB_convertible` with ZERO additional lines of code.
-	
-	
-### Lifecycle management
-
-QuickLMDB has reasonable default behavior when managing the lifecycle of a ``QuickLMDB/Transaction`` and ``QuickLMDB/Cursor``.
-
-- Transaction blocks that return normally will be committed
-
-- Transaction blocks that throw an error will cause the transaction to abort
-
-- At any time in a transaction block, a developer may call ``Transaction/
-
-### Database struct
-
-In the spirit of the core LMDB API, QuickLMDB's `Database` struct is designed to be approachable and convenient. 
-
-- Handles serialization on your behalf with `MDB_convertible` protocol. Standardized serialization means less opportunity bugs in your code.
-
-- Returns a specified `MDB_convertible` Type directly from database, rather than expecting you to deserialize data entries on your own.
-
-### Cursor class
-
-QuickLMDB's `Cursor` class also follows the spirit of the underlying LMDB API, by offering advanced access to a given database.
-
-- No built in serialization or data copies.
-
-- Returns the explicit `MDB_val` structs that the LMDB core is utilizing under the hood.
-
-	- When reading entries, this allows the developer to chose when to deserialize a given data entry.
-
-	- Serialization and deserialization of returned `MDB_val` can occur with a single line of code.
-	
-- Conforms to Swift's `Sequence` protocol, allowing a cursor to be used in a loop with a single line of code.
+LMDB is included with QuickLMDB with an OpenLDAP license.

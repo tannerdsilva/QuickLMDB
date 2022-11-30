@@ -14,7 +14,7 @@ final class QuickLMDBTests:XCTestCase {
 	}
 		
 	func testDatabaseCreateDestroy() throws {
-		let getDB = try testerEnv!.transact(readOnly:false) { someTrans in
+		try testerEnv!.transact(readOnly:false) { someTrans in
 			let newDB = try testerEnv!.openDatabase(named:"test_destroy_db", flags:[.create], tx:someTrans)
 			try testerEnv!.deleteDatabase(newDB, tx:someTrans)
 		}
@@ -52,13 +52,10 @@ final class QuickLMDBTests:XCTestCase {
 		let compareResult = try testerEnv!.transact(readOnly:false) { someTrans in
 			let getDatabase = try testerEnv!.openDatabase(named:"tester_sort", flags:[.create], tx:someTrans)
 			let compareCursor = try getDatabase.cursor(tx:someTrans)
-			return try compareCursor.compareKeys(672857148.331025, 672857147.99631405)
+			return compareCursor.compareKeys(672857148.331025, 672857147.99631405)
 		}
 		XCTAssertEqual(compareResult, 1)
 	}
-//	    
-	
-
 	override class func tearDown() {
 		try! FileManager.default.removeItem(at:envPath!)
 	}
