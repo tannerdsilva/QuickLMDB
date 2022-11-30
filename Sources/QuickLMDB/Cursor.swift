@@ -387,7 +387,7 @@ public class Cursor {
 	}
 	
 	deinit {
-		///LMDB documentation specifies that cursors must be closed in read transactions.
+		// LMDB documentation specifies that cursors must be closed in read transactions.
 		if (readOnly) {
 			mdb_cursor_close(cursor_handle)
 		}

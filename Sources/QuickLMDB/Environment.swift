@@ -168,7 +168,7 @@ public class Environment:Transactable {
 		}
 	}
     
-    /// Flush the data buffers to disk.
+    /// Flush the data buffers to disk. Useful for Environments with ``QuickLMDB/Environment/Flags/noSync`` enabled.
     /// - Parameter force: If true, the operation forces a synchronus flush. If false, an asynchronus flush is preformed.
     /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
 	public func sync(force:Bool = true) throws {
