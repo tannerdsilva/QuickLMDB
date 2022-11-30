@@ -118,13 +118,13 @@ public class Environment:Transactable {
     /// - Throws: This function will throw an ``LMDBError`` if the environment operation does not return `MDB_SUCCESS`.
 	public func deleteDatabase(_ database:Database, tx:Transaction?) throws {
 		if tx != nil {
-			let result = mdb_drop(env_handle, database.db_handle, 1)
+			let result = mdb_drop(tx!.txn_handle, database.db_handle, 1)
 			guard result == MDB_SUCCESS else {
 				throw LMDBError(returnCode:result)
 			}
 		} else {
 			try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-				let result = mdb_drop(env_handle, database.db_handle, 1)
+				let result = mdb_drop(someTrans.txn_handle, database.db_handle, 1)
 				guard result == MDB_SUCCESS else {
 					throw LMDBError(returnCode:result)
 				}
