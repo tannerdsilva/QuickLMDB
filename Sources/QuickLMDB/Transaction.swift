@@ -1,9 +1,14 @@
 import CLMDB
 
 public class Transaction:Transactable {
+
+	///Pointer to the `MDB_env` that an instance is associated with.
 	public let env_handle:OpaquePointer?
+	
+	///Pointer to the `MDB_txn` struct associated with a given instance.
 	public var txn_handle:OpaquePointer?
 	
+	/// Indicates if a given instance is a read-only transaction.
 	public let readOnly:Bool
 	
 	internal var isOpen = true
@@ -25,6 +30,7 @@ public class Transaction:Transactable {
 		return captureReturn
 	}
 	
+	/// Creates a new transaction from an Environment and optional parent.
 	convenience init(environment:Environment, readOnly:Bool, parent:Transaction? = nil) throws {
 		try self.init(environment:environment.env_handle, readOnly:readOnly, parent:parent?.env_handle)
 	}

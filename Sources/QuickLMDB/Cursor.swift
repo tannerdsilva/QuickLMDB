@@ -188,13 +188,13 @@ public class Cursor {
 		}
 	}
 	
-	///This is the pointer to the `MDB_cursor` object
+	///This is the pointer to the `MDB_cursor` struct associated with a given instance.
 	public let cursor_handle:OpaquePointer?
 	
 	///This is the database that this cursor is associated with.
 	public let db_handle:MDB_dbi
 	
-	///This is the transaction that this cursor is associated with
+	///Pointer to the `MDB_txn` struct associated with a given instance.
 	public let txn_handle:OpaquePointer?
 	
 	///Used to determine if the cursor needs to close itself when it is deinitialized.

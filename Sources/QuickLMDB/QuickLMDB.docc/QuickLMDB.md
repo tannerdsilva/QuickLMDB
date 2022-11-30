@@ -44,9 +44,9 @@ This is the native serialization and deserialization protocol for QuickLMDB.
 
 In the spirit of the core LMDB API, QuickLMDB's ``QuickLMDB/Database`` struct is designed to be approachable and convenient. 
 
-- Handles serialization on your behalf with `QuickLMDB/MDB_convertible` protocol. Standardized serialization eliminates the need for redundant code, and as a result, reduces the risk of bugs.
+- Handles serialization on your behalf with ``QuickLMDB/MDB_convertible`` protocol. Standardized serialization eliminates the need for redundant code, and as a result, reduces the risk of bugs.
 
-- Returns a specified `MDB_convertible` Type directly from database, rather than expecting you to deserialize data entries on your own.
+- Returns a specified ``QuickLMDB/MDB_convertible`` Type directly from database, rather than expecting you to deserialize data entries on your own.
 
 ### Cursor class
 
