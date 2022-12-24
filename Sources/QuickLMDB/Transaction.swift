@@ -51,7 +51,7 @@ public class Transaction:Transactable {
 	}
 	
 	///Transactable conformance
-	@discardableResult public func transact<R>(readOnly: Bool, _ txFunc: (Transaction) throws -> R) throws -> R {
+	public func transact<R>(readOnly: Bool, _ txFunc: (Transaction) throws -> R) throws -> R {
 		let newTransaction = try Transaction(environment:self.env_handle, readOnly:readOnly, parent:self.txn_handle)
 		let captureReturn:R
 		do {

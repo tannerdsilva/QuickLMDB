@@ -138,7 +138,7 @@ public class Environment:Transactable {
     ///   - txFunc: The handler transaction.
     /// - Throws: The function will throw if the transaction can't be created.
     /// - Returns: The opened transaction.
-	@discardableResult public func transact<R>(readOnly:Bool = true, _ txFunc:(Transaction) throws -> R) throws -> R {
+	public func transact<R>(readOnly:Bool = true, _ txFunc:(Transaction) throws -> R) throws -> R {
 		return try Transaction.instantTransaction(environment:self.env_handle, readOnly:readOnly, parent:nil, txFunc)
 	}
 	

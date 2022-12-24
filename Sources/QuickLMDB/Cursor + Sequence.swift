@@ -23,7 +23,7 @@ extension Cursor:Sequence {
 		internal var first:Bool = true
 		
 		/// The number of entries in the database
-		public var count:Int
+		public let count:Int
 		
 		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
 			self.cursor_handle = cursor_handle
@@ -66,7 +66,7 @@ extension Cursor:Sequence {
 		internal var first:Bool = true
 		
 		/// The number of entries for the current key
-		public var count:Int
+		public let count:Int
 		
 		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
 			self.cursor_handle = cursor_handle
