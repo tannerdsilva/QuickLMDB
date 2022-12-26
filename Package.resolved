@@ -5,9 +5,9 @@
         "package": "CLMDB",
         "repositoryURL": "https://github.com/tannerdsilva/CLMDB.git",
         "state": {
-          "branch": null,
-          "revision": "f7510b3861a7f27bb054ddb0f1ee2983dd6a0f6f",
-          "version": "0.9.29"
+          "branch": "master3",
+          "revision": "510c5fa97ef0003d977c7a9f113b065153fb8dd5",
+          "version": null
         }
       },
       {
