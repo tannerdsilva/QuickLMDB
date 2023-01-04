@@ -31,8 +31,8 @@ public class Transaction:Transactable {
 	}
 	
 	/// Creates a new transaction from an Environment and optional parent.
-	convenience init(environment:Environment, readOnly:Bool, parent:Transaction? = nil) throws {
-		try self.init(environment:environment.env_handle, readOnly:readOnly, parent:parent?.env_handle)
+	public convenience init<T>(_ transactable:T, readOnly:Bool, parent:Transaction? = nil) throws where T:Transactable {
+		try self.init(environment:transactable.env_handle, readOnly:readOnly, parent:parent?.env_handle)
 	}
 	
 	required internal init(environment env_handle:OpaquePointer?, readOnly:Bool, parent:OpaquePointer? = nil) throws {

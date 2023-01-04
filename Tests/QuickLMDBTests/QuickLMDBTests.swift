@@ -47,6 +47,32 @@ final class QuickLMDBTests:XCTestCase {
 	
 		XCTAssertEqual(isEqual, true)
 	}
+	
+	func testSubTransaction() throws {
+		let dbName = "subTransIO_test"
+		let inputTest = "hello world"
+		let key = "_TEST_hwkey"
+		let externalTransTest_IN = "hello world"
+		let internalTransTest_IN = "HELLO WORLD"
+		let (internalTransTest_OUT, newDB) = try testerEnv!.transact(readOnly:false) { someTrans in
+			let newDB = try someTrans.transact(readOnly:false) { subTrans in
+				let newDB = try testerEnv!.openDatabase(named:dbName, flags:[.create], tx:subTrans)
+				try newDB.setEntry(value:internalTransTest_IN, forKey:key, tx:subTrans)
+				return newDB
+			}
+			let getDBVal = try newDB.getEntry(type:String.self, forKey:key, tx:someTrans)!
+			try newDB.setEntry(value:inputTest, forKey:key, tx:someTrans)
+			return (getDBVal, newDB)
+		}
+		
+		let externalTransTest_OUT = try testerEnv!.transact(readOnly:true) { someTrans in
+			return try newDB.getEntry(type:String.self, forKey:key, tx:someTrans)!
+		}
+		
+		let isEqual:Bool = (externalTransTest_IN == externalTransTest_OUT && internalTransTest_IN == internalTransTest_OUT)
+		
+		XCTAssertEqual(isEqual, true)
+	}
 
 	func testDatabaseSort() throws {
 		let compareResult = try testerEnv!.transact(readOnly:false) { someTrans in
