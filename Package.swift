@@ -16,7 +16,7 @@ let package = Package(
         // .package(url: /* package url */, from: "1.0.0"),
 		/*.package(name:"CLMDB", path:"../CLMDB"),
 		.package(name:"swift-system", path:"../swift-system")*/
-		.package(url:"https://github.com/tannerdsilva/CLMDB.git", branch:"master"),
+		.package(url:"https://github.com/tannerdsilva/CLMDB.git", .exact("0.9.29")),
 		.package(url:"https://github.com/apple/swift-system.git", .upToNextMajor(from:"1.0.0"))
     ],
     targets: [
