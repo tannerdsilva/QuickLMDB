@@ -73,6 +73,17 @@ final class QuickLMDBTests:XCTestCase {
 		
 		XCTAssertEqual(isEqual, true)
 	}
+	
+	func testDupSort() throws {
+		let someTrans = try Transaction(testerEnv!, readOnly:false)
+		let getDatabase = try testerEnv!.openDatabase(named:"tester_dupsort", flags:[.create, .dupSort], tx:someTrans)
+		try getDatabase.setEntry(value:"tradeogre.com", forKey:"XMRBTC", tx:someTrans)
+		try getDatabase.setEntry(value:"kraken.com", forKey:"XMRBTC", tx:someTrans)
+		print("\(try getDatabase.getStatistics(tx:someTrans).entries)")
+		let isSuccessful:Bool = try getDatabase.getStatistics(tx:someTrans).entries == 2
+		
+		XCTAssertEqual(isSuccessful, true)
+	}
 
 	func testDatabaseSort() throws {
 		let compareResult = try testerEnv!.transact(readOnly:false) { someTrans in
