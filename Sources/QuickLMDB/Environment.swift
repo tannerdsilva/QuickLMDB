@@ -26,7 +26,7 @@ public class Environment:Transactable {
 		///Use a writable memorymap.
 		public static let writeMap = Flags(rawValue:UInt32(MDB_WRITEMAP))
 		
-		///Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags/writeMap`` flag.
+		///Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags-swift.struct/writeMap`` flag.
 		public static let mapAsync = Flags(rawValue:UInt32(MDB_MAPASYNC))
 		
 		///Associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
@@ -172,7 +172,7 @@ public class Environment:Transactable {
 		}
 	}
     
-    /// Flush the data buffers to disk. Useful for Environments with ``QuickLMDB/Environment/Flags/noSync`` enabled.
+    /// Flush the data buffers to disk. Useful for Environments with ``QuickLMDB/Environment/Flags-swift.struct/writeMap`` enabled.
     /// - Parameter force: If true, the operation forces a synchronus flush. If false, an asynchronus flush is preformed.
     /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
 	public func sync(force:Bool = true) throws {
