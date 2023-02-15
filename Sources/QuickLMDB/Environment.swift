@@ -46,6 +46,9 @@ public class Environment:Transactable {
 	/// - This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
 	public var env_handle:OpaquePointer?
 	
+	/// The flags that were used to initialize the Environment.
+	public let flags:Flags
+	
 	/// Initialize an LMDB environment at the specified path string.
 	/// - Parameters:
 	///   - path: The path where the environment will be stored.
@@ -93,6 +96,7 @@ public class Environment:Transactable {
 		}
 		
 		self.env_handle = environmentHandle
+		self.flags = flags
 	}
 	
 	/// Open a database in the environment.
