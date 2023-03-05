@@ -40,6 +40,21 @@ extension LosslessStringConvertible where Self:MDB_convertible {
 	}
 }
 
+///Any object that conforms to `RawRepresentable` and declares `MDB_convertible` will automatically inherit this implementation.
+/// - Note: the `RawValue` type must also conform to `LosslessStringConvertible` for this to work.
+extension RawRepresentable where Self:MDB_convertible, RawValue:LosslessStringConvertible {
+	public init?(_ value:MDB_val) {
+		let dataCopy = Data(bytes:value.mv_data, count:value.mv_size)
+		guard let asString = String(data:dataCopy, encoding:.utf8), let asRawValue = RawValue(asString), let asSelf = Self(rawValue:asRawValue) else {
+			return nil
+		}
+		self = asSelf
+	}
+	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
+		return try rawValue.description.asMDB_val(valFunc)
+	}
+}
+
 ///Declare `MDB_convertible` for various **number** types that inherit from `LosslessStringConvertible`. The correct implementation will be automatically inherited for these types.
 extension Bool:MDB_convertible {}
 extension Double:MDB_convertible {}
