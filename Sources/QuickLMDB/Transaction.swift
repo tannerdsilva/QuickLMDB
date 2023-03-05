@@ -35,15 +35,24 @@ public class Transaction:Transactable {
 		try self.init(environment:environment.env_handle, readOnly:readOnly, parent:parent?.txn_handle)
 	}
 	
+	/// The primary initializer for a Transaction. This is used by the other initializers and should not be called directly.
+	/// - Implements `mdb_txn_begin`
+	/// - Parameters:
+	/// 	- environment: The `MDB_env` that the transaction will be associated with.
+	/// 	- readOnly: Indicates if the transaction should be read-only.
+	/// 	- parent: An optional parent transaction. 
+	/// 		- If this is not `nil`, the transaction will be a child transaction.
+	/// 			- This is only evaluated if `readOnly` is `false`, since child transactions cannot be read-only.
 	required internal init(environment env_handle:OpaquePointer?, readOnly:Bool, parent:OpaquePointer? = nil) throws {
 		self.env_handle = env_handle
 		self.readOnly = readOnly
 		var start_handle:OpaquePointer? = nil
-		var flags:UInt32  = 0
+		let createResult:Int32
 		if (readOnly == true) {
-			flags = UInt32(MDB_RDONLY)
+			createResult = mdb_txn_begin(env_handle, nil, UInt32(MDB_RDONLY), &start_handle)
+		} else {
+			createResult = mdb_txn_begin(env_handle, parent, 0, &start_handle)
 		}
-		let createResult = mdb_txn_begin(env_handle, parent, flags, &start_handle)
 		guard createResult == 0 else {
 			throw LMDBError(returnCode:createResult)
 		}
