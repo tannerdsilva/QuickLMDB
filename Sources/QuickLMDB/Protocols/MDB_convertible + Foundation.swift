@@ -1,7 +1,7 @@
 import CLMDB
 import Foundation
 
-///Any object that conforms to `ContiguousBytes` and declares ``MDB_encodable`` will automatically inherit this implementation.
+/// Any object that conforms to `ContiguousBytes` and declares ``MDB_encodable`` will automatically inherit this implementation.
 extension ContiguousBytes where Self:MDB_encodable {
 	public func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R {
 		return try withUnsafeBytes({ bytes in
@@ -17,16 +17,16 @@ extension ContiguousBytes where Self:MDB_encodable {
 	}
 }
 
-///The `Data` struct directly conforms to the `MDB_convertible` protocol.
-///Since the `MDB_encodable` functionality is already inherited through the `ContiguousBytes` extension, we only need to define the functions for `MDB_decodable`.
+/// The `Data` struct directly conforms to the `MDB_convertible` protocol.
+/// Since the `MDB_encodable` functionality is already inherited through the `ContiguousBytes` extension, we only need to define the functions for `MDB_decodable`.
 extension Data:MDB_convertible {
 	public init?(_ value:MDB_val) {
 		self = Data(bytes:value.mv_data, count:value.mv_size)
 	}
 }
 
-///Any object that conforms to `LosslessStringConvertible` and declares `MDB_convertible` will automatically inherit this implementation.
-///`LosslessStringConvertible` is the primary means that QuickLMDB uses to serialize and deserialize common language types (such as number and string types).
+/// Any object that conforms to `LosslessStringConvertible` and declares `MDB_convertible` will automatically inherit this implementation.
+/// `LosslessStringConvertible` is the primary means that QuickLMDB uses to serialize and deserialize common language types (such as number and string types).
 extension LosslessStringConvertible where Self:MDB_convertible {
 	public init?(_ value:MDB_val) {
 		let dataCopy = Data(bytes:value.mv_data, count:value.mv_size)
@@ -40,7 +40,7 @@ extension LosslessStringConvertible where Self:MDB_convertible {
 	}
 }
 
-///Declare `MDB_convertible` for various **number** types that inherit from `LosslessStringConvertible`. The correct implementation will be automatically inherited for these types.
+/// Declare `MDB_convertible` for various **number** types that inherit from `LosslessStringConvertible`. The correct implementation will be automatically inherited for these types.
 extension Bool:MDB_convertible {}
 extension Double:MDB_convertible {}
 extension Float:MDB_convertible {}
@@ -55,7 +55,7 @@ extension UInt16:MDB_convertible {}
 extension UInt32:MDB_convertible {}
 extension UInt64:MDB_convertible {}
 
-///Declare `MDB_convertible` for various **string** types that inherit from `LosslessStringConvertible`. The correct implementation will be automatically inherited for these types.
+/// Declare `MDB_convertible` for various **string** types that inherit from `LosslessStringConvertible`. The correct implementation will be automatically inherited for these types.
 extension String:MDB_convertible {}
 extension Substring:MDB_convertible {}
 extension Unicode.Scalar:MDB_convertible {}
@@ -72,7 +72,7 @@ extension Date:MDB_convertible {
 	}
 }
 
-///Any `Dictionary` that contains Key and Value types that conform to `Codable` is considered `MDB_convertible`
+/// Any `Dictionary` that contains Key and Value types that conform to `Codable` is considered `MDB_convertible`
 extension Dictionary:MDB_convertible where Key:Codable, Value:Codable {
 	public init?(_ value:MDB_val) {
 		do {
@@ -88,7 +88,7 @@ extension Dictionary:MDB_convertible where Key:Codable, Value:Codable {
 	}
 }
 
-///Any `Array` that contains Element types that conform to `Codable` is considered `MDB_convertible`
+/// Any `Array` that contains Element types that conform to `Codable` is considered `MDB_convertible`
 extension Array:MDB_convertible where Element:Codable {
 	public init?(_ value:MDB_val) {
 		do {
@@ -104,7 +104,7 @@ extension Array:MDB_convertible where Element:Codable {
 	}
 }
 
-///Any `Set` that contains Element types that conform to `Codable` is considered `MDB_convertible`
+/// Any `Set` that contains Element types that conform to `Codable` is considered `MDB_convertible`
 extension Set:MDB_convertible where Element:Codable {
 	public init?(_ value:MDB_val) {
 		do {

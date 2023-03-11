@@ -5,34 +5,34 @@ public enum LMDBError:Error {
 
 	//LMDB specific errors
 	
-	///The key/value pair already exists.
+	/// The key/value pair already exists.
 	case keyExists
 	
-	///The key/value pair was not found (EOF)
+	/// The key/value pair was not found (EOF)
 	case notFound
 	
-	///Requested page not found - this usually indicates corruption.
+	/// Requested page not found - this usually indicates corruption.
 	case pageNotFound
 	
-	///Located page was wrong type.
+	/// Located page was wrong type.
 	case corrupted
 	
-	///Update of meta page failed or the environment had a fatal error.
+	/// Update of meta page failed or the environment had a fatal error.
 	case panic
 	
-	///Environment version mismatch.
+	/// Environment version mismatch.
 	case versionMismatch
 	
-	///File is not a valid LMDB file.
+	/// File is not a valid LMDB file.
 	case invalid
 	
-	///Environment mapsize has been reached.
+	/// Environment mapsize has been reached.
 	case mapFull
 	
-	///Environment maximum database count has been reached.
+	/// Environment maximum database count has been reached.
 	case dbsFull
 	
-	///Environment maximum reader count has been reached.
+	/// Environment maximum reader count has been reached.
 	case readersFull
 	case tlsFull
 	
@@ -67,14 +67,14 @@ public enum LMDBError:Error {
 	/// The specified database was changed unexpectedly
 	case badDBI
 
-	//OS specific errors
+	// OS specific errors
 	case invalidParameter
 	case outOfDiskSpace
 	case outOfMemory
 	case ioError
 	case accessViolation
 	
-	//Unknown errors
+	// Unknown errors
 	case other(returnCode:Int32)
 
 	public init(returnCode:Int32) {

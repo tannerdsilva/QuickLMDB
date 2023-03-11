@@ -2,10 +2,10 @@ import CLMDB
 
 public class Transaction:Transactable {
 
-	///Pointer to the `MDB_env` that an instance is associated with.
+	/// Pointer to the `MDB_env` that an instance is associated with.
 	public let env_handle:OpaquePointer?
 	
-	///Pointer to the `MDB_txn` struct associated with a given instance.
+	/// Pointer to the `MDB_txn` struct associated with a given instance.
 	public var txn_handle:OpaquePointer?
 	
 	/// Indicates if a given instance is a read-only transaction.
@@ -59,7 +59,7 @@ public class Transaction:Transactable {
 		self.txn_handle = start_handle
 	}
 	
-	///Transactable conformance
+	/// Transactable conformance
 	public func transact<R>(readOnly: Bool, _ txFunc: (Transaction) throws -> R) throws -> R {
 		let newTransaction = try Transaction(environment:self.env_handle, readOnly:readOnly, parent:self.txn_handle)
 		let captureReturn:R

@@ -2,7 +2,7 @@ import CLMDB
 
 public struct Database {
 	
-	///Special options for this database. These flags are specified
+	/// Special options for this database. These flags are specified
 	public struct Flags:OptionSet {
 		public let rawValue:UInt32
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
@@ -31,27 +31,27 @@ public struct Database {
 		public static let create = Flags(rawValue:UInt32(MDB_CREATE))
 	}
 	
-	///Statistics for the database.
+	/// Statistics for the database.
 	public struct Statistics {
-		///Size of the database page. This is currently the same for all databases.
+		/// Size of the database page. This is currently the same for all databases.
 		public let pageSize:UInt32
-		///Depth (height) of the B-tree.
+		/// Depth (height) of the B-tree.
 		public let depth:UInt32
-		///Number of internal (non-leaf) pages.
+		/// Number of internal (non-leaf) pages.
 		public let branch_pages:size_t
-		///Number of leaf pages.
+		/// Number of leaf pages.
 		public let leaf_pages:size_t
-		///Number of overflow pages.
+		/// Number of overflow pages.
 		public let overflow_pages:size_t
-		///Number of data items.
+		/// Number of data items.
 		public let entries:size_t
 	}
 	
-	///The name of the database. When this value is `nil`, this is the only database that exists in the Environment.
+	/// The name of the database. When this value is `nil`, this is the only database that exists in the Environment.
 	public let name:String?
-	///The `MDB_env` that this Database is associated with.
+	/// The `MDB_env` that this Database is associated with.
 	public let env_handle:OpaquePointer?
-	///This database as an `MDB_dbi`. Used for calling into LMDB core functions.
+	/// This database as an `MDB_dbi`. Used for calling into LMDB core functions.
 	public let db_handle:MDB_dbi
 	
 	/// Primary initializer. Opens a database.
@@ -81,7 +81,7 @@ public struct Database {
 		self.name = name
 	}
 	
-	///Create a cursor from this Database.
+	/// Create a cursor from this Database.
 	public func cursor(tx:Transaction) throws -> Cursor {
 		return try Cursor(txn_handle:tx.txn_handle, db:self.db_handle, readOnly:tx.readOnly)
 	}

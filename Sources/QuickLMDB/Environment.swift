@@ -3,42 +3,42 @@ import SystemPackage
 
 public class Environment:Transactable {
 	
-	///Flags that can be used to open an environment
+	/// Flags that can be used to open an environment
 	public struct Flags:OptionSet {
 		public let rawValue:UInt32
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
 		
-		///Experimental option that opens the memorymap at a fixed address.
+		/// Experimental option that opens the memorymap at a fixed address.
 		public static let fixedMap = Flags(rawValue:UInt32(MDB_FIXEDMAP))
 		
-		///Specify that the environment is a file instead of a directory.
+		/// Specify that the environment is a file instead of a directory.
 		public static let noSubDir = Flags(rawValue:UInt32(MDB_NOSUBDIR))
 		
-		///Disables the `fsync` call that typically executes after a transaction is committed.
+		/// Disables the `fsync` call that typically executes after a transaction is committed.
 		public static let noSync = Flags(rawValue:UInt32(MDB_NOSYNC))
 		
-		///Open the environment as readonly.
+		/// Open the environment as readonly.
 		public static let readOnly = Flags(rawValue:UInt32(MDB_RDONLY))
 		
-		///Disables the `fsync` on the metapage that typically executes after a transaction is committed.
+		/// Disables the `fsync` on the metapage that typically executes after a transaction is committed.
 		public static let noMetaSync = Flags(rawValue:UInt32(MDB_NOMETASYNC))
 		
-		///Use a writable memorymap.
+		/// Use a writable memorymap.
 		public static let writeMap = Flags(rawValue:UInt32(MDB_WRITEMAP))
 		
-		///Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags-swift.struct/writeMap`` flag.
+		/// Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags-swift.struct/writeMap`` flag.
 		public static let mapAsync = Flags(rawValue:UInt32(MDB_MAPASYNC))
 		
-		///Associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
+		/// Associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
 		public static let noTLS = Flags(rawValue:UInt32(MDB_NOTLS))
 		
-		///Disable all locking mechanisms for the database. Caller must manage their own locking.
+		/// Disable all locking mechanisms for the database. Caller must manage their own locking.
 		public static let noLock = Flags(rawValue:UInt32(MDB_NOLOCK))
 		
-		///Do not readahead (this flag has no effect on Windows).
+		/// Do not readahead (this flag has no effect on Windows).
 		public static let noReadAhead = Flags(rawValue:UInt32(MDB_NORDAHEAD))
 		
-		///Do not initialize malloc'd memory before writing to the datafile.
+		/// Do not initialize malloc'd memory before writing to the datafile.
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
 	

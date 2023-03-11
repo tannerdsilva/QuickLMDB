@@ -5,101 +5,102 @@ public typealias MDB_val = CLMDB.MDB_val
 
 /// LMDB Cursor. This is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memory.
 public class Cursor {
-	///This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
+	
+	/// This is the complete toolset of operations that can be utilized to retrieve and navigate entries in the database.
 	public enum Operation {
 		
-		///Operation flags modify the way that entries are stored in the database. In LMDB documentation, these are known as "write flags".
+		/// Operation flags modify the way that entries are stored in the database. In LMDB documentation, these are known as "write flags".
 		public struct Flags:OptionSet {
 			
-			///The raw integer value for this flag. Can be passed directly into 
+			/// The raw integer value for this flag. Can be passed directly into 
 			public let rawValue:UInt32
 			
-			///Create a flag with its integer value.
+			/// Create a flag with its integer value.
 			public init(rawValue:UInt32) {
 				self.rawValue = rawValue
 			}
 
-			///Do not write the entry if the key already exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
+			/// Do not write the entry if the key already exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
 			public static let noOverwrite = Flags(rawValue:UInt32(MDB_NOOVERWRITE))
 			
-			///Only for use with ``Database/Flags/dupSort``
-			///- For ``Cursor/setEntry(value:forKey:flags:)``: don't write if the key and data pair already exist.
-			///- For ``Cursor/deleteEntry(flags:)``: Remove all duplicate data items from the database.
+			/// Only for use with ``Database/Flags/dupSort``
+			/// - For ``Cursor/setEntry(value:forKey:flags:)``: don't write if the key and data pair already exist.
+			/// - For ``Cursor/deleteEntry(flags:)``: Remove all duplicate data items from the database.
 			public static let noDupData = Flags(rawValue:UInt32(MDB_NODUPDATA))
 			
-			///For ``Cursor/setEntry(value:forKey:flags:)``: overwrite the current key/value pair.
+			/// For ``Cursor/setEntry(value:forKey:flags:)``: overwrite the current key/value pair.
 			public static let current = Flags(rawValue:UInt32(MDB_CURRENT))
 			
-			///For ``Cursor/setEntry(value:forKey:flags:)``: just reserve space for the value, don't copy it. Return a pointer to the reserved space.
+			/// For ``Cursor/setEntry(value:forKey:flags:)``: just reserve space for the value, don't copy it. Return a pointer to the reserved space.
 			public static let reserve = Flags(rawValue:UInt32(MDB_RESERVE))
 			
-			///Pre-sorted keys are being stored in the database. Don't split full pages.
+			/// Pre-sorted keys are being stored in the database. Don't split full pages.
 			public static let append = Flags(rawValue:UInt32(MDB_APPEND))
 			
-			///Pre-sorted key/value entires are being stored in the database. Don't split full pages.
+			/// Pre-sorted key/value entires are being stored in the database. Don't split full pages.
 			public static let appendDup = Flags(rawValue:UInt32(MDB_APPENDDUP))
 			
-			///Store multiple data items in one call. Only for ``Database/Flags/dupFixed``.
+			/// Store multiple data items in one call. Only for ``Database/Flags/dupFixed``.
 			public static let multiple = Flags(rawValue:UInt32(MDB_MULTIPLE))
 		}
 		
-		///Position at first key/data item.
+		/// Position at first key/data item.
 		case first
 		
-		///Position at first data item of current key. Only use with ``Database/Flags/dupSort`` enabled.
+		/// Position at first data item of current key. Only use with ``Database/Flags/dupSort`` enabled.
 		case firstDup
 		
-		///Position at key/data pair. Only use with ``Database/Flags/dupSort`` enabled.
+		/// Position at key/data pair. Only use with ``Database/Flags/dupSort`` enabled.
 		case getBoth
 		
-		///Position at key, nearest data. Only use with ``Database/Flags/dupSort`` enabled.
+		/// Position at key, nearest data. Only use with ``Database/Flags/dupSort`` enabled.
 		case getBothRange
 		
-		///Return the key/value entry at the cursor's current position.
+		/// Return the key/value entry at the cursor's current position.
 		case getCurrent
 		
-		///Return key and up to a page of duplicate data items from the current cursor position. Move cursor to prepare for ``Cursor/Operation/nextMultiple``.
+		/// Return key and up to a page of duplicate data items from the current cursor position. Move cursor to prepare for ``Cursor/Operation/nextMultiple``.
 		case getMultiple
 		
-		///Position at the last key/value item.
+		/// Position at the last key/value item.
 		case last
 		
-		///Position at the last data item of the current key.
+		/// Position at the last data item of the current key.
 		case lastDup
 		
-		///Position at the next data item.
+		/// Position at the next data item.
 		case next
 		
-		///Position at the next data item of the current key.
+		/// Position at the next data item of the current key.
 		case nextDup
 		
-		///Return key and up to a page of duplicate data items from next cursor position. Move cursor to prepare for the next ``Cursor/Operation/nextMultiple``.
+		/// Return key and up to a page of duplicate data items from next cursor position. Move cursor to prepare for the next ``Cursor/Operation/nextMultiple``.
 		case nextMultiple
 		
-		///Position at first data item of the next key.
+		/// Position at first data item of the next key.
 		case nextNoDup
 		
-		///Position at previous data item.
+		/// Position at previous data item.
 		case previous
 		
-		///Position at previous data item of current key. Only for ``Database/Flags/dupSort``.
+		/// Position at previous data item of current key. Only for ``Database/Flags/dupSort``.
 		case previousDup
 		
-		///Position at lsat data item of previous key.
+		/// Position at lsat data item of previous key.
 		case previousNoDup
 		
-		///Position at the specified key.
-		///- Returned key will point to the same buffer that was passed into the cursor.
+		/// Position at the specified key.
+		/// - Returned key will point to the same buffer that was passed into the cursor.
 		case set
 		
-		///Position at the specified key.
-		///- Returned key will point to the buffer that is stored in the memory map.
+		/// Position at the specified key.
+		/// - Returned key will point to the buffer that is stored in the memory map.
 		case setKey
 		
-		///Position at the first key greater than or equal to specified key.
+		/// Position at the first key greater than or equal to specified key.
 		case setRange
 		
-		///Initialize an operation with a specified `MDB_cursor_op`.
+		/// Initialize an operation with a specified `MDB_cursor_op`.
 		public init(mdbValue:MDB_cursor_op) {
 			switch mdbValue {
 				case MDB_FIRST:
@@ -188,16 +189,16 @@ public class Cursor {
 		}
 	}
 	
-	///This is the pointer to the `MDB_cursor` struct associated with a given instance.
+	/// This is the pointer to the `MDB_cursor` struct associated with a given instance.
 	public let cursor_handle:OpaquePointer?
 	
-	///This is the database that this cursor is associated with.
+	/// This is the database that this cursor is associated with.
 	public let db_handle:MDB_dbi
 	
-	///Pointer to the `MDB_txn` struct associated with a given instance.
+	/// Pointer to the `MDB_txn` struct associated with a given instance.
 	public let txn_handle:OpaquePointer?
 	
-	///Used to determine if the cursor needs to close itself when it is deinitialized.
+	/// Used to determine if the cursor needs to close itself when it is deinitialized.
 	internal let readOnly:Bool
 	
 	internal init(txn_handle:OpaquePointer?, db:MDB_dbi, readOnly:Bool) throws {
