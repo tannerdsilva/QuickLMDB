@@ -64,7 +64,7 @@ extension Database {
 		}
 	}
 
-	public func deleteObject<K: MDB_encodable>(forKey key: K, tx: Transaction?) throws {
+	public func deleteObject<K: MDB_encodable, V:AnyObject>(type:V.Type, forKey key: K, tx: Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			var dataVal = MDB_val(mv_size: 0, mv_data: UnsafeMutableRawPointer(mutating: nil))
 			let getResult: Int32
@@ -86,7 +86,7 @@ extension Database {
 			}
 
 			let pointer = dataVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-			let unmanagedValue = Unmanaged<AnyObject>.fromOpaque(pointer)
+			let unmanagedValue = Unmanaged<V>.fromOpaque(pointer)
 
 			let deleteResult: Int32
 			if tx != nil {

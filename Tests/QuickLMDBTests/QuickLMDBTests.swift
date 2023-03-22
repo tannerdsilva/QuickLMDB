@@ -84,6 +84,61 @@ final class QuickLMDBTests:XCTestCase {
 		
 		XCTAssertEqual(isSuccessful, true)
 	}
+	
+	func testObjectARC() throws {
+		// Create a custom wrapper class with a deinitializer to track the object's lifecycle
+		class DeinitTracker {
+			let onDeinit: () -> Void
+			init(_ onDeinit: @escaping () -> Void) {
+				self.onDeinit = onDeinit
+			}
+
+			deinit {
+				onDeinit()
+			}
+		}
+		let someTrans = try Transaction(testerEnv!, readOnly:false)
+		let database = try! testerEnv!.openDatabase(named:"tester_arc", flags:[.create], tx:someTrans)
+ 		 // Track whether the value is deallocated
+        var isValueDeallocated = false
+		let myKey = "myARCKey!"
+		func runTheThing() throws {
+			var myThing:DeinitTracker? = nil
+			do {
+				let value = DeinitTracker {
+					// exit(55)
+					isValueDeallocated = true
+				}
+				// Set the value in the database
+				try database.setObject(value: value, forKey: myKey, tx:someTrans)
+				// try database.setObject(value: value, forKey: myKey, tx:someTrans)
+				// // Get the value from the database
+				// for i in 0..<50 {
+				// 	try database.getObject(type: DeinitTracker.self, forKey: myKey, tx:someTrans)
+				// }
+				try database.deleteObject(type:DeinitTracker.self, forKey: myKey, tx:someTrans)
+				// try database.getObject(type: DeinitTracker.self, forKey: myKey, tx:someTrans)?.sayHI()
+				// myThing = value
+			}
+			// sleep(5)
+			// try database.getObject(type: DeinitTracker.self, forKey: myKey, tx:someTrans) { obtainedValue in
+			// 	print("got item \(obtainedValue) \(isValueDeallocated)")
+			// 	// XCTAssertFalse(isValueDeallocated, "The value should not be deallocated during getObject")
+			// }
+			// Trigger a deallocation by removing the value from the database
+			// try database.getObject(type: DeinitTracker.self, forKey: myKey, tx:someTrans)
+			
+
+			
+		}
+
+		try runTheThing()
+		XCTAssertTrue(isValueDeallocated, "the value should be deallocated by the end of this test")
+       defer {
+		print("\(isValueDeallocated)")
+	   }
+        // XCTAssert(isValueDeallocated, "The value should be deallocated after removeObject")
+	}
 
 	func testDatabaseSort() throws {
 		let compareResult = try testerEnv!.transact(readOnly:false) { someTrans in
