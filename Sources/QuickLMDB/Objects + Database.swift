@@ -56,15 +56,21 @@ extension Database {
 			guard dataVal.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
 				return nil
 			}
-		
+
 			let pointer = dataVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
 			let unmanagedValue = Unmanaged<V>.fromOpaque(pointer)
 
-			return unmanagedValue.takeUnretainedValue()
+			// Get the reference and increment the reference count
+			let retainedValue = unmanagedValue.takeRetainedValue()
+	
+			// Retain the object again before returning it
+			_ = Unmanaged.passUnretained(retainedValue).retain()
+	
+			return retainedValue
 		}
 	}
 
-	public func deleteObject<K: MDB_encodable, V:AnyObject>(type:V.Type, forKey key: K, tx: Transaction?) throws {
+	public func deleteObject<K: MDB_encodable>(forKey key: K, tx: Transaction?) throws {
 		return try key.asMDB_val { keyVal in
 			var dataVal = MDB_val(mv_size: 0, mv_data: UnsafeMutableRawPointer(mutating: nil))
 			let getResult: Int32
@@ -86,7 +92,7 @@ extension Database {
 			}
 
 			let pointer = dataVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-			let unmanagedValue = Unmanaged<V>.fromOpaque(pointer)
+			let unmanagedValue = Unmanaged<AnyObject>.fromOpaque(pointer)
 
 			let deleteResult: Int32
 			if tx != nil {
