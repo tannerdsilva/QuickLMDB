@@ -62,10 +62,6 @@ extension Database {
 
 			// Get the reference and increment the reference count
 			let retainedValue = unmanagedValue.takeRetainedValue()
-	
-			// Retain the object again before returning it
-			_ = Unmanaged.passUnretained(retainedValue).retain()
-	
 			return retainedValue
 		}
 	}
