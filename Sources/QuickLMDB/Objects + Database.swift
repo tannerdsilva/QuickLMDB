@@ -61,7 +61,7 @@ extension Database {
 			let unmanagedValue = Unmanaged<V>.fromOpaque(pointer)
 
 			// Get the reference and increment the reference count
-			let retainedValue = unmanagedValue.takeRetainedValue()
+			let retainedValue = unmanagedValue.takeUnretainedValue()
 			return retainedValue
 		}
 	}
