@@ -21,23 +21,34 @@ extension Cursor:Sequence {
 	public struct CursorIterator:IteratorProtocol, Sequence {
 		internal let cursor_handle:OpaquePointer?
 		internal var first:Bool = true
+		private let isRev:Bool
 		
 		/// The number of entries in the database
 		public let count:Int
 		
-		fileprivate init(count:Int, cursor_handle:OpaquePointer?) {
+		fileprivate init(count:Int, cursor_handle:OpaquePointer?, reversed:Bool = false) {
 			self.cursor_handle = cursor_handle
 			self.count = count
+			self.isRev = false
 		}
 		
 		/// Returns the next entry in the database, or `nil` when iteration has been completed.
 		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
 			let cursorOp:MDB_cursor_op
 			if (first == true) {
-				cursorOp = MDB_FIRST
-				first = false
+				switch isRev {
+					case true:
+						cursorOp = MDB_LAST
+					case false:
+						cursorOp = MDB_FIRST
+				}
 			} else {
-				cursorOp = MDB_NEXT
+				switch isRev {
+					case true:
+						cursorOp = MDB_PREV
+					case false:
+						cursorOp = MDB_NEXT
+				}
 			}
 			
 			var captureKey = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
@@ -48,6 +59,10 @@ extension Cursor:Sequence {
 			}
 			
 			return (key:captureKey, value:captureVal)
+		}
+
+		public func reversed() -> CursorIterator {
+			return CursorIterator(count:count, cursor_handle:cursor_handle, reversed:true)
 		}
 	}
 	
@@ -64,6 +79,7 @@ extension Cursor:Sequence {
 	public struct CursorDupIterator:IteratorProtocol, Sequence {
 		internal let cursor_handle:OpaquePointer?
 		internal var first:Bool = true
+		private let isRev:Bool
 		
 		/// The key that this DupIterator is iterating through
 		internal let key:MDB_val
@@ -71,20 +87,31 @@ extension Cursor:Sequence {
 		/// The number of entries for the current key
 		public let count:Int
 		
-		fileprivate init(key:MDB_val, count:Int, cursor_handle:OpaquePointer?) {
+		fileprivate init(key:MDB_val, count:Int, cursor_handle:OpaquePointer?, reversed:Bool = false) {
 			self.cursor_handle = cursor_handle
 			self.count = count
 			self.key = key
+			self.isRev = false
 		}
 		
 		/// Returns the next entry in the database, or `nil` when iteration has been completed.
 		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
 			let cursorOp:MDB_cursor_op
 			if (first == true) {
-				cursorOp = MDB_FIRST_DUP
+				switch isRev {
+					case true:
+						cursorOp = MDB_LAST_DUP
+					case false:
+						cursorOp = MDB_FIRST_DUP
+				}
 				first = false
 			} else {
-				cursorOp = MDB_NEXT_DUP
+				switch isRev {
+					case true:
+						cursorOp = MDB_PREV_DUP
+					case false:
+						cursorOp = MDB_NEXT_DUP
+				}
 			}
 			
 			var captureKey = key
