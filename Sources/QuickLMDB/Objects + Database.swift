@@ -38,7 +38,7 @@ extension Database {
 	}
 
 	
-	public func getObject<K: MDB_encodable, V: AnyObject>(forKey key: K, tx txn: Transaction?) throws -> V? {
+	public func getObject<K: MDB_encodable, T: AnyObject>(type:T.Type, forKey key: K, tx txn: Transaction?) throws -> T? {
 		return try key.asMDB_val { keyVal in
 			let tx: Transaction
 			if txn == nil {
@@ -59,7 +59,7 @@ extension Database {
 			}
 
 			let storedPointer = valueVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-			let unmanagedObject = Unmanaged<V>.fromOpaque(storedPointer)
+			let unmanagedObject = Unmanaged<T>.fromOpaque(storedPointer)
 
 			// Retain the object to return an additionally retained object for the user
 			let retainedObject = unmanagedObject.retain().takeUnretainedValue()
@@ -73,7 +73,7 @@ extension Database {
 	}
 
 
-	public func deleteObject<K: MDB_encodable>(forKey key: K, tx txn: Transaction?) throws {
+	public func deleteObject<K: MDB_encodable, T:AnyObject>(type:T.Type, forKey key: K, tx txn: Transaction?) throws {
 		try key.asMDB_val { keyVal in
 			let tx: Transaction
 			if txn == nil {
