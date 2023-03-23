@@ -51,15 +51,11 @@ extension Database {
 			let getResult = mdb_get(tx.txn_handle, db_handle, &keyVal, &valueVal)
 
 			guard getResult == MDB_SUCCESS else {
-				if getResult == MDB_NOTFOUND {
-					return nil
-				} else {
-					throw LMDBError(returnCode: getResult)
-				}
+				throw LMDBError(returnCode: getResult)
 			}
 
 			guard valueVal.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
-				throw LMDBError.invalidDataSize
+				throw LMDBError.corrupted
 			}
 
 			let storedPointer = valueVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
@@ -99,7 +95,7 @@ extension Database {
 			}
 
 			guard existingEntry.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
-				throw LMDBError.invalidDataSize
+				throw LMDBError.corrupted
 			}
 
 			// Properly release the existing entry
