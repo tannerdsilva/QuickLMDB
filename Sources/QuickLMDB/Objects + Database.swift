@@ -38,72 +38,85 @@ extension Database {
 	}
 
 	
-	public func getObject<K: MDB_encodable, V: AnyObject>(type: V.Type, forKey key: K, tx: Transaction?) throws -> V? {
-		return try key.asMDB_val { keyVal -> V? in
-			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			let valueResult: Int32
-			if tx != nil {
-				valueResult = mdb_get(tx!.txn_handle, db_handle, &keyVal, &dataVal)
+	public func getObject<K: MDB_encodable, V: AnyObject>(forKey key: K, tx txn: Transaction?) throws -> V? {
+		return try key.asMDB_val { keyVal in
+			let tx: Transaction
+			if txn == nil {
+				tx = try Transaction(environment: env_handle, readOnly: true, parent: nil)
 			} else {
-				valueResult = try Transaction.instantTransaction(environment: env_handle, readOnly: true, parent: nil) { someTrans in
-					return mdb_get(someTrans.txn_handle, db_handle, &keyVal, &dataVal)
+				tx = txn!
+			}
+
+			var valueVal = MDB_val()
+			let getResult = mdb_get(tx.txn_handle, db_handle, &keyVal, &valueVal)
+
+			guard getResult == MDB_SUCCESS else {
+				if getResult == MDB_NOTFOUND {
+					return nil
+				} else {
+					throw LMDBError(returnCode: getResult)
 				}
 			}
-			guard valueResult == MDB_SUCCESS else {
-				throw LMDBError(returnCode: valueResult)
+
+			guard valueVal.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
+				throw LMDBError.invalidDataSize
 			}
 
-			guard dataVal.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
-				return nil
+			let storedPointer = valueVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+			let unmanagedObject = Unmanaged<V>.fromOpaque(storedPointer)
+
+			// Retain the object to return an additionally retained object for the user
+			let retainedObject = unmanagedObject.retain().takeUnretainedValue()
+
+			if txn == nil {
+				try tx.commit()
 			}
 
-			let pointer = dataVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-			let unmanagedValue = Unmanaged<V>.fromOpaque(pointer)
-
-			// Get the reference and increment the reference count
-			let retainedValue = unmanagedValue.takeUnretainedValue()
-			return retainedValue
+			return retainedObject
 		}
 	}
 
-	public func deleteObject<K: MDB_encodable>(forKey key: K, tx: Transaction?) throws {
-		return try key.asMDB_val { keyVal in
-			var dataVal = MDB_val(mv_size: 0, mv_data: UnsafeMutableRawPointer(mutating: nil))
-			let getResult: Int32
 
-			if tx != nil {
-				getResult = mdb_get(tx!.txn_handle, db_handle, &keyVal, &dataVal)
+	public func deleteObject<K: MDB_encodable>(forKey key: K, tx txn: Transaction?) throws {
+		try key.asMDB_val { keyVal in
+			let tx: Transaction
+			if txn == nil {
+				tx = try Transaction(environment: env_handle, readOnly: false, parent: nil)
 			} else {
-				getResult = try Transaction.instantTransaction(environment: env_handle, readOnly: true, parent: nil) { someTrans in
-					return mdb_get(someTrans.txn_handle, db_handle, &keyVal, &dataVal)
-				}
+				tx = txn!
 			}
 
+			// Check if there is an existing entry for the given key
+			var existingEntry = MDB_val()
+			let getResult = mdb_get(tx.txn_handle, db_handle, &keyVal, &existingEntry)
+			
 			guard getResult == MDB_SUCCESS else {
-				throw LMDBError(returnCode: getResult)
-			}
-
-			guard dataVal.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
-				return
-			}
-
-			let pointer = dataVal.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-			let unmanagedValue = Unmanaged<AnyObject>.fromOpaque(pointer)
-
-			let deleteResult: Int32
-			if tx != nil {
-				deleteResult = mdb_del(tx!.txn_handle, db_handle, &keyVal, nil)
-			} else {
-				deleteResult = try Transaction.instantTransaction(environment: env_handle, readOnly: false, parent: nil) { someTrans in
-					return mdb_del(someTrans.txn_handle, db_handle, &keyVal, nil)
+				if getResult == MDB_NOTFOUND {
+					return
+				} else {
+					throw LMDBError(returnCode: getResult)
 				}
 			}
+
+			guard existingEntry.mv_size == MemoryLayout<UnsafeRawPointer>.stride else {
+				throw LMDBError.invalidDataSize
+			}
+
+			// Properly release the existing entry
+			let existingPointer = existingEntry.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+			let unmanagedExistingValue = Unmanaged<AnyObject>.fromOpaque(existingPointer)
+			unmanagedExistingValue.release()
+
+			// Delete the object from the database
+			let deleteResult = mdb_del(tx.txn_handle, db_handle, &keyVal, nil)
 
 			guard deleteResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode: deleteResult)
 			}
 
-			unmanagedValue.release()
+			if txn == nil {
+				try tx.commit()
+			}
 		}
 	}
 }
