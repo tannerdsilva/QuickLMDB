@@ -67,7 +67,6 @@ extension Cursor:Sequence {
 	}
 	
 	/// Procuces an object that is conformant to `IteratorProtocol`. This object will only iterate over the duplicate items of the current key
-	/// 
 	public func makeDupIterator<K:MDB_encodable>(key:K) throws -> CursorDupIterator {
 		let getKey = try self.getEntry(.setKey, key:key).key
 		let dupCount = try self.dupCount()

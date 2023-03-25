@@ -15,7 +15,7 @@ extension Database {
 			if getResult == MDB_SUCCESS && existingEntry.mv_size == MemoryLayout<UnsafeRawPointer>.stride {
 				// Properly release the existing entry
 				let existingPointer = existingEntry.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-				let unmanagedExistingValue = Unmanaged<AnyObject>.fromOpaque(existingPointer)
+				let unmanagedExistingValue = Unmanaged<V>.fromOpaque(existingPointer)
 				unmanagedExistingValue.release()
 			}
 
@@ -62,7 +62,7 @@ extension Database {
 			let unmanagedObject = Unmanaged<T>.fromOpaque(storedPointer)
 
 			// Retain the object to return an additionally retained object for the user
-			let retainedObject = unmanagedObject.retain().takeUnretainedValue()
+			let retainedObject = unmanagedObject.takeRetainedValue()
 
 			if txn == nil {
 				try tx.commit()
@@ -100,8 +100,7 @@ extension Database {
 
 			// Properly release the existing entry
 			let existingPointer = existingEntry.mv_data.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-			let unmanagedExistingValue = Unmanaged<AnyObject>.fromOpaque(existingPointer)
-			unmanagedExistingValue.release()
+			let unmanagedExistingValue = Unmanaged<T>.fromOpaque(existingPointer)
 
 			// Delete the object from the database
 			let deleteResult = mdb_del(tx.txn_handle, db_handle, &keyVal, nil)
@@ -113,6 +112,9 @@ extension Database {
 			if txn == nil {
 				try tx.commit()
 			}
+
+			// Return the deleted object
+			unmanagedExistingValue.release()
 		}
 	}
 }

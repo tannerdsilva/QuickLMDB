@@ -20,6 +20,108 @@ final class QuickLMDBTests:XCTestCase {
 		}
 	}
 	
+	    // Custom test class for testing purposes
+    class TestObject {
+		let id: Int
+		var onDeinit: (() -> Void)?
+		init(id: Int, onDeinit: (() -> Void)? = nil) {
+			self.id = id
+			self.onDeinit = onDeinit
+		}
+		deinit {
+			onDeinit?()
+		}
+	}
+
+    func testSetObject() throws {
+		// Initialize your Swift framework that contains setObject, getObject, and deleteObject functions
+		let newTrans = try Transaction(testerEnv!, readOnly:false, parent:nil)
+		let newDatabase = try testerEnv!.openDatabase(named:"tester_object_arc", flags:[.create], tx:newTrans)
+
+		let key = "test_key"
+
+		// Use weak reference to check if the object is retained or released
+		weak var weakTestObject: TestObject?
+		
+		// Flag to track if the object has been deallocated
+		var isDeallocated = false
+
+		func setObjectAndRelease(completion: () -> Void) {
+			defer {
+				completion()
+			}
+			// Create a test object
+			let testObject = TestObject(id: 1, onDeinit: { isDeallocated = true })
+			weakTestObject = testObject
+
+			// Store the object in the database
+			try? newDatabase.setObject(value: testObject, forKey: key, tx:newTrans)
+			try? newDatabase.deleteObject(type:TestObject.self, forKey: key, tx: newTrans)
+			// Release the strong reference to the object
+			_ = testObject // Use '_' to discard the result and prevent the 'testObject' from being used again
+		}
+
+		setObjectAndRelease {
+			// Check if the object is retained by the database
+			// XCTAssertNotNil(weakTestObject, "The object should be retained by the database")
+			// XCTAssertFalse(isDeallocated, "The object should not be deallocated")
+		}
+		
+		// try newTrans.commit()
+		XCTAssertTrue(isDeallocated, "The object should be deallocated after deletion")
+		XCTAssertNil(weakTestObject, "The object should be released by the database")
+	}
+
+	// func testDeleteObject() throws {
+	// 	// Initialize your Swift framework that contains setObject, getObject, and deleteObject functions
+	// 	let newTrans = try Transaction(testerEnv!, readOnly: false, parent: nil)
+	// 	let newDatabase = try testerEnv!.openDatabase(named: "tester_object_arc", flags: [.create], tx: newTrans)
+
+	// 	let key = "test_key"
+
+	// 	// Use weak reference to check if the object is retained or released
+	// 	weak var weakTestObject: TestObject?
+
+	// 	// Flag to track if the object has been deallocated
+	// 	var isDeallocated = false
+
+	// 	// Expectation to wait for object deallocation
+	// 	let deallocationExpectation = expectation(description: "Object should be deallocated")
+
+	// 	func setObjectAndRelease(completion: () -> Void) {
+	// 		defer {
+	// 			completion()
+	// 		}
+	// 		// Create a test object
+	// 		let testObject = TestObject(id: 1, onDeinit: {
+	// 			isDeallocated = true
+	// 			deallocationExpectation.fulfill()
+	// 		})
+	// 		weakTestObject = testObject
+
+	// 		// Store the object in the database
+	// 		try? newDatabase.setObject(value: testObject, forKey: key, tx: newTrans)
+
+	// 		// Release the strong reference to the object
+	// 		_ = testObject
+	// 	}
+
+	// 	setObjectAndRelease {
+	// 		// Check if the object is retained by the database
+	// 		XCTAssertNotNil(weakTestObject, "The object should be retained by the database")
+	// 		XCTAssertFalse(isDeallocated, "The object should not be deallocated")
+	// 	}
+
+	// 	// Delete the object from the database
+	// 	try newDatabase.deleteObject(type:TestObject.self, forKey: key, tx: newTrans)
+	// 	try newTrans.commit()
+
+	// 	XCTAssertTrue(isDeallocated, "The object should be deallocated after deletion")
+	// 	XCTAssertNil(weakTestObject, "The object should be released by the database")
+	// }
+
+
+
 	func testMDBConvertible() throws {
 		let isEqual:Bool = try testerEnv!.transact(readOnly:false) { someTrans in
 	
