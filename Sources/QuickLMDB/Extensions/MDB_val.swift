@@ -5,7 +5,7 @@ import Foundation
 extension MDB_val {
 	/// Returns an MDB_val that represents a null value.
 	/// - Returned value is a zero-length value with a nil pointer.
-	static func nullValue() -> MDB_val {
+	public static func nullValue() -> MDB_val {
 		return MDB_val(mv_size:0, mv_data:nil)
 	}
 }
