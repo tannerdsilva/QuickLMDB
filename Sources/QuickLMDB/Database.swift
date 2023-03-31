@@ -283,6 +283,23 @@ public struct Database {
 			throw LMDBError(returnCode:valueResult)
 		}
 	}
+
+	/// Assigns a custom key comparison function to a database.
+	public func setCompare(tx someTrans:Transaction, _ compareFunction:@convention(c) (UnsafePointer<MDB_val>?, UnsafePointer<MDB_val>?) -> Int32) throws {
+		let result = mdb_set_compare(someTrans.txn_handle, db_handle, compareFunction)
+		guard result == MDB_SUCCESS else {
+			throw LMDBError(returnCode: result)
+		}
+	}
+
+	/// Applies a custom value comparison function to a database.
+	/// - Database must be configured with ``MDB_DUPSORT`` flag to use this feature
+	public func setDupsortCompare(tx someTrans:Transaction, _ compareFunction:@convention(c) (UnsafePointer<MDB_val>?, UnsafePointer<MDB_val>?) -> Int32) throws {
+		let result = mdb_set_dupsort(someTrans.txn_handle, db_handle, compareFunction)
+		guard result == MDB_SUCCESS else {
+			throw LMDBError(returnCode: result)
+		}
+	}
 	
 	/// Close a database handle. **NOT NEEDED IN MOST USE CASES**
 	public func closeDatabase() {
