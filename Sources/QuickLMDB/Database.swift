@@ -285,7 +285,7 @@ public struct Database {
 	}
 
 	/// Assigns a custom key comparison function to a database.
-	public func setCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_conpare_function) throws {
+	public func setCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_function) throws {
 		let result = mdb_set_compare(someTrans.txn_handle, db_handle, compareFunction)
 		guard result == MDB_SUCCESS else {
 			throw LMDBError(returnCode: result)
@@ -294,7 +294,7 @@ public struct Database {
 
 	/// Applies a custom value comparison function to a database.
 	/// - Database must be configured with ``MDB_DUPSORT`` flag to use this feature.
-	public func setDupsortCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_conpare_function) throws {
+	public func setDupsortCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_function) throws {
 		let result = mdb_set_dupsort(someTrans.txn_handle, db_handle, compareFunction)
 		guard result == MDB_SUCCESS else {
 			throw LMDBError(returnCode: result)
