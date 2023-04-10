@@ -1,7 +1,17 @@
 import CLMDB
 import Foundation
 
-extension MDB_val:Hashable {
+// MARK: Static functions
+extension MDB_val {
+	/// Returns an MDB_val that represents a null value.
+	/// - Returned value is a zero-length value with a nil pointer.
+	public static func nullValue() -> MDB_val {
+		return MDB_val(mv_size:0, mv_data:nil)
+	}
+}
+
+// MARK: Hashable & Equatable
+extension MDB_val:Hashable, Equatable {
 	public func hash(into hasher: inout Hasher) {
 		hasher.combine(bytes:UnsafeRawBufferPointer(start:self.mv_data, count:self.mv_size))
 	}
@@ -15,12 +25,14 @@ extension MDB_val:Hashable {
 	}
 }
 
+// MARK: ContiguousBytes
 extension MDB_val:ContiguousBytes {
 	public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
 		return try body(UnsafeRawBufferPointer(start:self.mv_data, count:self.mv_size))
 	}
 }
 
+// MARK: MDB_encodable
 extension MDB_val:MDB_encodable {
 	public func asMDB_val<R>(_ valFunc: (inout MDB_val) throws -> R) rethrows -> R {
 		var copyVal = self
@@ -28,6 +40,7 @@ extension MDB_val:MDB_encodable {
 	}
 }
 
+// MARK: Sequence<UInt8>
 extension MDB_val:Sequence {
 	public struct Iterator:IteratorProtocol {
 		public typealias Element = UInt8
@@ -55,6 +68,7 @@ extension MDB_val:Sequence {
 	}
 }
 
+// MARK: Collection<UInt8>
 extension MDB_val:Collection {
 	public func index(after i:size_t) -> size_t {
 		return i + 1;
