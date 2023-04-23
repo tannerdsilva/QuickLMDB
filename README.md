@@ -12,11 +12,11 @@ QuickLMDB is fully documented. This documentation is available [HERE](https://qu
 
 ## Compatibility
 
-QuickLMDB is fully supported on all platforms capable of running Swift, including:
+QuickLMDB is fully supported(*) on all platforms capable of running Swift, including:
 
 - Linux
 
-- MacOS
+- MacOS (* Non-Sandboxed Only)
 
 - iOS
 
