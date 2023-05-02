@@ -49,6 +49,10 @@ public class Environment:Transactable {
 	/// The flags that were used to initialize the Environment.
 	public let flags:Flags
 	
+	/// This variable accounts for the current map size of the LMDB environment.
+	public private(set) var mapSize:size_t = 0
+
+	
 	/// Initialize an LMDB environment at the specified path string.
 	/// - Parameters:
 	///   - path: The path where the environment will be stored.
@@ -72,6 +76,7 @@ public class Environment:Transactable {
 			guard mdbSetResult == 0 else {
 				throw LMDBError(returnCode:mdbSetResult)
 			}
+			self.mapSize = mapSize!
 		}
 		
 		//set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
@@ -155,6 +160,7 @@ public class Environment:Transactable {
 		guard mdbSetResult == 0 else {
 			throw LMDBError(returnCode:mdbSetResult)
 		}
+		self.mapSize = newMapSize
 	}
     
     /// Copy an LMDB environment to a specified path.
