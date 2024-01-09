@@ -50,7 +50,7 @@ public struct Database {
 	/// The name of the database. When this value is `nil`, this is the only database that exists in the Environment.
 	public let name:String?
 	/// The `MDB_env` that this Database is associated with.
-	public let env_handle:OpaquePointer?
+	public let env_handle:OpaquePointer
 	/// This database as an `MDB_dbi`. Used for calling into LMDB core functions.
 	public let db_handle:MDB_dbi
 	
@@ -60,7 +60,7 @@ public struct Database {
 	///   - name: The name of the database to open. if only a single database is needed in the environment, this value may be `nil`.
 	///   - flags: Special options for this database.
 	///   - tx: The transaction in which this Database is to be opened.
-	internal init(environment:OpaquePointer?, name:String?, flags:Flags, tx:Transaction) throws {
+	internal init(environment:OpaquePointer, name:String?, flags:Flags, tx:Transaction) throws {
 		var captureHandle = MDB_dbi()
 		
 		if (name != nil) {

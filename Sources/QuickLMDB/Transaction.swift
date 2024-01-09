@@ -3,7 +3,7 @@ import CLMDB
 public class Transaction:Transactable {
 
 	/// Pointer to the `MDB_env` that an instance is associated with.
-	public let env_handle:OpaquePointer?
+	public let env_handle:OpaquePointer
 	
 	/// Pointer to the `MDB_txn` struct associated with a given instance.
 	public var txn_handle:OpaquePointer?
@@ -13,7 +13,7 @@ public class Transaction:Transactable {
 	
 	internal var isOpen = true
 	
-	internal static func instantTransaction<R>(environment:OpaquePointer?, readOnly:Bool, parent:OpaquePointer?, _ handler:(Transaction) throws -> R) throws -> R {
+	internal static func instantTransaction<R>(environment:OpaquePointer, readOnly:Bool, parent:OpaquePointer?, _ handler:(Transaction) throws -> R) throws -> R {
 		let newTransaction = try Transaction(environment:environment, readOnly:readOnly, parent:parent)
 		let captureReturn:R
 		do {
@@ -43,7 +43,7 @@ public class Transaction:Transactable {
 	/// 	- parent: An optional parent transaction. 
 	/// 		- If this is not `nil`, the transaction will be a child transaction.
 	/// 			- This is only evaluated if `readOnly` is `false`, since child transactions cannot be read-only.
-	required internal init(environment env_handle:OpaquePointer?, readOnly:Bool, parent:OpaquePointer? = nil) throws {
+	required internal init(environment env_handle:OpaquePointer, readOnly:Bool, parent:OpaquePointer? = nil) throws {
 		self.env_handle = env_handle
 		self.readOnly = readOnly
 		var start_handle:OpaquePointer? = nil

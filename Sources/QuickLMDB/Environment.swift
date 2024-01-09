@@ -44,7 +44,7 @@ public class Environment:Transactable {
 	
 	/// This is an opaque pointer to the underlying `MDB_env` object for this environment.
 	/// - This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
-	public var env_handle:OpaquePointer?
+	public var env_handle:OpaquePointer
 	
 	/// The flags that were used to initialize the Environment.
 	public let flags:Flags
@@ -95,7 +95,7 @@ public class Environment:Transactable {
 			}
 		}
 		
-		self.env_handle = environmentHandle
+		self.env_handle = environmentHandle!
 		self.flags = flags
 	}
 	
