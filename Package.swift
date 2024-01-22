@@ -12,11 +12,8 @@ let package = Package(
             targets: ["QuickLMDB"]),
     ],
     dependencies: [
-        // Dependencies declare other packages that this package depends on.
-        // .package(url: /* package url */, from: "1.0.0"),
-		/*.package(name:"CLMDB", path:"../CLMDB"),
-		.package(name:"swift-system", path:"../swift-system")*/
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", .exact("0.9.30")),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", branch:"v5"),
 		.package(url:"https://github.com/apple/swift-system.git", .upToNextMajor(from:"1.0.0"))
     ],
     targets: [
@@ -24,7 +21,11 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "QuickLMDB",
-			dependencies: ["CLMDB", .product(name:"SystemPackage", package:"swift-system")]),
+			dependencies: [
+				"CLMDB", 
+				.product(name:"SystemPackage", package:"swift-system"),
+				.product(name:"RAW", package:"rawdog")
+			]),
         .testTarget(
             name: "QuickLMDBTests",
             dependencies: ["QuickLMDB"]),

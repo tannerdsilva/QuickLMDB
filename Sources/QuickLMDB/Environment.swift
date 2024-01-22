@@ -1,11 +1,20 @@
 import CLMDB
 import SystemPackage
 
-public class Environment:Transactable {
+public protocol MDB_env {
+	var MDB_env_handle:OpaquePointer { get }
+	var MDB_env_flags:Environment.Flags { get }
+	var MDB_env_mapsize:size_t { get }
+	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions)
+}
+
+public class Environment {
 	
 	/// Flags that can be used to open an environment
 	public struct Flags:OptionSet {
+
 		public let rawValue:UInt32
+
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
 		
 		/// Experimental option that opens the memorymap at a fixed address.
@@ -57,16 +66,16 @@ public class Environment:Transactable {
 	///   - maxReaders: Specify the number of concurrent read transactions that can happen in this environment.
 	///   - maxDBs: Specify the number of named databases that can exist in the environment. It is recommended to specify a low to moderate maxumum value, as each named database costs between 7 to 120 words per transaction. It is NOT recommended to specify a huge value for the maximum database count.
 	///   - mode: The UNIX permissions to be set on on created files and semaphores. These permissions are not applied to files that already exist on the system.
-	public init(path:String, flags:Flags = [], mapSize:size_t? = nil, maxReaders:MDB_dbi = 128, maxDBs:MDB_dbi = 16, mode:FilePermissions = [.ownerReadWriteExecute, .groupRead, .groupExecute]) throws {
+	public init(path:String, flags:Flags = [], mapSize:size_t? = nil, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions = [.ownerReadWriteExecute, .groupRead, .groupExecute]) throws {
 		
-		//create the environment variable
+		// create the environment variable
 		var environmentHandle:OpaquePointer? = nil;
 		let envStatus = mdb_env_create(&environmentHandle)
 		guard envStatus == 0 else {
 			throw LMDBError(returnCode:envStatus)
 		}
 		
-		//set the map size
+		// set the map size
 		if mapSize != nil {
 			let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
 			guard mdbSetResult == 0 else {
@@ -74,25 +83,22 @@ public class Environment:Transactable {
 			}
 		}
 		
-		//set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
+		// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
 		let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders);
 		guard setReadersResult == 0 else {
 			throw LMDBError(returnCode:setReadersResult)
 		}
 		
-		//set maximum db count
+		// set maximum db count
 		let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
 		guard mdbSetResult == 0 else {
 			throw LMDBError(returnCode:mdbSetResult)
 		}
 		
-		//convert the path into a c-compatible string
-		try path.withCString { stringBuffer in
-			//open the environment with the specified flags and file modes specified
-			let openStatus = mdb_env_open(environmentHandle, stringBuffer, UInt32(flags.rawValue), mode.rawValue)
-			guard openStatus == 0 else {
-				throw LMDBError(returnCode:openStatus)
-			}
+		// open the environment with the specified flags and file modes specified
+		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
+		guard openStatus == 0 else {
+			throw LMDBError(returnCode:openStatus)
 		}
 		
 		self.env_handle = environmentHandle
@@ -105,14 +111,8 @@ public class Environment:Transactable {
 	///   - flags: Special options for the database.
 	///   - tx: The transaction in which this Database is to be opened. If `nil` is specified, a read/write transaction will be conveniently opened behind the scenes.
 	/// - Returns: The newly created Database structure.
-	public func openDatabase(named databaseName:String? = nil, flags:Database.Flags = [], tx:Transaction?) throws -> Database {
-		if tx != nil {
-			return try Database(environment:env_handle, name:databaseName, flags:flags, tx:tx!)
-		} else {
-			return try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-				return try Database(environment:env_handle, name:databaseName, flags:flags, tx:someTrans)
-			}
-		}
+	public func openDatabase(named databaseName:String?, flags:Database.Flags, tx:Transaction) throws -> Database {
+		return try Database(environment:env_handle, name:databaseName, flags:flags, tx:tx)
 	}
 	
 	/// Remove a database from the environment.
@@ -120,19 +120,10 @@ public class Environment:Transactable {
 	///   - database: The database that is to be removed from the environment.
 	///   - tx: The transaction in which to apply this action. If `nil` is specified, a writable transaction is
     /// - Throws: This function will throw an ``LMDBError`` if the environment operation does not return `MDB_SUCCESS`.
-	public func deleteDatabase(_ database:Database, tx:Transaction?) throws {
-		if tx != nil {
-			let result = mdb_drop(tx!.txn_handle, database.db_handle, 1)
-			guard result == MDB_SUCCESS else {
-				throw LMDBError(returnCode:result)
-			}
-		} else {
-			try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-				let result = mdb_drop(someTrans.txn_handle, database.db_handle, 1)
-				guard result == MDB_SUCCESS else {
-					throw LMDBError(returnCode:result)
-				}
-			}
+	public func deleteDatabase(_ database:Database, tx:Transaction) throws {
+		let result = mdb_drop(tx.txn_handle, database.db_handle, 1)
+		guard result == MDB_SUCCESS else {
+			throw LMDBError(returnCode:result)
 		}
 	}
 	
@@ -142,8 +133,8 @@ public class Environment:Transactable {
     ///   - txFunc: The handler transaction.
     /// - Throws: The function will throw if the transaction can't be created.
     /// - Returns: The opened transaction.
-	public func transact<R>(readOnly:Bool = true, _ txFunc:(Transaction) throws -> R) throws -> R {
-		return try Transaction.instantTransaction(environment:self.env_handle, readOnly:readOnly, parent:nil, txFunc)
+	public func transact<R>(readOnly:Bool, _ txFunc:(Transaction) throws -> R) rethrows -> R {
+		return try! Transaction.instantTransaction(environment:self.env_handle, readOnly:readOnly, parent:nil, txFunc)
 	}
 	
 	///Set the size of the memory map to use for this environment.
@@ -163,12 +154,10 @@ public class Environment:Transactable {
     ///   - performCompaction: If true, the operation preforms compation while copying (consumes more CPU and runs slower). If false, the operation does not preform compation.
     /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
 	public func copyTo(path:String, performCompaction:Bool) throws {
-		try path.withCString { pathCString in
-			let copyFlags:UInt32 = (performCompaction == true) ? UInt32(MDB_CP_COMPACT) : 0
-			let copyResult = mdb_env_copy2(env_handle, pathCString, copyFlags)
-			guard copyResult == 0 else {
-				throw LMDBError(returnCode:copyResult)
-			}
+		let copyFlags:UInt32 = (performCompaction == true) ? UInt32(MDB_CP_COMPACT) : 0
+		let copyResult = mdb_env_copy2(env_handle, path, copyFlags)
+		guard copyResult == 0 else {
+			throw LMDBError(returnCode:copyResult)
 		}
 	}
     

@@ -1,5 +1,3 @@
-import CLMDB
-
 /// This typealias defines a protocol that is both encodable and decodable from the database.
 public typealias MDB_convertible = MDB_encodable & MDB_decodable
 

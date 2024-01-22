@@ -1,7 +1,187 @@
 import CLMDB
-import Foundation
+import RAW
 
 public typealias MDB_val = CLMDB.MDB_val
+
+public protocol MDB_cursor {
+	/// the cursor handle for the specific instance.
+	var MDB_cursor_handle:OpaquePointer { get }
+	/// the database handle for the specific instance.
+	var MDB_db_handle:MDB_dbi { get }
+	/// the transaction that this instance is operating within.
+	var MDB_txn_handle:OpaquePointer? { get }
+
+	init(MDB_db_handle:MDB_dbi, tx:Transaction) throws
+
+	// get entries
+	/// get entries with a key and a value.
+	@discardableResult func getEntry<K:RAW_accessible, V:RAW_accessible>(_ operation:Cursor.Operation, key:inout K, value:inout V) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer)
+	/// get entries with a key.
+	@discardableResult func getEntry<K:RAW_accessible>(_ operation:Cursor.Operation, key:inout K) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer)
+	/// get entries with a value.
+	@discardableResult func getEntry<V:RAW_accessible>(_ operation:Cursor.Operation, value:inout V) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer)
+	/// get entries based on an operation only.
+	@discardableResult func getEntry(_ operation:Cursor.Operation) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer)
+
+	// set entries.
+	func setEntry<K:RAW_accessible, V:RAW_encodable>(key:inout K, value:inout V, flags:Cursor.Operation.Flags) throws
+	
+	// checking for existing entries.
+	func containsEntry<K:RAW_accessible>(key:inout K) throws -> Bool
+	// checking for existing entries.
+	func containsEntry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V) throws -> Bool
+
+	// delete entries.
+	func deleteCurrentEntry(flags:Cursor.Operation.Flags) throws
+
+	// compare entries based on the native compare function of the database.
+	func compareKeys<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32
+
+	// compare entries based on the native compare function of the database.
+	func compareValues<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32
+}
+
+extension MDB_cursor {
+	/// execute an entry retrieval operation with a specified operation, key and value.
+	@discardableResult public func getEntry<K:RAW_accessible, V:RAW_accessible>(_ operation:Cursor.Operation, key:inout K, value:inout V) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer) {
+		return try key.RAW_access_mutating { keyBuff in
+			return try value.RAW_access_mutating { valueBuff in
+				var keyVal = MDB_val(keyBuff)
+				var valueVal = MDB_val(valueBuff)
+				let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
+				guard cursorResult == MDB_SUCCESS else {
+					throw LMDBError(returnCode:cursorResult)
+				}
+				return (key:UnsafeMutableRawBufferPointer(keyVal), value:UnsafeMutableRawBufferPointer(valueVal))
+			}
+		}
+	}
+
+	/// execute an entry retrieval operation with a specified operation and key.
+	@discardableResult public func getEntry<K:RAW_accessible>(_ operation:Cursor.Operation, key:inout K) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer) {
+		return try key.RAW_access_mutating { keyBuff in
+			var keyVal = MDB_val(keyBuff)
+			var valueVal = MDB_val.nullValue()
+			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
+			guard cursorResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:cursorResult)
+			}
+			return (key:UnsafeMutableRawBufferPointer(keyVal), value:UnsafeMutableRawBufferPointer(valueVal))
+		}
+	}
+
+	/// execute an entry retrieval operation with a specified operation and value.
+	@discardableResult public func getEntry<V:RAW_accessible>(_ operation:Cursor.Operation, value:inout V) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer) {
+		return try value.RAW_access_mutating { valueBuff in
+			var keyVal = MDB_val.nullValue()
+			var valueVal = MDB_val(valueBuff)
+			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
+			guard cursorResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:cursorResult)
+			}
+			return (key:UnsafeMutableRawBufferPointer(keyVal), value:UnsafeMutableRawBufferPointer(valueVal))
+		}
+	}
+
+	/// execute an entry retrieval operation with a specified operation only.
+	@discardableResult public func getEntry(_ operation:Cursor.Operation) throws -> (key:UnsafeMutableRawBufferPointer, value:UnsafeMutableRawBufferPointer) {
+		var keyVal = MDB_val.nullValue()
+		var valueVal = MDB_val.nullValue()
+		let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
+		guard cursorResult == MDB_SUCCESS else {
+			throw LMDBError(returnCode:cursorResult)
+		}
+		return (key:UnsafeMutableRawBufferPointer(keyVal), value:UnsafeMutableRawBufferPointer(valueVal))
+	}
+
+	/// set the current entry with a specified key and value.
+	public func setEntry<K:RAW_accessible, V:RAW_encodable>(key:inout K, value:inout V, flags:Cursor.Operation.Flags) throws {
+		try key.RAW_access_mutating { keyBuff in
+			var keyVal = MDB_val(keyBuff)
+			var valueVal = MDB_val.nullValue()
+			value.RAW_encode(count:&valueVal.mv_size)
+			let putResult = mdb_cursor_put(MDB_cursor_handle, &keyVal, &valueVal, flags.union(.reserve).rawValue)
+			guard putResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:putResult)
+			}
+			#if DEBUG
+			assert(valueVal.mv_data != nil)
+			#endif
+			value.RAW_encode(dest:valueVal.mv_data.assumingMemoryBound(to:UInt8.self))
+		}
+	}
+
+	public func containsEntry<K:RAW_accessible>(key:inout K) throws -> Bool {
+		return try key.RAW_access_mutating { keyBuff in
+			var keyVal = MDB_val(keyBuff)
+			let searchKey = mdb_cursor_get(MDB_cursor_handle, &keyVal, nil, MDB_SET)
+			switch searchKey {
+				case MDB_SUCCESS:
+					return true;
+				case MDB_NOTFOUND:
+					return false;
+				default:
+					throw LMDBError(returnCode:searchKey)
+			}
+		}
+	}
+
+	public func containsEntry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V) throws -> Bool {
+		return try key.RAW_access_mutating { keyBuff in
+			return try value.RAW_access_mutating { valueBuff in
+				var keyVal = MDB_val(keyBuff)
+				var valueVal = MDB_val(valueBuff)
+				let searchKey = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, MDB_SET)
+				switch searchKey {
+					case MDB_SUCCESS:
+						return true;
+					case MDB_NOTFOUND:
+						return false;
+					default:
+						throw LMDBError(returnCode:searchKey)
+				}
+			}
+		}
+	}
+
+	public func deleteCurrentEntry(flags:Cursor.Operation.Flags) throws {
+		let deleteResult = mdb_cursor_del(MDB_cursor_handle, flags.rawValue)
+		guard deleteResult == MDB_SUCCESS else {
+			throw LMDBError(returnCode:deleteResult)
+		}
+	}
+
+	public func compareKeys<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32 {
+		return dataL.RAW_access_mutating { lBuff in
+			return dataR.RAW_access_mutating { rBuff in
+				var lVal = MDB_val(lBuff)
+				var rVal = MDB_val(rBuff)
+				return mdb_cmp(MDB_txn_handle, MDB_db_handle, &lVal, &rVal)
+			}
+		}
+	}
+
+	public func compareValues<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32 {
+		return dataL.RAW_access_mutating { lBuff in
+			return dataR.RAW_access_mutating { rBuff in
+				var lVal = MDB_val(lBuff)
+				var rVal = MDB_val(rBuff)
+				return mdb_dcmp(MDB_txn_handle, MDB_db_handle, &lVal, &rVal)
+			}
+		}
+	}
+
+	public func dupCount() throws -> size_t {
+		var dupCount = size_t()
+		let countResult = mdb_cursor_count(self.MDB_cursor_handle, &dupCount)
+		switch countResult { 
+			case MDB_SUCCESS:
+				return dupCount
+			default:
+				throw LMDBError(returnCode:countResult)
+		}
+	}
+}
 
 /// LMDB Cursor. This is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memory.
 public class Cursor {
@@ -197,11 +377,8 @@ public class Cursor {
 	
 	/// Pointer to the `MDB_txn` struct associated with a given instance.
 	public let txn_handle:OpaquePointer?
-	
-	/// Used to determine if the cursor needs to close itself when it is deinitialized.
-	internal let readOnly:Bool
-	
-	internal init(txn_handle:OpaquePointer?, db:MDB_dbi, readOnly:Bool) throws {
+
+	internal init(txn_handle:OpaquePointer?, db:MDB_dbi) throws {
 		var buildCursor:OpaquePointer? = nil
 		let openCursorResult = mdb_cursor_open(txn_handle, db, &buildCursor)
 		guard openCursorResult == MDB_SUCCESS else {
@@ -210,7 +387,6 @@ public class Cursor {
 		self.cursor_handle = buildCursor
 		self.db_handle = db
 		self.txn_handle = txn_handle
-		self.readOnly = readOnly
 	}
 	
 	/// Retrieve an entry with a provided key and value.

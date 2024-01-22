@@ -1,80 +1,197 @@
 import CLMDB
+import RAW
 
-public struct Database {
+public protocol MDB_db {
 	
-	/// Special options for this database. These flags are specified
+	var MDB_env_handle:OpaquePointer { get }
+	var MDB_db_name:String? { get }
+	var MDB_db_handle:MDB_dbi { get }
+
+	init(MDB_env_handle:OpaquePointer, MDB_db_name:String?, MDB_db_flags:Database.Flags, tx:Transaction) throws
+
+	// reading entries in the database
+	/// get an entry from the database.
+	///	- parameters:
+	///		- key: the key that will be searched in the database.
+	///		- as: the type to decode from the database.
+	///		- tx: the transaction to use for the entry search.
+	/// - throws: throws ``LMDBError.notFound`` if the key does not exist, or other errors for more obscure circumstances.
+	///	- returns: the decoded value type, if it successfully decoded from the database. if the entry is found but it fails to decode, `nil` is returned.
+	func getEntry<K:RAW_accessible, V:RAW_decodable>(key:inout K, as:V.Type, tx:Transaction) throws -> V?
+	
+	/// search the database for the existence of a given entry.
+	func containsEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws -> Bool
+
+	// writing entries to the database
+	func setEntry<K:RAW_accessible, V:RAW_encodable>(key:inout K, value:inout V, tx:Transaction) throws
+
+	// removing entries to the database
+	func deleteEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws
+	func deleteEntry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V, tx:Transaction)
+	func deleteAllEntries(tx:Transaction)
+
+	func setEntryCompare(keys:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws
+	func setEntryCompare(values:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws
+}
+
+extension MDB_db {
+
+	public func getEntry<K:RAW_accessible, V:RAW_decodable>(key:inout K, as:V.Type, tx:Transaction) throws -> V? {
+		return V(try key.RAW_access_mutating { ptr in
+			var keyVal = MDB_val(ptr)
+			var dbValue = MDB_val.nullValue()
+			let valueResult = mdb_get(tx.txn_handle, MDB_db_handle, &keyVal, &dbValue)
+			guard valueResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:valueResult)
+			}
+			return dbValue
+		})
+	}
+
+	public func containsEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws -> Bool {
+		return try key.RAW_access_mutating { ptr in
+			var keyVal = MDB_val(ptr)
+			var dbValue = MDB_val.nullValue()
+			let valueResult = mdb_get(tx.txn_handle, MDB_db_handle, &keyVal, &dbValue)
+			switch valueResult {
+				case MDB_SUCCESS:
+					return true
+				case MDB_NOTFOUND:
+					return false
+				default:
+					throw LMDBError(returnCode:valueResult)
+			}
+		}
+	}
+
+	public func setEntry<K:RAW_accessible, V:RAW_encodable>(key:inout K, value:inout V, flags:Cursor.Operation.Flags, tx:Transaction) throws {
+		try key.RAW_access_mutating { ptr in
+			var keyVal = MDB_val(ptr)
+			var mdbValVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
+			value.RAW_encode(count:&mdbValVal.mv_size)
+			let dbResult = mdb_put(tx.txn_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.union(.reserve).rawValue)
+			guard dbResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:dbResult)
+			}
+			#if DEBUG
+			assert(mdbValVal.mv_data != nil)
+			#endif
+			value.RAW_encode(dest:mdbValVal.mv_data.assumingMemoryBound(to:UInt8.self))
+		}
+	}
+	public func deleteEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws {
+		try key.RAW_access_mutating { ptr in
+			var keyVal = MDB_val(ptr)
+			let dbResult = mdb_del(tx.txn_handle, MDB_db_handle, &keyVal, nil)
+			guard dbResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:dbResult)
+			}
+		}
+	}
+
+	public func deleteEntry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V, tx:Transaction) throws {
+		return try key.RAW_access_mutating({ keyBuff in
+			return try value.RAW_access_mutating({ valBuff in
+				var keyV = MDB_val(keyBuff)
+				var valV = MDB_val(valBuff)
+				let dbResult = mdb_del(tx.txn_handle, MDB_db_handle, &keyV, &valV)
+				guard dbResult == MDB_SUCCESS else {
+					throw LMDBError(returnCode:dbResult)
+				}
+			})
+		})
+	}
+
+	public func deleteAllEntries(tx:Transaction) throws {
+		let dbResult = mdb_drop(tx.txn_handle, MDB_db_handle, 0)
+		guard dbResult == MDB_SUCCESS else {
+			throw LMDBError(returnCode:dbResult)
+		}
+	}
+
+	public func setEntryCompare(keys:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws {
+		let dbResult = mdb_set_compare(tx.txn_handle, MDB_db_handle, keys)
+		guard dbResult == MDB_SUCCESS else {
+			throw LMDBError(returnCode:dbResult)
+		}
+	}
+
+	public func setEntryCompare(values:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws {
+		let dbResult = mdb_set_dupsort(tx.txn_handle, MDB_db_handle, values)
+		guard dbResult == MDB_SUCCESS else {
+			throw LMDBError(returnCode:dbResult)
+		}
+	}
+}
+
+public struct Database:MDB_db {
+
+    public var MDB_env_handle: OpaquePointer { 
+		return env_handle!
+	}
+
+    public var MDB_db_name: String? {
+		self.name
+	}
+
+    public var MDB_db_handle: MDB_dbi {
+		db_handle
+	}
+
+    public init(MDB_env_handle: OpaquePointer, MDB_db_name: String?, MDB_db_flags: Flags, tx: Transaction) throws {
+        try self.init(environment:MDB_env_handle, name:MDB_db_name, flags:MDB_db_flags, tx:tx)
+    }
+	
+	/// special options for this database. These flags are specified
 	public struct Flags:OptionSet {
 		public let rawValue:UInt32
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
 
-		/// Use reverse string keys
+		/// use reverse string keys
 		public static let reverseKey = Flags(rawValue:UInt32(MDB_REVERSEKEY))
 		
-		/// Use sorted duplicates
+		/// use sorted duplicates
 		public static let dupSort = Flags(rawValue:UInt32(MDB_DUPSORT))
 		
-		/// Numeric keys in native byte order. The keys must all be of the same size.
+		/// numeric keys in native byte order. The keys must all be of the same size.
 		public static let integerKey = Flags(rawValue:UInt32(MDB_INTEGERKEY))
 		
-		/// Duplicate items have a fixed size
-		/// - Use with ``dupSort``
+		/// duplicate items have a fixed size
+		/// - use with ``dupSort``
 		public static let dupFixed = Flags(rawValue:UInt32(MDB_DUPFIXED))
 		
-		/// Duplicate item are integers (``integerKey`` for duplicate items)
+		/// duplicate item are integers (``integerKey`` for duplicate items)
 		public static let integerDup = Flags(rawValue:UInt32(MDB_INTEGERDUP))
 		
-		/// Use reverse string duplicate keys
-		/// - Use with ``QuickLMDB/Database``
+		/// use reverse string duplicate keys
+		/// - use with ``QuickLMDB/Database``
 		public static let reverseDup = Flags(rawValue:UInt32(MDB_REVERSEDUP))
 		
-		/// Create the database if it does not already exist
+		/// create the database if it does not already exist
 		public static let create = Flags(rawValue:UInt32(MDB_CREATE))
 	}
 	
-	/// Statistics for the database.
-	public struct Statistics {
-		/// Size of the database page. This is currently the same for all databases.
-		public let pageSize:UInt32
-		/// Depth (height) of the B-tree.
-		public let depth:UInt32
-		/// Number of internal (non-leaf) pages.
-		public let branch_pages:size_t
-		/// Number of leaf pages.
-		public let leaf_pages:size_t
-		/// Number of overflow pages.
-		public let overflow_pages:size_t
-		/// Number of data items.
-		public let entries:size_t
-	}
-	
-	/// The name of the database. When this value is `nil`, this is the only database that exists in the Environment.
+	/// statistics for the database.
+	public typealias Statistics = MDB_stat
+
+	/// the name of the database. When this value is `nil`, this is the only database that exists in the Environment.
 	public let name:String?
-	/// The `MDB_env` that this Database is associated with.
+	/// the `MDB_env` that this Database is associated with.
 	public let env_handle:OpaquePointer?
-	/// This database as an `MDB_dbi`. Used for calling into LMDB core functions.
+	/// this database as an `MDB_dbi`. Used for calling into LMDB core functions.
 	public let db_handle:MDB_dbi
 	
 	/// Primary initializer. Opens a database.
 	/// - Parameters:
-	///   - environment: The environment that the database belongs to..
+	///   - environment: The environment that the database belongs to.
 	///   - name: The name of the database to open. if only a single database is needed in the environment, this value may be `nil`.
 	///   - flags: Special options for this database.
 	///   - tx: The transaction in which this Database is to be opened.
 	internal init(environment:OpaquePointer?, name:String?, flags:Flags, tx:Transaction) throws {
 		var captureHandle = MDB_dbi()
-		
-		if (name != nil) {
-			try name!.withCString { namePointer in
-				let openDatabaseResult = mdb_dbi_open(tx.txn_handle, namePointer, UInt32(flags.rawValue), &captureHandle)
-				guard openDatabaseResult == 0 else {
-					throw LMDBError(returnCode:openDatabaseResult)
-				}
-			}
-		} else {
-			let openDatabaseResult = mdb_dbi_open(tx.txn_handle, nil, UInt32(flags.rawValue), &captureHandle)
-			guard openDatabaseResult == 0 else {
-				throw LMDBError(returnCode:openDatabaseResult)
-			}
+		let openDatabaseResult = mdb_dbi_open(tx.txn_handle, name, UInt32(flags.rawValue), &captureHandle)
+		guard openDatabaseResult == 0 else {
+			throw LMDBError(returnCode:openDatabaseResult)
 		}
 		self.db_handle = captureHandle
 		self.env_handle = environment
@@ -87,43 +204,28 @@ public struct Database {
 	}
 	
 	/// Get the statistics for the database..
-	/// - Parameter tx: The transaction to use to capture the statistics. If `nil` is specified, a read-only transaction is opened to retrieve the statistics.
+	/// - Parameter tx: The transaction to use to capture the statistics.
 	/// - Returns: Statistics object with info of the database.
 	/// - Throws: This function with throw an ``LMDBError`` if the statistics could not be retrieved.
-	public func getStatistics(tx:Transaction?) throws -> Statistics {
+	public func getStatistics(tx:Transaction) throws -> Statistics {
 		var statObj = MDB_stat()
-		if tx != nil {
-			let getStatTry = mdb_stat(tx!.txn_handle, db_handle, &statObj)
-			guard getStatTry == 0 else {
-				throw LMDBError(returnCode:getStatTry)
-			}
-			return Statistics(pageSize:statObj.ms_psize, depth:statObj.ms_depth, branch_pages:statObj.ms_branch_pages, leaf_pages:statObj.ms_leaf_pages, overflow_pages:statObj.ms_overflow_pages, entries:statObj.ms_entries)
-		} else {
-			return try Transaction.instantTransaction(environment:env_handle, readOnly:true, parent:nil) { someTransaction in
-				var statObj = MDB_stat()
-				let getStatTry = mdb_stat(someTransaction.txn_handle, db_handle, &statObj)
-				guard getStatTry == 0 else {
-					throw LMDBError(returnCode:getStatTry)
-				}
-				return Statistics(pageSize:statObj.ms_psize, depth:statObj.ms_depth, branch_pages:statObj.ms_branch_pages, leaf_pages:statObj.ms_leaf_pages, overflow_pages:statObj.ms_overflow_pages, entries:statObj.ms_entries)
-			}
+		let getStatTry = mdb_stat(tx.txn_handle, db_handle, &statObj)
+		guard getStatTry == 0 else {
+			throw LMDBError(returnCode:getStatTry)
 		}
+		return statObj
 	}
 
 	/// Get the flags that were used when opening the database.
 	/// - Parameter tx: The transaction to use to get the flags for the database. If `nil` is specified, a read-only transaction is opened to retrieve the flags.
 	/// - Returns: Current flags assigned to the database object.
-	public func getFlags(tx:Transaction?) throws -> Flags {
+	public func getFlags(tx:Transaction) throws -> Flags {
 		var captureFlags = UInt32()
-		if tx != nil {
-			mdb_dbi_flags(tx!.txn_handle, db_handle, &captureFlags)
-			return Flags(rawValue:captureFlags)
-		} else {
-			return try Transaction.instantTransaction(environment:env_handle, readOnly:true, parent:nil) { someTransaction in
-				mdb_dbi_flags(someTransaction.txn_handle, db_handle, &captureFlags)
-				return Flags(rawValue:captureFlags)
-			}
+		let getFlagsTry = mdb_dbi_flags(tx.txn_handle, db_handle, &captureFlags)
+		guard getFlagsTry == 0 else {
+			throw LMDBError(returnCode:getFlagsTry)
 		}
+		return Flags(rawValue:captureFlags)
 	}
 	
 	/// Return the value of an entry with a specified key.
@@ -133,17 +235,10 @@ public struct Database {
 	///   - tx: The transaction that is to be used to retrieve this entry.
 	/// - Throws: Will throw ``QuickLMDB/LMDBError/notFound`` if an entry with the given key could not be found.
 	/// - Returns: Returns `nil` if the entry exists but could not be deserialized to the specified type. Otherwise, the value of the specified type is returned.
-	public func getEntry<K:MDB_encodable, V:MDB_decodable>(type:V.Type, forKey key:K, tx:Transaction?) throws -> V? {
+	public func getEntry<K:MDB_encodable, V:MDB_decodable>(type:V.Type, forKey key:K, tx:Transaction) throws -> V? {
 		return try key.asMDB_val { keyVal -> V? in
 			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			let valueResult:Int32
-			if tx != nil {
-				valueResult = mdb_get(tx!.txn_handle, db_handle, &keyVal, &dataVal)
-			} else {
-				valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:true, parent:nil) { someTrans in
-					return mdb_get(someTrans.txn_handle, db_handle, &keyVal, &dataVal)
-				}
-			}
+			let valueResult:Int32 = mdb_get(tx.txn_handle, db_handle, &keyVal, &dataVal)
 			guard valueResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:valueResult)
 			}
@@ -285,7 +380,7 @@ public struct Database {
 	}
 
 	/// Assigns a custom key comparison function to a database.
-	public func setCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_function) throws {
+	public func setCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_ftype) throws {
 		let result = mdb_set_compare(someTrans.txn_handle, db_handle, compareFunction)
 		guard result == MDB_SUCCESS else {
 			throw LMDBError(returnCode: result)
@@ -294,7 +389,7 @@ public struct Database {
 
 	/// Applies a custom value comparison function to a database.
 	/// - Database must be configured with ``MDB_DUPSORT`` flag to use this feature.
-	public func setDupsortCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_function) throws {
+	public func setDupsortCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_ftype) throws {
 		let result = mdb_set_dupsort(someTrans.txn_handle, db_handle, compareFunction)
 		guard result == MDB_SUCCESS else {
 			throw LMDBError(returnCode: result)
