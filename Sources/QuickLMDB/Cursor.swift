@@ -15,33 +15,90 @@ public protocol MDB_cursor {
 
 	// get entries
 	/// get entries with a key and a value.
+	/// - parameters:
+	/// 	- operation: the operation to perform.
+	/// 	- key: the key to search for.
+	/// 	- value: the value to search for.
+	/// - note: despite requiring inout parameters, the key and value buffers are not modified by this function.
+	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	@discardableResult func MDB_get_entry<K:RAW_accessible, V:RAW_accessible>(_ operation:Cursor.Operation, key:inout K, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
 	/// get entries with a key.
+	/// - parameters:
+	/// 	- operation: the operation to perform.
+	/// 	- key: the key to search for.
+	/// - note: despite requiring an inout parameter, the key buffer is not modified by this function.
+	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	@discardableResult func MDB_get_entry<K:RAW_accessible>(_ operation:Cursor.Operation, key:inout K) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
-	/// get entries with a value.
+	/// get entries based on an specified cursor operation.
+	/// - parameters:
+	/// 	- operation: the operation to perform.
+	/// 	- value: the value to search for.
+	/// - note: despite requiring an inout parameter, the value buffer is not modified by this function.
+	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	@discardableResult func MDB_get_entry<V:RAW_accessible>(_ operation:Cursor.Operation, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
-	/// get entries based on an operation only.
+	/// get entries based on an specified cursor operation.
+	/// - parameters:
+	/// 	- operation: the operation to perform.
+	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	@discardableResult func MDB_get_entry(_ operation:Cursor.Operation) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
 
 	// set entries.
 	/// set an entry in the database with a specified key and value. the operation will be committed with the specified flags.
+	/// - parameters:
+	/// 	- key: the key to set.
+	/// 	- value: the value to set.
+	/// 	- flags: the flags to use when setting the entry.
+	/// - note: despite requiring inout parameters, the key and value buffers are not modified by this function.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_set_entry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V, flags:Cursor.Operation.Flags) throws
 	
 	// check for entries.
 	/// check for an existing entry containing a specified key.
+	/// - parameters:
+	/// 	- key: the key to search for.
+	/// - note: despite requiring an inout parameter, the key buffer is not modified by this function.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_contains_entry<K:RAW_accessible>(key:inout K) throws -> Bool
 	/// check for an existing entry containing a specified key and value.
+	/// - parameters:
+	/// 	- key: the key to search for.
+	/// 	- value: the value to search for.
+	/// - note: despite requiring inout parameters, the key and value buffers are not modified by this function.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_contains_entry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V) throws -> Bool
 
 	// delete entries.
+	/// delete the presently-selected cursor entry from the database.
+	/// - parameters:
+	/// 	- flags: the flags to use when deleting the entry.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_delete_current_entry(flags:Cursor.Operation.Flags) throws
 
 	// compare entries based on the native compare function of the database.
+	/// compare entries based on the native compare function of the database.
+	/// - parameters:
+	/// 	- dataL: the left-hand side of the comparison.
+	/// 	- dataR: the right-hand side of the comparison.
+	/// - returns: the result of the comparison.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_compare_keys<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32
 	// compare entries based on the native compare function of the database.
+	/// compare entries based on the native compare function of the database.
+	/// - parameters:
+	/// 	- dataL: the left-hand side of the comparison.
+	/// 	- dataR: the right-hand side of the comparison.
+	/// - returns: the result of the comparison.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_compare_dupsort_values<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32
 
-	// returns the number of duplicate entries in the database for this key
+	// returns the number of duplicate entries in the database for this key.
+	/// returns the number of duplicate entries in the database for this key.
+	/// - returns: the number of duplicate entries in the database for this key.
+	/// - throws: a corresponding ``LMDBError`` if the operation fails.
 	func MDB_dup_count() throws -> size_t
 }
 
