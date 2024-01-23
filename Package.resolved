@@ -14,9 +14,9 @@
         "package": "rawdog",
         "repositoryURL": "https://github.com/tannerdsilva/rawdog.git",
         "state": {
-          "branch": "v5",
-          "revision": "415cbb19b6b16aeae7ccf6d34189286c2467e202",
-          "version": null
+          "branch": null,
+          "revision": "0ba0a37d3b8524533cb15fc59feb5df18fa31f21",
+          "version": "5.2.0"
         }
       },
       {

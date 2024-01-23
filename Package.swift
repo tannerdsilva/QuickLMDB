@@ -13,7 +13,7 @@ let package = Package(
     ],
     dependencies: [
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", .exact("0.9.30")),
-		.package(url:"https://github.com/tannerdsilva/rawdog.git", branch:"v5"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"5.3.0"),
 		.package(url:"https://github.com/apple/swift-system.git", .upToNextMajor(from:"1.0.0"))
     ],
     targets: [
