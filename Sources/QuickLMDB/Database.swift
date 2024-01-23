@@ -2,45 +2,75 @@ import CLMDB
 import RAW
 
 public protocol MDB_db {
-	
+	/// the environment handle primitive that LMDB uses.
 	var MDB_env_handle:OpaquePointer { get }
+	/// the database name.
 	var MDB_db_name:String? { get }
+	/// the database handle primitive that LMDB uses.
 	var MDB_db_handle:MDB_dbi { get }
 
-	init(MDB_env_handle:OpaquePointer, MDB_db_name:String?, MDB_db_flags:Database.Flags, tx:Transaction) throws
+	init<E:MDB_env, T:MDB_tx>(MDB_env:E, MDB_db_name:String?, MDB_db_flags:Database.Flags, MDB_tx:T) throws
 
 	// reading entries in the database
 	/// get an entry from the database.
 	///	- parameters:
 	///		- key: the key that will be searched in the database.
 	///		- as: the type to decode from the database.
-	///		- tx: the transaction to use for the entry search.
-	/// - throws: throws ``LMDBError.notFound`` if the key does not exist, or other errors for more obscure circumstances.
+	///		- MDB_tx: the transaction to use for the entry search.
+	/// - throws: a corresponding ``LMDBError.notFound`` if the key does not exist, or other errors for more obscure circumstances.
+	/// - note: despite this function requiring an inout parameter, the passed value is not mutated. it is treated as a read-only value.
 	///	- returns: the decoded value type, if it successfully decoded from the database. if the entry is found but it fails to decode, `nil` is returned.
-	func getEntry<K:RAW_accessible, V:RAW_decodable>(key:inout K, as:V.Type, tx:Transaction) throws -> V?
-	
-	/// search the database for the existence of a given entry.
-	func containsEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws -> Bool
+	func getEntry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:inout K, as:V.Type, MDB_tx:inout T) throws -> V?
+	/// search the database for the existence of a given entry key.
+	/// - parameters:
+	/// 	- key: the key that will be searched in the database.
+	/// 	- MDB_tx: the transaction to use for the entry search.
+	/// - note: despite this function requiring an inout parameter, the passed value is not mutated. it is treated as a read-only value.
+	/// - throws: a corresponding ``LMDBError`` if the entry could not be searched.
+	/// - returns: `true` if the entry exists, `false` if it does not.
+	func containsEntry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx:inout T) throws -> Bool
 
-	// writing entries to the database
-	func setEntry<K:RAW_accessible, V:RAW_encodable>(key:inout K, value:inout V, tx:Transaction) throws
+	// writing entries to the database.
+	/// set an entry in the database.
+	/// - parameters:
+	/// 	- key: the key that will be set in the database.
+	/// 	- value: the value that will be set in the database.
+	/// 	- flags: the flags that will be used when setting the entry.
+	/// 	- MDB_tx: the transaction to use for the entry set.
+	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
+	/// - throws: a corresponding ``LMDBError`` if the entry could not be set.
+	func setEntry<K:RAW_accessible, V:RAW_encodable, T:MDB_tx>(key:inout K, value:inout V, flags:Cursor.Operation.Flags, MDB_tx:inout T) throws
 
 	// removing entries to the database
-	func deleteEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws
-	func deleteEntry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V, tx:Transaction)
-	func deleteAllEntries(tx:Transaction)
-
-	func setEntryCompare(keys:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws
-	func setEntryCompare(values:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws
+	/// remove an entry key (along with its corresponding value) from the database.
+	/// - parameters:
+	/// 	- key: the key that will be removed from the database.
+	/// 	- MDB_tx: the transaction to use for the entry removal.
+	/// - note: despite this function requiring an inout parameter, the passed value is not mutated. it is treated as a read-only value.
+	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
+	func deleteEntry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx:inout T) throws
+	/// remove a specific key and value pairing from the database.
+	/// - parameters:
+	/// 	- key: the key that will be removed from the database.
+	/// 	- value: the value that will be removed from the database.
+	/// 	- MDB_tx: the transaction to use for the entry removal.
+	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
+	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
+	func deleteEntry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:inout K, value:inout V, MDB_tx:inout T) throws
+	/// remove all entries from the database.
+	/// - parameters:
+	/// 	- MDB_tx: the transaction to use for the entry removal.
+	/// - throws: a corresponding ``LMDBError`` if the entries could not be removed.
+	func deleteAllEntries<T:MDB_tx>(MDB_tx:inout T) throws
 }
 
 extension MDB_db {
 
-	public func getEntry<K:RAW_accessible, V:RAW_decodable>(key:inout K, as:V.Type, tx:Transaction) throws -> V? {
-		return V(try key.RAW_access_mutating { ptr in
+	public func getEntry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:inout K, as:V.Type, MDB_tx tx:inout T) throws -> V? {
+		return V(RAW_decode:try key.RAW_access_mutating { ptr in
 			var keyVal = MDB_val(ptr)
 			var dbValue = MDB_val.nullValue()
-			let valueResult = mdb_get(tx.txn_handle, MDB_db_handle, &keyVal, &dbValue)
+			let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &dbValue)
 			guard valueResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:valueResult)
 			}
@@ -48,11 +78,11 @@ extension MDB_db {
 		})
 	}
 
-	public func containsEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws -> Bool {
+	public func containsEntry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx tx:inout T) throws -> Bool {
 		return try key.RAW_access_mutating { ptr in
 			var keyVal = MDB_val(ptr)
 			var dbValue = MDB_val.nullValue()
-			let valueResult = mdb_get(tx.txn_handle, MDB_db_handle, &keyVal, &dbValue)
+			let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &dbValue)
 			switch valueResult {
 				case MDB_SUCCESS:
 					return true
@@ -64,12 +94,12 @@ extension MDB_db {
 		}
 	}
 
-	public func setEntry<K:RAW_accessible, V:RAW_encodable>(key:inout K, value:inout V, flags:Cursor.Operation.Flags, tx:Transaction) throws {
+	public func setEntry<K:RAW_accessible, V:RAW_encodable, T:MDB_tx>(key:inout K, value:inout V, flags:Cursor.Operation.Flags, MDB_tx tx:inout T) throws {
 		try key.RAW_access_mutating { ptr in
 			var keyVal = MDB_val(ptr)
 			var mdbValVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 			value.RAW_encode(count:&mdbValVal.mv_size)
-			let dbResult = mdb_put(tx.txn_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.union(.reserve).rawValue)
+			let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.union(.reserve).rawValue)
 			guard dbResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:dbResult)
 			}
@@ -79,22 +109,23 @@ extension MDB_db {
 			value.RAW_encode(dest:mdbValVal.mv_data.assumingMemoryBound(to:UInt8.self))
 		}
 	}
-	public func deleteEntry<K:RAW_accessible>(key:inout K, tx:Transaction) throws {
+
+	public func deleteEntry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx tx:T) throws {
 		try key.RAW_access_mutating { ptr in
 			var keyVal = MDB_val(ptr)
-			let dbResult = mdb_del(tx.txn_handle, MDB_db_handle, &keyVal, nil)
+			let dbResult = mdb_del(tx.MDB_tx_handle, MDB_db_handle, &keyVal, nil)
 			guard dbResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:dbResult)
 			}
 		}
 	}
 
-	public func deleteEntry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V, tx:Transaction) throws {
+	public func deleteEntry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:inout K, value:inout V, MDB_tx tx:inout T) throws {
 		return try key.RAW_access_mutating({ keyBuff in
 			return try value.RAW_access_mutating({ valBuff in
 				var keyV = MDB_val(keyBuff)
 				var valV = MDB_val(valBuff)
-				let dbResult = mdb_del(tx.txn_handle, MDB_db_handle, &keyV, &valV)
+				let dbResult = mdb_del(tx.MDB_tx_handle, MDB_db_handle, &keyV, &valV)
 				guard dbResult == MDB_SUCCESS else {
 					throw LMDBError(returnCode:dbResult)
 				}
@@ -102,22 +133,22 @@ extension MDB_db {
 		})
 	}
 
-	public func deleteAllEntries(tx:Transaction) throws {
-		let dbResult = mdb_drop(tx.txn_handle, MDB_db_handle, 0)
+	public func deleteAllEntries<T:MDB_tx>(MDB_tx tx:inout T) throws {
+		let dbResult = mdb_drop(tx.MDB_tx_handle, MDB_db_handle, 0)
 		guard dbResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:dbResult)
 		}
 	}
 
-	public func setEntryCompare(keys:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws {
-		let dbResult = mdb_set_compare(tx.txn_handle, MDB_db_handle, keys)
+	public func setEntryCompare<T:MDB_tx>(keys:MDB_comparable.MDB_compare_ftype, MDB_tx tx:inout T) throws {
+		let dbResult = mdb_set_compare(tx.MDB_tx_handle, MDB_db_handle, keys)
 		guard dbResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:dbResult)
 		}
 	}
 
-	public func setEntryCompare(values:MDB_comparable.MDB_compare_ftype, tx:Transaction) throws {
-		let dbResult = mdb_set_dupsort(tx.txn_handle, MDB_db_handle, values)
+	public func setEntryCompare<T:MDB_tx>(values:MDB_comparable.MDB_compare_ftype, MDB_tx tx:inout T) throws {
+		let dbResult = mdb_set_dupsort(tx.MDB_tx_handle, MDB_db_handle, values)
 		guard dbResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:dbResult)
 		}
@@ -126,20 +157,19 @@ extension MDB_db {
 
 public struct Database:MDB_db {
 
-    public var MDB_env_handle: OpaquePointer { 
-		return env_handle!
-	}
+    public let MDB_env_handle:OpaquePointer
+    public let MDB_db_name:String?
+    public let MDB_db_handle:MDB_dbi
 
-    public var MDB_db_name: String? {
-		self.name
-	}
-
-    public var MDB_db_handle: MDB_dbi {
-		db_handle
-	}
-
-    public init(MDB_env_handle: OpaquePointer, MDB_db_name: String?, MDB_db_flags: Flags, tx: Transaction) throws {
-        try self.init(environment:MDB_env_handle, name:MDB_db_name, flags:MDB_db_flags, tx:tx)
+    public init<E:MDB_env, T:MDB_tx>(MDB_env env:E, MDB_db_name:String?, MDB_db_flags: Flags, MDB_tx tx:T) throws {
+        var captureHandle = MDB_dbi()
+		let openDatabaseResult = mdb_dbi_open(tx.MDB_tx_handle, MDB_db_name, UInt32(MDB_db_flags.rawValue), &captureHandle)
+		guard openDatabaseResult == 0 else {
+			throw LMDBError(returnCode:openDatabaseResult)
+		}
+		self.MDB_db_handle = captureHandle
+		self.MDB_env_handle = env.MDB_env_handle
+		self.MDB_db_name = MDB_db_name
     }
 	
 	/// special options for this database. These flags are specified
@@ -170,34 +200,7 @@ public struct Database:MDB_db {
 		/// create the database if it does not already exist
 		public static let create = Flags(rawValue:UInt32(MDB_CREATE))
 	}
-	
-	/// statistics for the database.
-	public typealias Statistics = MDB_stat
 
-	/// the name of the database. When this value is `nil`, this is the only database that exists in the Environment.
-	public let name:String?
-	/// the `MDB_env` that this Database is associated with.
-	public let env_handle:OpaquePointer?
-	/// this database as an `MDB_dbi`. Used for calling into LMDB core functions.
-	public let db_handle:MDB_dbi
-	
-	/// Primary initializer. Opens a database.
-	/// - Parameters:
-	///   - environment: The environment that the database belongs to.
-	///   - name: The name of the database to open. if only a single database is needed in the environment, this value may be `nil`.
-	///   - flags: Special options for this database.
-	///   - tx: The transaction in which this Database is to be opened.
-	internal init(environment:OpaquePointer?, name:String?, flags:Flags, tx:Transaction) throws {
-		var captureHandle = MDB_dbi()
-		let openDatabaseResult = mdb_dbi_open(tx.txn_handle, name, UInt32(flags.rawValue), &captureHandle)
-		guard openDatabaseResult == 0 else {
-			throw LMDBError(returnCode:openDatabaseResult)
-		}
-		self.db_handle = captureHandle
-		self.env_handle = environment
-		self.name = name
-	}
-	
 	/// Create a cursor from this Database.
 	public func cursor(tx:Transaction) throws -> Cursor {
 		return try Cursor(txn_handle:tx.txn_handle, db:self.db_handle, readOnly:tx.readOnly)
@@ -226,174 +229,6 @@ public struct Database:MDB_db {
 			throw LMDBError(returnCode:getFlagsTry)
 		}
 		return Flags(rawValue:captureFlags)
-	}
-	
-	/// Return the value of an entry with a specified key.
-	/// - Parameters:
-	///   - type: The value type to return from the database.
-	///   - key: The key of the entry that is to be retrieved.
-	///   - tx: The transaction that is to be used to retrieve this entry.
-	/// - Throws: Will throw ``QuickLMDB/LMDBError/notFound`` if an entry with the given key could not be found.
-	/// - Returns: Returns `nil` if the entry exists but could not be deserialized to the specified type. Otherwise, the value of the specified type is returned.
-	public func getEntry<K:MDB_encodable, V:MDB_decodable>(type:V.Type, forKey key:K, tx:Transaction) throws -> V? {
-		return try key.asMDB_val { keyVal -> V? in
-			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			let valueResult:Int32 = mdb_get(tx.txn_handle, db_handle, &keyVal, &dataVal)
-			guard valueResult == MDB_SUCCESS else {
-				throw LMDBError(returnCode:valueResult)
-			}
-			return V(dataVal)
-		}
-	}
-	
-    /// Sets an entry with a specified key and value for that key
-    /// - Parameters:
-    ///   - value: The value (or data) to be stored in the database
-    ///   - key: The key to assosiate with the specified value
-    ///   - flags: Options for this operation
-    ///   - tx: The transaction to use to set the entry into the database. If `nil` is specified, a read-write transaction is opened to set the entry.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func setEntry<K:MDB_encodable, V:MDB_encodable>(value:V, forKey key:K, flags:Cursor.Operation.Flags = [], tx:Transaction?) throws {
-		return try key.asMDB_val { keyVal in
-			return try value.asMDB_val { valueVal in
-				let valueResult:Int32
-				if tx != nil {
-					valueResult = mdb_put(tx!.txn_handle, db_handle, &keyVal, &valueVal, flags.rawValue)
-				} else {
-					valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-						return mdb_put(someTrans.txn_handle, db_handle, &keyVal, &valueVal, flags.rawValue)
-					}
-				}
-				guard valueResult == MDB_SUCCESS else {
-					throw LMDBError(returnCode:valueResult)
-				}
-			}
-		}
-	}
-    
-    /// Checks if the database contains a specified key
-    /// - Parameters:
-    ///   - key: The key to search for
-    ///   - tx: The transaction to use to search for the specified key. If `nil` is specified, a read-only transaction is opened to search for the key.
-    /// - Throws: This function will throw an ``LMDBError`` if any value other than `MDB_SUCCESS` or `MDB_NOTFOUND` are returned.
-    /// - Returns: True if the database contains the key. False otherwise.
-	public func containsEntry<K:MDB_encodable>(key:K, tx:Transaction?) throws -> Bool {
-		return try key.asMDB_val { keyVal in
-			var dataVal = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
-			let valueResult:Int32
-			if tx != nil {
-				valueResult = mdb_get(tx!.txn_handle, db_handle, &keyVal, &dataVal)
-			} else {
-				valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:true, parent:nil) { someTrans -> Int32 in
-					return mdb_get(someTrans.txn_handle, db_handle, &keyVal, &dataVal)
-				}
-			}
-			switch valueResult {
-				case MDB_SUCCESS:
-					return true
-				case MDB_NOTFOUND:
-					return false
-				default:
-					throw LMDBError(returnCode:valueResult)
-			}
-		}
-	}
-    
-    /// Deletes an entry in the database for a specified key
-    /// - Parameters:
-    ///   - key: The key to be deleted
-    ///   - tx: The transaction to use to delete the entry for the specified key. If `nil` is specified, a read-write transaction is opened to delete the entry.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func deleteEntry<K:MDB_encodable>(key:K, tx:Transaction?) throws {
-		return try key.asMDB_val { keyVal in
-			let valueResult:Int32
-			if tx != nil {
-				valueResult = mdb_del(tx!.txn_handle, db_handle, &keyVal, nil)
-			} else {
-				valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-					return mdb_del(someTrans.txn_handle, db_handle, &keyVal, nil)
-				}
-			}
-			guard valueResult == MDB_SUCCESS else {
-				throw LMDBError(returnCode:valueResult)
-			}
-		}
-	}
-	
-    /// Deletes an entry in the database for a specified key and value
-    /// - Parameters:
-    ///   - key: The key to be deleted
-    ///   - value: The value that must assosiate with the key
-    ///   - tx: The transaction to use to delete the entry for the specified key and value. If `nil` is specified, a read-write transaction is opened to delete the entry.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func deleteEntry<K:MDB_encodable, V:MDB_encodable>(key:K, value:V, tx:Transaction?) throws {
-		return try key.asMDB_val { keyVal in
-			return try value.asMDB_val { valueVal in
-				let valueResult:Int32
-				if tx != nil {
-					valueResult = mdb_del(tx!.txn_handle, db_handle, &keyVal, &valueVal)
-				} else {
-					valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-						return mdb_del(someTrans.txn_handle, db_handle, &keyVal, &valueVal)
-					}
-				}
-				guard valueResult == MDB_SUCCESS else {
-					throw LMDBError(returnCode:valueResult)
-				}
-
-			}
-		}
-	}
-    
-    /// Deletes all entries in the database
-    /// - Parameter tx: The transaction to use to delete all entries. If `nil` is specified, a read-write transaction is opened to delete all entries.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func deleteAllEntries(tx:Transaction?) throws {
-		let valueResult:Int32
-		if tx != nil {
-			valueResult = mdb_drop(tx!.txn_handle, db_handle, 0)
-		} else {
-			valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-				mdb_drop(someTrans.txn_handle, db_handle, 0)
-			}
-		}
-		guard valueResult == MDB_SUCCESS else {
-			throw LMDBError(returnCode:valueResult)
-		}
-	}
-    
-    /// Removes this database from its current environment
-    /// - Parameter tx: The transaction to use to remove this database. If `nil` is specified, a read-write transaction is opened to delete this database.
-    /// - Throws: This function will throw an ``LMDBError`` if the database operation does not return `MDB_SUCCESS`
-	public func deleteDatabase(tx:Transaction?) throws {
-		let valueResult:Int32
-		if tx != nil {
-			valueResult = mdb_drop(tx!.txn_handle, db_handle, 1)
-		} else {
-			valueResult = try Transaction.instantTransaction(environment:env_handle, readOnly:false, parent:nil) { someTrans in
-				return mdb_drop(someTrans.txn_handle, db_handle, 1)
-			}
-		}
-		guard valueResult == MDB_SUCCESS else {
-			throw LMDBError(returnCode:valueResult)
-		}
-	}
-
-	/// Assigns a custom key comparison function to a database.
-	public func setCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_ftype) throws {
-		let result = mdb_set_compare(someTrans.txn_handle, db_handle, compareFunction)
-		guard result == MDB_SUCCESS else {
-			throw LMDBError(returnCode: result)
-		}
-	}
-
-	/// Applies a custom value comparison function to a database.
-	/// - Database must be configured with ``MDB_DUPSORT`` flag to use this feature.
-	public func setDupsortCompare(tx someTrans:Transaction, _ compareFunction:MDB_comparable.MDB_compare_ftype) throws {
-		let result = mdb_set_dupsort(someTrans.txn_handle, db_handle, compareFunction)
-		guard result == MDB_SUCCESS else {
-			throw LMDBError(returnCode: result)
-		}
 	}
 	
 	/// Close a database handle. **NOT NEEDED IN MOST USE CASES**

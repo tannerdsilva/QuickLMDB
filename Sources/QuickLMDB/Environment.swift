@@ -2,61 +2,63 @@ import CLMDB
 import SystemPackage
 
 public protocol MDB_env {
+	/// the environment handle primitive that LMDB uses.
 	var MDB_env_handle:OpaquePointer { get }
+	/// the environment flags that was used to create the environment.
 	var MDB_env_flags:Environment.Flags { get }
-	var MDB_env_mapsize:size_t { get }
-	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions)
+
+	/// create a new environment given the specified path and flags.
+	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi?, maxDBs:MDB_dbi, mode:FilePermissions)
 }
 
-public class Environment {
-	
-	/// Flags that can be used to open an environment
+public class Environment:MDB_env {
+	/// flags that can be used to open an environment
 	public struct Flags:OptionSet {
 
 		public let rawValue:UInt32
 
 		public init(rawValue:UInt32) { self.rawValue = rawValue }
 		
-		/// Experimental option that opens the memorymap at a fixed address.
+		/// experimental option that opens the memorymap at a fixed address.
 		public static let fixedMap = Flags(rawValue:UInt32(MDB_FIXEDMAP))
 		
-		/// Specify that the environment is a file instead of a directory.
+		/// specify that the environment is a file instead of a directory.
 		public static let noSubDir = Flags(rawValue:UInt32(MDB_NOSUBDIR))
 		
-		/// Disables the `fsync` call that typically executes after a transaction is committed.
+		/// disables the `fsync` call that typically executes after a transaction is committed.
 		public static let noSync = Flags(rawValue:UInt32(MDB_NOSYNC))
 		
-		/// Open the environment as readonly.
+		/// open the environment as readonly.
 		public static let readOnly = Flags(rawValue:UInt32(MDB_RDONLY))
 		
-		/// Disables the `fsync` on the metapage that typically executes after a transaction is committed.
+		/// disables the `fsync` on the metapage that typically executes after a transaction is committed.
 		public static let noMetaSync = Flags(rawValue:UInt32(MDB_NOMETASYNC))
 		
-		/// Use a writable memorymap.
+		/// use a writable memorymap.
 		public static let writeMap = Flags(rawValue:UInt32(MDB_WRITEMAP))
 		
-		/// Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags-swift.struct/writeMap`` flag.
+		/// sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags-swift.struct/writeMap`` flag.
 		public static let mapAsync = Flags(rawValue:UInt32(MDB_MAPASYNC))
 		
-		/// Associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
+		/// associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
 		public static let noTLS = Flags(rawValue:UInt32(MDB_NOTLS))
 		
-		/// Disable all locking mechanisms for the database. Caller must manage their own locking.
+		/// disable all locking mechanisms for the database. Caller must manage their own locking.
 		public static let noLock = Flags(rawValue:UInt32(MDB_NOLOCK))
 		
-		/// Do not readahead (this flag has no effect on Windows).
+		/// do not readahead (this flag has no effect on Windows).
 		public static let noReadAhead = Flags(rawValue:UInt32(MDB_NORDAHEAD))
 		
-		/// Do not initialize malloc'd memory before writing to the datafile.
+		/// do not initialize malloc'd memory before writing to the datafile.
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
 	
 	/// This is an opaque pointer to the underlying `MDB_env` object for this environment.
 	/// - This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
-	public var env_handle:OpaquePointer?
+	public let MDB_env_handle:OpaquePointer
 	
 	/// The flags that were used to initialize the Environment.
-	public let flags:Flags
+	public let MDB_env_flags:Flags
 	
 	/// Initialize an LMDB environment at the specified path string.
 	/// - Parameters:
