@@ -4,7 +4,7 @@ import RAW
 extension MDB_val {
 
 	/// returns a new MDB_val with a null data pointer and a length specified as the encoded count of the given encodable type.
-	internal static func reserved<E>(forRAW_encodable encodable:inout E) -> E {
+	internal static func reserved<E:RAW_encodable>(forRAW_encodable encodable:inout E) -> MDB_val {
 		var newEncodable = MDB_val(mv_size:0, mv_data:nil)
 		encodable.RAW_encode(count:&newEncodable.mv_size)
 		return newEncodable

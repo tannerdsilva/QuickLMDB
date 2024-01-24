@@ -1,52 +1,50 @@
 {
-  "object": {
-    "pins": [
-      {
-        "package": "CLMDB",
-        "repositoryURL": "https://github.com/tannerdsilva/CLMDB.git",
-        "state": {
-          "branch": null,
-          "revision": "4ce5826424f8e65f395efc5b4c611479384722b1",
-          "version": "0.9.30"
-        }
-      },
-      {
-        "package": "rawdog",
-        "repositoryURL": "https://github.com/tannerdsilva/rawdog.git",
-        "state": {
-          "branch": null,
-          "revision": "9b0ce23d7631dfa86ed521609f73ac811e004f81",
-          "version": "6.0.0"
-        }
-      },
-      {
-        "package": "swift-log",
-        "repositoryURL": "https://github.com/apple/swift-log.git",
-        "state": {
-          "branch": null,
-          "revision": "532d8b529501fb73a2455b179e0bbb6d49b652ed",
-          "version": "1.5.3"
-        }
-      },
-      {
-        "package": "swift-syntax",
-        "repositoryURL": "https://github.com/apple/swift-syntax.git",
-        "state": {
-          "branch": null,
-          "revision": "43c802fb7f96e090dde015344a94b5e85779eff1",
-          "version": "509.1.0"
-        }
-      },
-      {
-        "package": "swift-system",
-        "repositoryURL": "https:///github.com/apple/swift-system.git",
-        "state": {
-          "branch": null,
-          "revision": "836bc4557b74fe6d2660218d56e3ce96aff76574",
-          "version": "1.1.1"
-        }
+  "pins" : [
+    {
+      "identity" : "clmdb",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tannerdsilva/CLMDB.git",
+      "state" : {
+        "revision" : "4ce5826424f8e65f395efc5b4c611479384722b1",
+        "version" : "0.9.30"
       }
-    ]
-  },
-  "version": 1
+    },
+    {
+      "identity" : "rawdog",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tannerdsilva/rawdog.git",
+      "state" : {
+        "revision" : "e6cd6ab65b1316cb6597dfc430480c88d37b1a95",
+        "version" : "6.0.1"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "532d8b529501fb73a2455b179e0bbb6d49b652ed",
+        "version" : "1.5.3"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-syntax.git",
+      "state" : {
+        "revision" : "43c802fb7f96e090dde015344a94b5e85779eff1",
+        "version" : "509.1.0"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https:///github.com/apple/swift-system.git",
+      "state" : {
+        "revision" : "836bc4557b74fe6d2660218d56e3ce96aff76574",
+        "version" : "1.1.1"
+      }
+    }
+  ],
+  "version" : 2
 }

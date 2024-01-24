@@ -2,16 +2,60 @@ import CLMDB
 import SystemPackage
 
 public protocol MDB_env {
+
+	/// the type of transaction that this environment uses for transactions.
+	associatedtype MDB_tx_type:MDB_tx
+
 	/// the environment handle primitive that LMDB uses.
 	var MDB_env_handle:OpaquePointer { get }
 	/// the environment flags that was used to create the environment.
 	var MDB_env_flags:Environment.Flags { get }
 
 	/// create a new environment given the specified path and flags.
-	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi?, maxDBs:MDB_dbi, mode:FilePermissions)
+	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws
 }
 
-public class Environment:MDB_env {
+public final class Environment:MDB_env {
+
+    public init(path: String, flags: Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:SystemPackage.FilePermissions) throws {
+	
+		// create the environment variable
+		var environmentHandle:OpaquePointer? = nil;
+		let envStatus = mdb_env_create(&environmentHandle)
+		guard envStatus == 0 else {
+			throw LMDBError(returnCode:envStatus)
+		}
+		
+		// set the map size
+		if mapSize != nil {
+			let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
+			guard mdbSetResult == 0 else {
+				throw LMDBError(returnCode:mdbSetResult)
+			}
+		}
+		
+		// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
+		let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders)
+		guard setReadersResult == 0 else {
+			throw LMDBError(returnCode:setReadersResult)
+		}
+		
+		// set maximum db count
+		let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
+		guard mdbSetResult == 0 else {
+			throw LMDBError(returnCode:mdbSetResult)
+		}
+		
+		// open the environment with the specified flags and file modes specified
+		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
+		guard openStatus == 0 else {
+			throw LMDBError(returnCode:openStatus)
+		}
+		
+		self.MDB_env_handle = environmentHandle!
+		self.MDB_env_flags = flags
+    }
+
 	/// flags that can be used to open an environment
 	public struct Flags:OptionSet {
 
@@ -53,132 +97,66 @@ public class Environment:MDB_env {
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
 	
-	/// This is an opaque pointer to the underlying `MDB_env` object for this environment.
-	/// - This pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
+	/// this is an opaque pointer to the underlying `MDB_env` object for this environment.
+	/// - this pointer can be used if you want to interop this Swift wrapper with the underlying LMDB library functions.
 	public let MDB_env_handle:OpaquePointer
 	
-	/// The flags that were used to initialize the Environment.
+	/// the flags that were used to initialize the Environment.
 	public let MDB_env_flags:Flags
 	
-	/// Initialize an LMDB environment at the specified path string.
-	/// - Parameters:
-	///   - path: The path where the environment will be stored.
-	///   - flags: Special options for this environment.
-	///   - mapSize: Assign the size of the memory map that will be used for this environment. If left unspecified, the LMDB default value will be used, which is "intentionally set low".
-	///   - maxReaders: Specify the number of concurrent read transactions that can happen in this environment.
-	///   - maxDBs: Specify the number of named databases that can exist in the environment. It is recommended to specify a low to moderate maxumum value, as each named database costs between 7 to 120 words per transaction. It is NOT recommended to specify a huge value for the maximum database count.
-	///   - mode: The UNIX permissions to be set on on created files and semaphores. These permissions are not applied to files that already exist on the system.
-	public init(path:String, flags:Flags = [], mapSize:size_t? = nil, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions = [.ownerReadWriteExecute, .groupRead, .groupExecute]) throws {
-		
-		// create the environment variable
-		var environmentHandle:OpaquePointer? = nil;
-		let envStatus = mdb_env_create(&environmentHandle)
-		guard envStatus == 0 else {
-			throw LMDBError(returnCode:envStatus)
-		}
-		
-		// set the map size
-		if mapSize != nil {
-			let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
-			guard mdbSetResult == 0 else {
-				throw LMDBError(returnCode:mdbSetResult)
-			}
-		}
-		
-		// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
-		let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders);
-		guard setReadersResult == 0 else {
-			throw LMDBError(returnCode:setReadersResult)
-		}
-		
-		// set maximum db count
-		let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
-		guard mdbSetResult == 0 else {
-			throw LMDBError(returnCode:mdbSetResult)
-		}
-		
-		// open the environment with the specified flags and file modes specified
-		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
-		guard openStatus == 0 else {
-			throw LMDBError(returnCode:openStatus)
-		}
-		
-		self.env_handle = environmentHandle
-		self.flags = flags
-	}
-	
-	/// Open a database in the environment.
-	/// - Parameters:
-	///   - databaseName: The name of the database to open. If only a single database is needed in the environment, this value may be `nil`.
-	///   - flags: Special options for the database.
-	///   - tx: The transaction in which this Database is to be opened. If `nil` is specified, a read/write transaction will be conveniently opened behind the scenes.
-	/// - Returns: The newly created Database structure.
-	public func openDatabase(named databaseName:String?, flags:Database.Flags, tx:Transaction) throws -> Database {
-		return try Database(environment:env_handle, name:databaseName, flags:flags, tx:tx)
-	}
-	
-	/// Remove a database from the environment.
-	/// - Parameters:
+	/// remove a database from the environment.
+	/// - parameters:
 	///   - database: The database that is to be removed from the environment.
 	///   - tx: The transaction in which to apply this action. If `nil` is specified, a writable transaction is
-    /// - Throws: This function will throw an ``LMDBError`` if the environment operation does not return `MDB_SUCCESS`.
-	public func deleteDatabase(_ database:Database, tx:Transaction) throws {
-		let result = mdb_drop(tx.txn_handle, database.db_handle, 1)
+    /// - throws: This function will throw an ``LMDBError`` if the environment operation does not return `MDB_SUCCESS`.
+	/// - WARNING: this function will remove all of the data in the database. call with caution.
+	public func deleteDatabase<D:MDB_db, T:MDB_tx>(_ database:D, MDB_tx tx:T) throws {
+		let result = mdb_drop(tx.MDB_tx_handle, database.MDB_db_handle, 1)
 		guard result == MDB_SUCCESS else {
 			throw LMDBError(returnCode:result)
 		}
 	}
 	
-    /// Open a new transaction in the environment.
-    /// - Parameters:
-    ///   - readOnly: If true the transaction is read-only. If false the transaction is read-write.
-    ///   - txFunc: The handler transaction.
-    /// - Throws: The function will throw if the transaction can't be created.
-    /// - Returns: The opened transaction.
-	public func transact<R>(readOnly:Bool, _ txFunc:(Transaction) throws -> R) rethrows -> R {
-		return try! Transaction.instantTransaction(environment:self.env_handle, readOnly:readOnly, parent:nil, txFunc)
-	}
-	
-	///Set the size of the memory map to use for this environment.
-	/// - The size should be a multiple of the OS page size.
-	/// - Callers MUST explicitly ensure that no transactions are active in the process before calling this function.
-	/// - The new size takes effect immediately for the calling process, but the change will not take effect for other processes until the current process commits a new write transaction.
+	/// set the size of the memory map to use for this environment.
+	/// - the size should be a multiple of the OS page size.
+	/// - callers MUST explicitly ensure that no transactions are active in the process before calling this function.
+	/// - the new size takes effect immediately for the calling process, but the change will not take effect for other processes until the current process commits a new write transaction.
 	public func setMapSize(_ newMapSize:size_t) throws {
-		let mdbSetResult = mdb_env_set_mapsize(env_handle, newMapSize)
+		let mdbSetResult = mdb_env_set_mapsize(MDB_env_handle, newMapSize)
 		guard mdbSetResult == 0 else {
 			throw LMDBError(returnCode:mdbSetResult)
 		}
 	}
     
-    /// Copy an LMDB environment to a specified path.
-    /// - Parameters:
+    /// copy an LMDB environment to a specified path.
+    /// - parameters:
     ///   - path: The path where the environment is to be copied.
     ///   - performCompaction: If true, the operation preforms compation while copying (consumes more CPU and runs slower). If false, the operation does not preform compation.
-    /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
+    /// - throws: this function will throw an ``LMDBError`` if the environment operation fails.
 	public func copyTo(path:String, performCompaction:Bool) throws {
 		let copyFlags:UInt32 = (performCompaction == true) ? UInt32(MDB_CP_COMPACT) : 0
-		let copyResult = mdb_env_copy2(env_handle, path, copyFlags)
+		let copyResult = mdb_env_copy2(MDB_env_handle, path, copyFlags)
 		guard copyResult == 0 else {
 			throw LMDBError(returnCode:copyResult)
 		}
 	}
     
-    /// Flush the data buffers to disk. Useful for Environments with ``QuickLMDB/Environment/Flags-swift.struct/writeMap`` enabled.
-    /// - Parameter force: If true, the operation forces a synchronus flush. If false, an asynchronus flush is preformed.
-    /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
+    /// flush the data buffers to disk. Useful for Environments with ``QuickLMDB/Environment/Flags-swift.struct/writeMap`` enabled.
+    /// - parameter force: If true, the operation forces a synchronus flush. If false, an asynchronus flush is preformed.
+    /// - throws: This function will throw an ``LMDBError`` if the environment operation fails.
 	public func sync(force:Bool = true) throws {
-		let syncStatus = mdb_env_sync(env_handle, (force == true ? 1 : 0))
+		let syncStatus = mdb_env_sync(MDB_env_handle, (force == true ? 1 : 0))
 		guard syncStatus == 0 else {
 			throw LMDBError(returnCode:syncStatus)
 		}
 	}
     
-    /// Checks for stale entries in the reader lock table.
-    /// - Throws: This function will throw an ``LMDBError`` if the environment operation fails.
-    /// - Returns: The number of stale slots that were cleared.
+    /// checks for stale entries in the reader lock table.
+    /// - throws: this function will throw an ``LMDBError`` if the environment operation fails.
+    /// - returns: the number of stale slots that were cleared.
 	@discardableResult public func readerCheck() throws -> Int32 {
 		var deadCheck:Int32 = 0
-		let clearCheck = mdb_reader_check(self.env_handle, &deadCheck)
+		let clearCheck = mdb_reader_check(MDB_env_handle, &deadCheck)
 		guard clearCheck == MDB_SUCCESS else {
 			throw LMDBError(returnCode:clearCheck)
 		}
@@ -186,8 +164,8 @@ public class Environment:MDB_env {
 	}
 
 	deinit {
-		//close the environment handle when all references to this instance are released
-		mdb_env_close(self.env_handle)
+		// close the environment handle when all references to this instance are released
+		mdb_env_close(MDB_env_handle)
 	}
 }
 
