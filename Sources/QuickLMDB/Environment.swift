@@ -16,6 +16,7 @@ public protocol MDB_env {
 }
 
 public final class Environment:MDB_env {
+    public typealias MDB_tx_type = Transaction
 
     public init(path: String, flags: Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:SystemPackage.FilePermissions) throws {
 	
