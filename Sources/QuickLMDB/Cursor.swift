@@ -18,7 +18,7 @@ public protocol MDB_cursor_strict:MDB_cursor where MDB_cursor_dbtype:MDB_db_stri
 	func MDB_cursor_contains_entry(key:inout MDB_cursor_dbtype.MDB_db_key_type, value:inout MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool
 }
 
-public protocol MDB_cursor {
+public protocol MDB_cursor:Sequence {
 	
 	/// the database type backing this cursor.
 	associatedtype MDB_cursor_dbtype:MDB_db
@@ -33,6 +33,7 @@ public protocol MDB_cursor {
 	/// initialize a new cursor from a valid transaction and database handle.
 	init<T:MDB_tx>(MDB_db:MDB_dbi, MDB_tx:inout T) throws
 
+	
 	// get entries
 	/// get entries with a key and a value.
 	/// - parameters:
@@ -289,8 +290,43 @@ extension Cursor:MDB_cursor where MDB_cursor_dbtype:MDB_db {}
 /// - conforms to the ``MDB_cursor`` protocol with any database (unconditional)
 /// - conforms to the ``MDB_cursor_strict`` protocol with any database that conforms to the ``MDB_db_strict`` protocol.
 public final class Cursor<D:MDB_db>:Sequence {
+	/// returns a dup iterator for a specified key. if the key does not exist, an error is thrown.
+	public func makeDupIterator<A:RAW_accessible>(key:inout A) throws -> DupIterator {
+		try MDB_cursor_get_entry(.setKey, key:&key)
+		return DupIterator(self)
+	}
+	
+	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
 	public func makeIterator() -> Iterator {
 		return Iterator(self)
+	}
+	
+	/// primary dup iterator implementation
+	public struct DupIterator:IteratorProtocol {
+		private var cursor:Cursor<D>
+		private var op:Operation
+
+		fileprivate init(_ cursor:Cursor<D>) {
+			self.cursor = cursor
+			self.op = .firstDup
+		}
+
+		public mutating func next() -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)? {
+			defer {
+				switch op {
+					case .firstDup:
+						op = .nextDup
+					default:
+						break;
+				}
+			}
+			do {
+				return try cursor.MDB_cursor_get_entry(op)
+			} catch {
+				return nil
+			}
+		}
+	
 	}
 
 	public struct Iterator:IteratorProtocol {
