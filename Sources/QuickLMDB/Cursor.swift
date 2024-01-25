@@ -302,7 +302,7 @@ public final class Cursor<D:MDB_db>:Sequence {
 	}
 	
 	/// primary dup iterator implementation
-	public struct DupIterator:IteratorProtocol {
+	public struct DupIterator:IteratorProtocol, Sequence {
 		private var cursor:Cursor<D>
 		private var op:Operation
 
@@ -329,7 +329,7 @@ public final class Cursor<D:MDB_db>:Sequence {
 	
 	}
 
-	public struct Iterator:IteratorProtocol {
+	public struct Iterator:IteratorProtocol, Sequence {
 		private var cursor:Cursor<D>
 		private var op:Operation
 
