@@ -288,8 +288,38 @@ extension Cursor:MDB_cursor where MDB_cursor_dbtype:MDB_db {}
 /// LMDB cursor. this is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memory.
 /// - conforms to the ``MDB_cursor`` protocol with any database (unconditional)
 /// - conforms to the ``MDB_cursor_strict`` protocol with any database that conforms to the ``MDB_db_strict`` protocol.
-public final class Cursor<D:MDB_db> {
-    public typealias MDB_cursor_dbtype = D
+public final class Cursor<D:MDB_db>:Sequence {
+	public func makeIterator() -> Iterator {
+		return Iterator(self)
+	}
+
+	public struct Iterator:IteratorProtocol {
+		private var cursor:Cursor<D>
+		private var op:Operation
+
+		public init(_ cursor:Cursor<D>) {
+			self.cursor = cursor
+			self.op = .first
+		}
+
+		public mutating func next() -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)? {
+			defer {
+				switch op {
+					case .first:
+						op = .next
+					default:
+						break;
+				}
+			}
+			do {
+				return try cursor.MDB_cursor_get_entry(op)
+			} catch {
+				return nil
+			}
+		}
+	}
+
+	public typealias MDB_cursor_dbtype = D
 
 	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
 	public let MDB_cursor_handle:OpaquePointer
