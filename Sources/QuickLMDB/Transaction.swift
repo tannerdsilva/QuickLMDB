@@ -14,10 +14,15 @@ public protocol MDB_tx {
 	/// 	- readOnly: indicates if the newly created transaction shall be read-only.
 	/// 	- parent: an optional parent transaction. if this is not nil, the transaction will be a child transaction. this is only evaluated if readOnly is false, since child transactions cannot be read-only.
 	/// 	- handler: the handler function that will be called with the newly created transaction.
-	static func MDB_tx_instant<E:MDB_env, T:MDB_tx, R>(readOnly:Bool, MDB_env:E, parent:T?, _ handler:(inout Self) throws -> R) rethrows -> R
+	static func MDB_tx_instant<E:MDB_env, T:MDB_tx, R>(_:E, readOnly:Bool, MDB_tx_parent:T, _ handler:(inout Self) throws -> R) rethrows -> R
 
-	/// creates a new transaction given the specified env handle and tx handle.
-	init<E:MDB_env, T:MDB_tx>(readOnly:Bool, MDB_env_handle:E, parent_tx_handle:T?) throws
+	static func MDB_tx_instant<E:MDB_env, R>(_:E, readOnly:Bool, _ handler:(inout Self) throws -> R) rethrows -> R
+
+	/// creates a new child transaction given the specified env handle and parent tx handle.
+	init<E:MDB_env, T:MDB_tx>(_:E, readOnly:Bool, MDB_tx_parent:T) throws
+
+	/// creates a new root transaction given the specified env handle.
+	init<E:MDB_env>(_:E, readOnly:Bool) throws
 
 	/// commits the transaction.
 	mutating func MDB_tx_commit() throws
@@ -30,8 +35,25 @@ public protocol MDB_tx {
 }
 
 extension MDB_tx {
-	public static func MDB_tx_instant<E:MDB_env, T:MDB_tx, R>(readOnly:Bool, MDB_env:E, parent:T?, _ handler:(inout Self) throws -> R) rethrows -> R {
-		var newTransaction = try! Self.init(readOnly:readOnly, MDB_env_handle:MDB_env, parent_tx_handle:parent)
+	public static func MDB_tx_instant<E:MDB_env, R>(_ env:E, readOnly:Bool, _ handler:(inout Self) throws -> R) rethrows -> R {
+		var newTransaction = try! Self.init(env, readOnly:readOnly)
+		let captureReturn:R
+		do {
+			captureReturn = try handler(&newTransaction)
+			if newTransaction.MDB_tx_readOnly == false {
+				try! newTransaction.MDB_tx_commit()
+			}
+		} catch let error {
+			if newTransaction.MDB_tx_readOnly == false {
+				newTransaction.MDB_tx_abort()
+			}
+			throw error
+		}
+		return captureReturn
+	}
+
+	public static func MDB_tx_instant<E:MDB_env, T:MDB_tx, R>(_ env:E, readOnly:Bool, MDB_tx_parent parent:T, _ handler:(inout Self) throws -> R) rethrows -> R {
+		var newTransaction = try! Self.init(env, readOnly:readOnly, MDB_tx_parent:parent)
 		let captureReturn:R
 		do {
 			captureReturn = try handler(&newTransaction)
@@ -63,12 +85,24 @@ public final class Transaction:MDB_tx {
 	internal var isOpen = true
 
 	/// creates a new transaction from an Environment and optional parent.
-	public required init<E:MDB_env, T:MDB_tx>(readOnly:Bool, MDB_env_handle:E, parent_tx_handle:T?) throws {
-		self.MDB_env_handle = MDB_env_handle.MDB_env_handle
+	public required init<E:MDB_env, T:MDB_tx>(_ MDB_env:E, readOnly:Bool, MDB_tx_parent parent:T) throws {
+		self.MDB_env_handle = MDB_env.MDB_env_handle
 		self.MDB_tx_readOnly = readOnly
 		var start_handle:OpaquePointer? = nil
 		let txnFlags = readOnly ? UInt32(MDB_RDONLY) : 0
-		let createResult = mdb_txn_begin(MDB_env_handle.MDB_env_handle, parent_tx_handle?.MDB_tx_handle, txnFlags, &start_handle)
+		let createResult = mdb_txn_begin(MDB_env.MDB_env_handle, parent.MDB_tx_handle, txnFlags, &start_handle)
+		guard createResult == 0 else {
+			throw LMDBError(returnCode:createResult)
+		}
+		self.MDB_tx_handle = start_handle!
+	}
+
+	public required init<E:MDB_env>(_ MDB_env:E, readOnly:Bool) throws {
+		self.MDB_env_handle = MDB_env.MDB_env_handle
+		self.MDB_tx_readOnly = readOnly
+		var start_handle:OpaquePointer? = nil
+		let txnFlags = readOnly ? UInt32(MDB_RDONLY) : 0
+		let createResult = mdb_txn_begin(MDB_env.MDB_env_handle, nil, txnFlags, &start_handle)
 		guard createResult == 0 else {
 			throw LMDBError(returnCode:createResult)
 		}
