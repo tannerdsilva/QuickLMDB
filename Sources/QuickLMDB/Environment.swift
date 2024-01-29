@@ -13,7 +13,53 @@ public protocol MDB_env {
 
 	/// create a new environment given the specified path and flags.
 	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws
+	
+	/// transaction handler with a parent
+	func MDB_tx<T, P, R>(_ txType:T.Type, readOnly:Bool, MDB_tx_parent:P, _ handler:(inout T) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx
+	
+	/// transaction handler without a parent
+	func MDB_tx<T, R>(_ txType:T.Type, readOnly:Bool, _ handler:(inout T) throws -> R) rethrows -> R where T:MDB_tx
 }
+
+extension MDB_env {
+
+	/// transact handler with a parent
+	public func MDB_tx<T, P, R>(_ txType:T.Type, readOnly:Bool, MDB_tx_parent:P, _ handler:(inout T) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx {
+		var newTransaction = try! T(self, readOnly:readOnly, MDB_tx_parent:MDB_tx_parent)
+		let captureReturn:R
+		do {
+			captureReturn = try handler(&newTransaction)
+			if newTransaction.MDB_tx_readOnly == false {
+				try! newTransaction.MDB_tx_commit()
+			}
+		} catch let error {
+			if newTransaction.MDB_tx_readOnly == false {
+				newTransaction.MDB_tx_abort()
+			}
+			throw error
+		}
+		return captureReturn
+	}
+	
+	/// transact without a parent
+	public func MDB_tx<T, R>(_ txType:T.Type, readOnly:Bool, _ handler:(inout T) throws -> R) rethrows -> R where T:MDB_tx {
+		var newTransaction = try! T(self, readOnly:readOnly)
+		let captureReturn:R
+		do {
+			captureReturn = try handler(&newTransaction)
+			if newTransaction.MDB_tx_readOnly == false {
+				try! newTransaction.MDB_tx_commit()
+			}
+		} catch let error {
+			if newTransaction.MDB_tx_readOnly == false {
+				newTransaction.MDB_tx_abort()
+			}
+			throw error
+		}
+		return captureReturn
+	}
+}
+
 
 public final class Environment:MDB_env {
     public typealias MDB_tx_type = Transaction
