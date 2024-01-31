@@ -183,7 +183,7 @@ extension MDB_db {
 			switch flags.contains(.reserve) {
 				case true:
 					var mdbValVal = MDB_val.reserved(forRAW_encodable:&value)
-					let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.union(.reserve).rawValue)
+					let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.rawValue)
 					guard dbResult == MDB_SUCCESS else {
 						throw LMDBError(returnCode:dbResult)
 					}
@@ -194,7 +194,7 @@ extension MDB_db {
 				case false:
 					try value.RAW_access_mutating({ valBuff in
 						var mdbValVal = MDB_val(valBuff)
-						let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.union(.reserve).rawValue)
+						let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.rawValue)
 						guard dbResult == MDB_SUCCESS else {
 							throw LMDBError(returnCode:dbResult)
 						}
