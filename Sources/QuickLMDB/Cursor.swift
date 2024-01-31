@@ -378,7 +378,7 @@ public final class Cursor<D:MDB_db>:Sequence {
 		}
 		MDB_cursor_handle = buildCursor!
 		MDB_db_handle = dbh
-		MDB_txn_handle = MDB_tx.MDB_env_handle
+		MDB_txn_handle = MDB_tx.MDB_tx_handle
 		MDB_txn_readonly = MDB_tx.MDB_tx_readOnly
 	}
 
