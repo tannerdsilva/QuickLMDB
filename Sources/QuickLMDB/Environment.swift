@@ -23,7 +23,7 @@ public protocol MDB_env {
 
 extension MDB_env {
 
-	/// transact handler with a parent
+	/// transact handler with a parent.
 	public func MDB_tx<T, P, R>(_ txType:T.Type, readOnly:Bool, MDB_tx_parent:P, _ handler:(inout T) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx {
 		var newTransaction = try! T(self, readOnly:readOnly, MDB_tx_parent:MDB_tx_parent)
 		let captureReturn:R
@@ -41,7 +41,7 @@ extension MDB_env {
 		return captureReturn
 	}
 	
-	/// transact without a parent
+	/// transact without a parent.
 	public func MDB_tx<T, R>(_ txType:T.Type, readOnly:Bool, _ handler:(inout T) throws -> R) rethrows -> R where T:MDB_tx {
 		var newTransaction = try! T(self, readOnly:readOnly)
 		let captureReturn:R
@@ -61,7 +61,7 @@ extension MDB_env {
 }
 
 
-public final class Environment:MDB_env {
+public final class Environment:MDB_env, Sendable {
     public typealias MDB_tx_type = Transaction
 
     public init(path: String, flags: Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:SystemPackage.FilePermissions) throws {

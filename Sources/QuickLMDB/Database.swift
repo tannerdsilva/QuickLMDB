@@ -254,7 +254,7 @@ extension MDB_db {
 
 // normal database
 /// an LMDB database that operates with arbitrary key and value types. keys and values are specified uniquely for each function call.
-public struct Database:MDB_db {
+public struct Database:MDB_db, Sendable {
 
     public let MDB_env_handle:OpaquePointer
     public let MDB_db_name:String?
@@ -279,7 +279,7 @@ extension Database {
 	/// an LMDB database that operates strictly with a known key and value type. this protocol assumes that RAW_decodable types will NEVER initialize to nil if an entry exists in the database.
 	/// - automatically (and unconditionally) applies the sorting algorithm of the key type to the database.
 	/// - automatically applies the sorting algorithm of the value type to the database ONLY IF the database is used with ``Database.Flags.dupSort``.
-	public struct Strict<K:MDB_convertible, V:MDB_convertible>:MDB_db_strict {
+	public struct Strict<K:MDB_convertible, V:MDB_convertible>:MDB_db_strict, Sendable {
 
 	    public let MDB_env_handle:OpaquePointer
 	    public let MDB_db_name:String?

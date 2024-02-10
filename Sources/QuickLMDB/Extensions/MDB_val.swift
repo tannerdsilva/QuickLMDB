@@ -20,6 +20,7 @@ extension MDB_val {
 		return MDB_val(mv_size:0, mv_data:nil)
 	}
 
+	/// initializes a new MDB_val that overlaps with the contents of an UnsafeMutableBufferPointer.
 	internal init(_ buffer:UnsafeMutableBufferPointer<UInt8>) {
 		self = MDB_val(mv_size:buffer.count, mv_data:buffer.baseAddress)
 	}

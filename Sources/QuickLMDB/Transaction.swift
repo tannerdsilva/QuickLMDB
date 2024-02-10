@@ -70,7 +70,7 @@ extension MDB_tx {
 	}
 }
 
-public final class Transaction:MDB_tx {
+public final class Transaction:MDB_tx, Sendable {
 
 	/// pointer to the `MDB_env` that an instance is associated with.
 	public let MDB_env_handle:OpaquePointer
