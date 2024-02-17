@@ -30,19 +30,19 @@ public protocol MDB_db_strict<MDB_db_key_type, MDB_db_val_type>:MDB_db where MDB
 	associatedtype MDB_db_val_type:MDB_convertible
 
 	// get an entry from the database.
-	func MDB_db_get_entry<T:MDB_tx>(key:inout MDB_db_key_type, MDB_tx:inout T) throws -> MDB_db_val_type
+	func MDB_db_get_entry<T:MDB_tx>(key:UnsafePointer<MDB_db_key_type>, MDB_tx:inout T) throws -> MDB_db_val_type
 	
 	// write an entry to the database.
-	func MDB_db_set_entry<T:MDB_tx>(key:inout MDB_db_key_type, value:inout MDB_db_val_type, flags:Operation.Flags, MDB_tx:inout T) throws
+	func MDB_db_set_entry<T:MDB_tx>(key:UnsafePointer<MDB_db_key_type>, value:UnsafePointer<MDB_db_val_type>, flags:Operation.Flags, MDB_tx:inout T) throws
 
 	// remove an entry from the database.
-	func MDB_db_delete_entry<T:MDB_tx>(key:inout MDB_db_key_type, MDB_tx:inout T) throws
-	func MDB_db_delete_entry<T:MDB_tx>(key:inout MDB_db_key_type, value:inout MDB_db_val_type, MDB_tx:inout T) throws
+	func MDB_db_delete_entry<T:MDB_tx>(key:UnsafePointer<MDB_db_key_type>, MDB_tx:inout T) throws
+	func MDB_db_delete_entry<T:MDB_tx>(key:UnsafePointer<MDB_db_key_type>, value:UnsafePointer<MDB_db_val_type>, MDB_tx:inout T) throws
 }
 
 extension MDB_db_strict {
-	public func MDB_db_get_entry<T:MDB_tx>(key:inout MDB_db_key_type, MDB_tx:inout T) throws -> MDB_db_val_type {
-		return try self.MDB_db_get_entry(key:&key, as:MDB_db_val_type.self, MDB_tx:&MDB_tx)!
+	public func MDB_db_get_entry<T:MDB_tx>(key:UnsafePointer<MDB_db_key_type>, MDB_tx:inout T) throws -> MDB_db_val_type {
+		return try self.MDB_db_get_entry(key:key, as:MDB_db_val_type.self, MDB_tx:&MDB_tx)!
 	}
 }
 
@@ -71,7 +71,7 @@ public protocol MDB_db {
 	/// - throws: a corresponding ``LMDBError.notFound`` if the key does not exist, or other errors for more obscure circumstances.
 	/// - note: despite this function requiring an inout parameter, the passed value is not mutated. it is treated as a read-only value.
 	///	- returns: the decoded value type, if it successfully decoded from the database. if the entry is found but it fails to decode, `nil` is returned.
-	func MDB_db_get_entry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:inout K, as:V.Type, MDB_tx:inout T) throws -> V?
+	func MDB_db_get_entry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:UnsafePointer<K>, as:V.Type, MDB_tx:inout T) throws -> V?
 	/// search the database for the existence of a given entry key.
 	/// - parameters:
 	/// 	- key: the key that will be searched in the database.
@@ -79,9 +79,9 @@ public protocol MDB_db {
 	/// - note: despite this function requiring an inout parameter, the passed value is not mutated. it is treated as a read-only value.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be searched.
 	/// - returns: `true` if the entry exists, `false` if it does not.
-	func MDB_db_contains_entry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx:inout T) throws -> Bool
+	func MDB_db_contains_entry<K:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, MDB_tx:inout T) throws -> Bool
 
-	func MDB_db_contains_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:inout K, value:inout V, MDB_tx:inout T) throws -> Bool
+	func MDB_db_contains_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, value:UnsafePointer<V>, MDB_tx:inout T) throws -> Bool
 
 	// writing entries to the database.
 	/// set an entry in the database.
@@ -92,7 +92,7 @@ public protocol MDB_db {
 	/// 	- MDB_tx: the transaction to use for the entry set.
 	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be set.
-	func MDB_db_set_entry<K:RAW_accessible, V:RAW_encodable, T:MDB_tx>(key:inout K, value:inout V, flags:Operation.Flags, MDB_tx:inout T) throws
+	func MDB_db_set_entry<K:RAW_accessible, V:RAW_encodable, T:MDB_tx>(key:UnsafePointer<K>, value:UnsafePointer<V>, flags:Operation.Flags, MDB_tx:inout T) throws
 
 	// removing entries to the database
 	/// remove an entry key (along with its corresponding value) from the database.
@@ -101,7 +101,7 @@ public protocol MDB_db {
 	/// 	- MDB_tx: the transaction to use for the entry removal.
 	/// - note: despite this function requiring an inout parameter, the passed value is not mutated. it is treated as a read-only value.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
-	func MDB_db_delete_entry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx:inout T) throws
+	func MDB_db_delete_entry<K:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, MDB_tx:inout T) throws
 	/// remove a specific key and value pairing from the database.
 	/// - parameters:
 	/// 	- key: the key that will be removed from the database.
@@ -109,7 +109,7 @@ public protocol MDB_db {
 	/// 	- MDB_tx: the transaction to use for the entry removal.
 	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
-	func MDB_db_delete_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:inout K, value:inout V, MDB_tx:inout T) throws
+	func MDB_db_delete_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, value:UnsafePointer<V>, MDB_tx:inout T) throws
 	/// remove all entries from the database.
 	/// - parameters:
 	/// 	- MDB_tx: the transaction to use for the entry removal.
@@ -131,36 +131,21 @@ extension MDB_db {
 		return try Cursor<Self>(MDB_db:MDB_db_handle, MDB_tx:&tx)
 	}
 
-	public func MDB_db_get_entry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:inout K, as:V.Type, MDB_tx tx:inout T) throws -> V? {
-		return V(RAW_decode:try key.RAW_access_mutating { ptr in
+	public func MDB_db_get_entry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:UnsafePointer<K>, as:V.Type, MDB_tx tx:inout T) throws -> V? {
+		return V(RAW_decode:try key.pointee.RAW_access { ptr in
 			var keyVal = MDB_val(ptr)
 			var dbValue = MDB_val.nullValue()
-			
-			#if DEBUG
-			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-			#endif
-			
 			let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &dbValue)
 			guard valueResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:valueResult)
 			}
-			
-			#if DEBUG
-			assert(dbValue.mv_data != nil, "found NULL data pointer in database")
-			#endif
-			
 			return dbValue
 		})
 	}
 
-	public func MDB_db_contains_entry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx tx:inout T) throws -> Bool {
-		return try key.RAW_access_mutating { ptr in
+	public func MDB_db_contains_entry<K:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, MDB_tx tx:inout T) throws -> Bool {
+		return try key.pointee.RAW_access { ptr in
 			var keyVal = MDB_val(ptr)
-			
-			#if DEBUG
-			assert(keyVal.mv_data != nil, "cannot use NULL data key with LMDB")
-			#endif
-			
 			let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, nil)
 			switch valueResult {
 				case MDB_SUCCESS:
@@ -173,17 +158,11 @@ extension MDB_db {
 		}
 	}
 
-	public func MDB_db_contains_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:inout K, value:inout V, MDB_tx tx:inout T) throws -> Bool {
-		return try key.RAW_access_mutating { keyPtr in
-			return try value.RAW_access_mutating { valPtr in
+	public func MDB_db_contains_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, value:UnsafePointer<V>, MDB_tx tx:inout T) throws -> Bool {
+		return try key.pointee.RAW_access { keyPtr in
+			return try value.pointee.RAW_access { valPtr in
 				var keyVal = MDB_val(keyPtr)
 				var valVal = MDB_val(valPtr)
-				
-				#if DEBUG
-				assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-				assert(valVal.mv_data != nil, "cannot use NULL data value with LMDB")
-				#endif
-				
 				let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &valVal)
 				switch valueResult {
 					case MDB_SUCCESS:
@@ -197,35 +176,20 @@ extension MDB_db {
 		}
 	}
 
-	public func MDB_db_set_entry<K:RAW_accessible, V:RAW_encodable, T:MDB_tx>(key:inout K, value:inout V, flags:Operation.Flags, MDB_tx tx:inout T) throws {
-		try key.RAW_access_mutating { ptr in
+	public func MDB_db_set_entry<K:RAW_accessible, V:RAW_encodable, T:MDB_tx>(key:UnsafePointer<K>, value:UnsafePointer<V>, flags:Operation.Flags, MDB_tx tx:inout T) throws {
+		try key.pointee.RAW_access { ptr in
 			var keyVal = MDB_val(ptr)
-			
-			#if DEBUG
-			assert(keyVal.mv_data != nil, "cannot use NULL data with LMDB")
-			#endif
-			
 			switch flags.contains(.reserve) {
 				case true:
-					var mdbValVal = MDB_val.reserved(forRAW_encodable:&value)
+					var mdbValVal = MDB_val.reserved(forRAW_encodable:value)
 					let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.rawValue)
 					guard dbResult == MDB_SUCCESS else {
 						throw LMDBError(returnCode:dbResult)
 					}
-					
-					#if DEBUG
-					assert(mdbValVal.mv_data != nil, "got NULL data pointer from LMDB")
-					#endif
-					
-					value.RAW_encode(dest:mdbValVal.mv_data.assumingMemoryBound(to:UInt8.self))
+					value.pointee.RAW_encode(dest:mdbValVal.mv_data.assumingMemoryBound(to:UInt8.self))
 				case false:
-					try value.RAW_access_mutating({ valBuff in
+					try value.pointee.RAW_access({ valBuff in
 						var mdbValVal = MDB_val(valBuff)
-						
-						#if DEBUG
-						assert(mdbValVal.mv_data != nil, "cannot use NULL data with LMDB")
-						#endif
-						
 						let dbResult = mdb_put(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &mdbValVal, flags.rawValue)
 						guard dbResult == MDB_SUCCESS else {
 							throw LMDBError(returnCode:dbResult)
@@ -235,14 +199,9 @@ extension MDB_db {
 		}
 	}
 
-	public func MDB_db_delete_entry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx tx:inout T) throws {
-		try key.RAW_access_mutating { ptr in
+	public func MDB_db_delete_entry<K:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, MDB_tx tx:inout T) throws {
+		try key.pointee.RAW_access { ptr in
 			var keyVal = MDB_val(ptr)
-			
-			#if DEBUG
-			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-			#endif
-			
 			let dbResult = mdb_del(tx.MDB_tx_handle, MDB_db_handle, &keyVal, nil)
 			guard dbResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:dbResult)
@@ -250,17 +209,11 @@ extension MDB_db {
 		}
 	}
 
-	public func MDB_db_delete_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:inout K, value:inout V, MDB_tx tx:inout T) throws {
-		return try key.RAW_access_mutating({ keyBuff in
-			return try value.RAW_access_mutating({ valBuff in
+	public func MDB_db_delete_entry<K:RAW_accessible, V:RAW_accessible, T:MDB_tx>(key:UnsafePointer<K>, value:UnsafePointer<V>, MDB_tx tx:inout T) throws {
+		return try key.pointee.RAW_access({ keyBuff in
+			return try value.pointee.RAW_access({ valBuff in
 				var keyV = MDB_val(keyBuff)
 				var valV = MDB_val(valBuff)
-				
-				#if DEBUG
-				assert(keyV.mv_data != nil, "LMDB key data may not be NULL")
-				assert(valV.mv_data != nil, "LMDB value data may not be NULL")
-				#endif
-				
 				let dbResult = mdb_del(tx.MDB_tx_handle, MDB_db_handle, &keyV, &valV)
 				guard dbResult == MDB_SUCCESS else {
 					throw LMDBError(returnCode:dbResult)

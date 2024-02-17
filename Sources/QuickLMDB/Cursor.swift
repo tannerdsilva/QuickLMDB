@@ -1,36 +1,38 @@
 import CLMDB
 import RAW
 
+/// the protocol for type-strict cursors
 public protocol MDB_cursor_strict:MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
-	// get entry with strict key and value types
-	@discardableResult func MDB_cursor_get_entry(_ operation:Operation, key:inout MDB_cursor_dbtype.MDB_db_key_type, value:inout MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
-	// get entry with strict key type
-	@discardableResult func MDB_cursor_get_entry(_ operation:Operation, key:inout MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
-	// get entry with strict value type
-	@discardableResult func MDB_cursor_get_entry(_ operation:Operation, value:inout MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
+	/// get entry with strict key and value types
+	@discardableResult func MDB_cursor_get_entry(_ operation:Operation, key:UnsafePointer<MDB_cursor_dbtype.MDB_db_key_type>, value:UnsafePointer<MDB_cursor_dbtype.MDB_db_val_type>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
+	/// get entry with strict key type
+	@discardableResult func MDB_cursor_get_entry(_ operation:Operation, key:UnsafePointer<MDB_cursor_dbtype.MDB_db_key_type>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
+	/// get entry with strict value type
+	@discardableResult func MDB_cursor_get_entry(_ operation:Operation, value:UnsafePointer<MDB_cursor_dbtype.MDB_db_val_type>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
 
-	// set entry with strict key and value types
-	func MDB_cursor_set_entry(key:inout MDB_cursor_dbtype.MDB_db_key_type, value:inout MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws
+	/// set entry with strict key and value types
+	func MDB_cursor_set_entry(key:UnsafePointer<MDB_cursor_dbtype.MDB_db_key_type>, value:UnsafePointer<MDB_cursor_dbtype.MDB_db_val_type>, flags:Operation.Flags) throws
 
-	// check for entries with strict key type
-	func MDB_cursor_contains_entry(key:inout MDB_cursor_dbtype.MDB_db_key_type) throws -> Bool
-	// check for entries with strict key and value types
-	func MDB_cursor_contains_entry(key:inout MDB_cursor_dbtype.MDB_db_key_type, value:inout MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool
+	/// check for entries with strict key type
+	func MDB_cursor_contains_entry(key:UnsafePointer<MDB_cursor_dbtype.MDB_db_key_type>) throws -> Bool
+	/// check for entries with strict key and value types
+	func MDB_cursor_contains_entry(key:UnsafePointer<MDB_cursor_dbtype.MDB_db_key_type>, value:UnsafePointer<MDB_cursor_dbtype.MDB_db_val_type>) throws -> Bool
 }
 
+/// the protocol for open ended data storage type
 public protocol MDB_cursor:Sequence {
 	
-	/// the database type backing this cursor.
+	/// the database type backing this cursor
 	associatedtype MDB_cursor_dbtype:MDB_db
 
-	/// the cursor handle for the specific instance.
+	/// the cursor handle for the specific instance
 	var MDB_cursor_handle:OpaquePointer { get }
-	/// the database handle for the specific instance.
+	/// the database handle for the specific instance
 	var MDB_db_handle:MDB_dbi { get }
-	/// the transaction that this instance is operating within.
+	/// the transaction that this instance is operating within
 	var MDB_txn_handle:OpaquePointer { get }
 
-	/// initialize a new cursor from a valid transaction and database handle.
+	/// initialize a new cursor from a valid transaction and database handle
 	init<T:MDB_tx>(MDB_db:MDB_dbi, MDB_tx:inout T) throws
 
 	
@@ -43,7 +45,7 @@ public protocol MDB_cursor:Sequence {
 	/// - note: despite requiring inout parameters, the key and value buffers are not modified by this function.
 	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	@discardableResult func MDB_cursor_get_entry<K:RAW_accessible, V:RAW_accessible>(_ operation:Operation, key:inout K, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
+	@discardableResult func MDB_cursor_get_entry<K:RAW_accessible, V:RAW_accessible>(_ operation:Operation, key:UnsafePointer<K>, value:UnsafePointer<V>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
 	/// get entries with a key.
 	/// - parameters:
 	/// 	- operation: the operation to perform.
@@ -51,7 +53,7 @@ public protocol MDB_cursor:Sequence {
 	/// - note: despite requiring an inout parameter, the key buffer is not modified by this function.
 	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	@discardableResult func MDB_cursor_get_entry<K:RAW_accessible>(_ operation:Operation, key:inout K) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
+	@discardableResult func MDB_cursor_get_entry<K:RAW_accessible>(_ operation:Operation, key:UnsafePointer<K>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
 	/// get entries based on an specified cursor operation.
 	/// - parameters:
 	/// 	- operation: the operation to perform.
@@ -59,7 +61,7 @@ public protocol MDB_cursor:Sequence {
 	/// - note: despite requiring an inout parameter, the value buffer is not modified by this function.
 	/// - returns: a tuple containing the key and value buffers as they are stored in the database.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	@discardableResult func MDB_cursor_get_entry<V:RAW_accessible>(_ operation:Operation, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
+	@discardableResult func MDB_cursor_get_entry<V:RAW_accessible>(_ operation:Operation, value:UnsafePointer<V>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)
 	/// get entries based on an specified cursor operation.
 	/// - parameters:
 	/// 	- operation: the operation to perform.
@@ -75,7 +77,7 @@ public protocol MDB_cursor:Sequence {
 	/// 	- flags: the flags to use when setting the entry.
 	/// - note: despite requiring inout parameters, the key and value buffers are not modified by this function.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	func MDB_cursor_set_entry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V, flags:Operation.Flags) throws
+	func MDB_cursor_set_entry<K:RAW_accessible, V:RAW_accessible>(key:UnsafePointer<K>, value:UnsafePointer<V>, flags:Operation.Flags) throws
 	
 	// check for entries.
 	/// check for an existing entry containing a specified key.
@@ -83,14 +85,14 @@ public protocol MDB_cursor:Sequence {
 	/// 	- key: the key to search for.
 	/// - note: despite requiring an inout parameter, the key buffer is not modified by this function.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	func MDB_cursor_contains_entry<K:RAW_accessible>(key:inout K) throws -> Bool
+	func MDB_cursor_contains_entry<K:RAW_accessible>(key:UnsafePointer<K>) throws -> Bool
 	/// check for an existing entry containing a specified key and value.
 	/// - parameters:
 	/// 	- key: the key to search for.
 	/// 	- value: the value to search for.
 	/// - note: despite requiring inout parameters, the key and value buffers are not modified by this function.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	func MDB_cursor_contains_entry<V:RAW_accessible, K:RAW_accessible>(key:inout K, value:inout V) throws -> Bool
+	func MDB_cursor_contains_entry<V:RAW_accessible, K:RAW_accessible>(key:UnsafePointer<K>, value:UnsafePointer<V>) throws -> Bool
 
 	// delete entries.
 	/// delete the presently-selected cursor entry from the database.
@@ -106,7 +108,7 @@ public protocol MDB_cursor:Sequence {
 	/// 	- dataR: the right-hand side of the comparison.
 	/// - returns: the result of the comparison.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	func MDB_cursor_compare_keys<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32
+	func MDB_cursor_compare_keys<L:RAW_accessible, R:RAW_accessible>(_ dataL:UnsafePointer<L>, _ dataR:UnsafePointer<R>) -> Int32
 	// compare entries based on the native compare function of the database.
 	/// compare entries based on the native compare function of the database.
 	/// - parameters:
@@ -114,7 +116,7 @@ public protocol MDB_cursor:Sequence {
 	/// 	- dataR: the right-hand side of the comparison.
 	/// - returns: the result of the comparison.
 	/// - throws: a corresponding ``LMDBError`` if the operation fails.
-	func MDB_cursor_compare_values<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32
+	func MDB_cursor_compare_values<L:RAW_accessible, R:RAW_accessible>(_ dataL:UnsafePointer<L>, _ dataR:UnsafePointer<R>) -> Int32
 
 	// returns the number of duplicate entries in the database for this key.
 	/// returns the number of duplicate entries in the database for this key.
@@ -125,18 +127,11 @@ public protocol MDB_cursor:Sequence {
 
 extension MDB_cursor {
 	/// execute an entry retrieval operation with a specified operation, key and value.
-	@discardableResult public func MDB_cursor_get_entry<K:RAW_accessible, V:RAW_accessible>(_ operation:Operation, key:inout K, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
-		return try key.RAW_access_mutating { keyBuff in
-			return try value.RAW_access_mutating { valueBuff in
+	@discardableResult public func MDB_cursor_get_entry<K:RAW_accessible, V:RAW_accessible>(_ operation:Operation, key:UnsafePointer<K>, value:UnsafePointer<V>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
+		return try key.pointee.RAW_access { keyBuff in
+			return try value.pointee.RAW_access { valueBuff in
 				var keyVal = MDB_val(keyBuff)
-				var valueVal = MDB_val(valueBuff)
-				
-				#if DEBUG
-				// check the input key and value
-				assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-				assert(valueVal.mv_data != nil, "cannot use NULL value data with LMDB")
-				#endif
-				
+				var valueVal = MDB_val(valueBuff)	
 				let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 				guard cursorResult == MDB_SUCCESS else {
 					throw LMDBError(returnCode:cursorResult)
@@ -147,51 +142,27 @@ extension MDB_cursor {
 	}
 
 	/// execute an entry retrieval operation with a specified operation and key.
-	@discardableResult public func MDB_cursor_get_entry<K:RAW_accessible>(_ operation:Operation, key:inout K) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
-		return try key.RAW_access_mutating { keyBuff in
+	@discardableResult public func MDB_cursor_get_entry<K:RAW_accessible>(_ operation:Operation, key:UnsafePointer<K>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
+		return try key.pointee.RAW_access { keyBuff in
 			var keyVal = MDB_val(keyBuff)
-			
-			#if DEBUG
-			// check the input key
-			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-			#endif
-			
 			var valueVal = MDB_val.nullValue()
 			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 			guard cursorResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:cursorResult)
 			}
-			
-			#if DEBUG
-			// check the output value
-			assert(valueVal.mv_data != nil, "got NULL data value from LMDB")
-			#endif
-			
 			return (key:UnsafeMutableBufferPointer<UInt8>(keyVal), value:UnsafeMutableBufferPointer<UInt8>(valueVal))
 		}
 	}
 
 	/// execute an entry retrieval operation with a specified operation and value.
-	@discardableResult public func MDB_cursor_get_entry<V:RAW_accessible>(_ operation:Operation, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
-		return try value.RAW_access_mutating { valueBuff in
+	@discardableResult public func MDB_cursor_get_entry<V:RAW_accessible>(_ operation:Operation, value:UnsafePointer<V>) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
+		return try value.pointee.RAW_access { valueBuff in
 			var keyVal = MDB_val.nullValue()
 			var valueVal = MDB_val(valueBuff)
-			
-			#if DEBUG
-			// check the input value
-			assert(valueVal.mv_data != nil, "cannot use NULL data values with LMDB")
-			#endif
-			
 			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 			guard cursorResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:cursorResult)
-			}
-			
-			#if DEBUG
-			// check the input key
-			assert(keyVal.mv_data != nil, "got NULL data key from LMDB")
-			#endif
-			
+			}			
 			return (key:UnsafeMutableBufferPointer<UInt8>(keyVal), value:UnsafeMutableBufferPointer<UInt8>(valueVal))
 		}
 	}
@@ -203,48 +174,27 @@ extension MDB_cursor {
 		let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 		guard cursorResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:cursorResult)
-		}
-		
-		#if DEBUG
-		assert(keyVal.mv_data != nil, "got NULL key data from LMDB")
-		assert(valueVal.mv_data != nil, "got NULL value data from LMDB")
-		#endif
-		
+		}	
 		return (key:UnsafeMutableBufferPointer<UInt8>(keyVal), value:UnsafeMutableBufferPointer<UInt8>(valueVal))
 	}
 
 	/// set the current entry with a specified key and value.
-	public func MDB_cursor_set_entry<K:RAW_accessible, V:RAW_accessible>(key: inout K, value:inout V, flags:Operation.Flags) throws {
-		try key.RAW_access_mutating { keyBuff in
+	public func MDB_cursor_set_entry<K:RAW_accessible, V:RAW_accessible>(key:UnsafePointer<K>, value:UnsafePointer<V>, flags:Operation.Flags) throws {
+		try key.pointee.RAW_access { keyBuff in
 			var keyVal = MDB_val(keyBuff)
-			
-			#if DEBUG
-			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-			#endif
-			
 			switch flags.contains(.reserve) {
-				
 				case true:
-
 					// deploy the encoable functions here, since it will be *technically* more efficient than the accessed method for certain types.
-					var valueVal = MDB_val.reserved(forRAW_encodable: &value)
+					var valueVal = MDB_val.reserved(forRAW_encodable:value)
 					let result = mdb_cursor_put(MDB_cursor_handle, &keyVal, &valueVal, flags.rawValue)
 					guard result == MDB_SUCCESS else {
 						throw LMDBError(returnCode:result)
 					}
-					#if DEBUG
-					assert(valueVal.mv_data != nil, "got null value pointer from LMDB. this is unexpected given the return value from the cursor_put func call")
-					#endif
-					value.RAW_encode(dest:valueVal.mv_data.assumingMemoryBound(to:UInt8.self))
-				
+					value.pointee.RAW_encode(dest:valueVal.mv_data.assumingMemoryBound(to:UInt8.self))
 				case false:
-
 					// deploy accessable functions.
-					try value.RAW_access_mutating { valueBuff in
+					try value.pointee.RAW_access { valueBuff in
 						var valueVal = MDB_val(valueBuff)
-						#if DEBUG
-						assert(valueVal.mv_data != nil, "cannot use NULL value data with LMDB")
-						#endif
 						let result = mdb_cursor_put(MDB_cursor_handle, &keyVal, &valueVal, flags.rawValue)
 						guard result == MDB_SUCCESS else {
 							throw LMDBError(returnCode:result)
@@ -254,14 +204,9 @@ extension MDB_cursor {
 		}
 	}
 
-	public func MDB_cursor_contains_entry<K:RAW_accessible>(key:inout K) throws -> Bool {
-		return try key.RAW_access_mutating { keyBuff in
+	public func MDB_cursor_contains_entry<K:RAW_accessible>(key:UnsafePointer<K>) throws -> Bool {
+		return try key.pointee.RAW_access { keyBuff in
 			var keyVal = MDB_val(keyBuff)
-			
-			#if DEBUG
-			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
-			#endif
-			
 			let searchKey = mdb_cursor_get(MDB_cursor_handle, &keyVal, nil, MDB_SET)
 			switch searchKey {
 				case MDB_SUCCESS:
@@ -274,15 +219,11 @@ extension MDB_cursor {
 		}
 	}
 
-	public func MDB_cursor_contains_entry<K:RAW_accessible, V:RAW_accessible>(key:inout K, value:inout V) throws -> Bool {
-		return try key.RAW_access_mutating { keyBuff in
-			return try value.RAW_access_mutating { valueBuff in
+	public func MDB_cursor_contains_entry<K:RAW_accessible, V:RAW_accessible>(key:UnsafePointer<K>, value:UnsafePointer<V>) throws -> Bool {
+		return try key.pointee.RAW_access { keyBuff in
+			return try value.pointee.RAW_access { valueBuff in
 				var keyVal = MDB_val(keyBuff)
 				var valueVal = MDB_val(valueBuff)
-				#if DEBUG
-				assert(keyVal.mv_data != nil, "cannot use NULL key data from LMDB")
-				assert(valueVal.mv_data != nil, "cannot use NULL value data from LMDB")
-				#endif
 				let searchKey = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, MDB_SET)
 				switch searchKey {
 					case MDB_SUCCESS:
@@ -303,9 +244,9 @@ extension MDB_cursor {
 		}
 	}
 
-	public func MDB_cursor_compare_keys<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32 {
-		return dataL.RAW_access_mutating { lBuff in
-			return dataR.RAW_access_mutating { rBuff in
+	public func MDB_cursor_compare_keys<L:RAW_accessible, R:RAW_accessible>(_ dataL:UnsafePointer<L>, _ dataR:UnsafePointer<R>) -> Int32 {
+		return dataL.pointee.RAW_access { lBuff in
+			return dataR.pointee.RAW_access { rBuff in
 				var lVal = MDB_val(lBuff)
 				var rVal = MDB_val(rBuff)
 				return mdb_cmp(MDB_txn_handle, MDB_db_handle, &lVal, &rVal)
@@ -313,9 +254,9 @@ extension MDB_cursor {
 		}
 	}
 
-	public func MDB_cursor_compare_values<L:RAW_accessible, R:RAW_accessible>(_ dataL:inout L, _ dataR:inout R) -> Int32 {
-		return dataL.RAW_access_mutating { lBuff in
-			return dataR.RAW_access_mutating { rBuff in
+	public func MDB_cursor_compare_values<L:RAW_accessible, R:RAW_accessible>(_ dataL:UnsafePointer<L>, _ dataR:UnsafePointer<R>) -> Int32 {
+		return dataL.pointee.RAW_access { lBuff in
+			return dataR.pointee.RAW_access { rBuff in
 				var lVal = MDB_val(lBuff)
 				var rVal = MDB_val(rBuff)
 				return mdb_dcmp(MDB_txn_handle, MDB_db_handle, &lVal, &rVal)
@@ -379,7 +320,6 @@ public final class Cursor<D:MDB_db>:Sequence {
 				return nil
 			}
 		}
-	
 	}
 
 	public struct Iterator:IteratorProtocol, Sequence {
