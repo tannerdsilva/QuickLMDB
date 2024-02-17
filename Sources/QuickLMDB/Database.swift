@@ -134,7 +134,7 @@ extension MDB_db {
 	public func MDB_db_get_entry<K:RAW_accessible, V:RAW_decodable, T:MDB_tx>(key:inout K, as:V.Type, MDB_tx tx:inout T) throws -> V? {
 		return V(RAW_decode:try key.RAW_access_mutating { ptr in
 			var keyVal = MDB_val(ptr)
-			var dbValue = MDB_val()
+			var dbValue = MDB_val.nullValue()
 			
 			#if DEBUG
 			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
@@ -156,13 +156,12 @@ extension MDB_db {
 	public func MDB_db_contains_entry<K:RAW_accessible, T:MDB_tx>(key:inout K, MDB_tx tx:inout T) throws -> Bool {
 		return try key.RAW_access_mutating { ptr in
 			var keyVal = MDB_val(ptr)
-			var dbValue = MDB_val() // can I replace this with nil directly in the mdb_get function call? possibly.
 			
 			#if DEBUG
 			assert(keyVal.mv_data != nil, "cannot use NULL data key with LMDB")
 			#endif
 			
-			let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, &dbValue)
+			let valueResult = mdb_get(tx.MDB_tx_handle, MDB_db_handle, &keyVal, nil)
 			switch valueResult {
 				case MDB_SUCCESS:
 					return true

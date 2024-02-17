@@ -156,7 +156,7 @@ extension MDB_cursor {
 			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
 			#endif
 			
-			var valueVal = MDB_val()
+			var valueVal = MDB_val.nullValue()
 			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 			guard cursorResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:cursorResult)
@@ -174,7 +174,7 @@ extension MDB_cursor {
 	/// execute an entry retrieval operation with a specified operation and value.
 	@discardableResult public func MDB_cursor_get_entry<V:RAW_accessible>(_ operation:Operation, value:inout V) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
 		return try value.RAW_access_mutating { valueBuff in
-			var keyVal = MDB_val()
+			var keyVal = MDB_val.nullValue()
 			var valueVal = MDB_val(valueBuff)
 			
 			#if DEBUG
@@ -198,8 +198,8 @@ extension MDB_cursor {
 
 	/// execute an entry retrieval operation with a specified operation only.
 	@discardableResult public func MDB_cursor_get_entry(_ operation:Operation) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
-		var keyVal = MDB_val()
-		var valueVal = MDB_val()
+		var keyVal = MDB_val.nullValue()
+		var valueVal = MDB_val.nullValue()
 		let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 		guard cursorResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:cursorResult)

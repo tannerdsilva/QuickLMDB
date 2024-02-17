@@ -5,16 +5,18 @@ extension MDB_val {
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and a length specified as the encoded count of the given encodable type.
 	internal static func reserved<E:RAW_encodable>(forRAW_encodable encodable:inout E) -> MDB_val {
-		var newEncodable = MDB_val()
+		var newEncodable = MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 		encodable.RAW_encode(count:&newEncodable.mv_size)
 		return newEncodable
+	}
+	
+	internal static func nullValue() -> MDB_val {
+		return MDB_val(mv_size:0, mv_data:UnsafeMutableRawPointer(mutating:nil))
 	}
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and specified length.
 	internal static func reserved(capacity:size_t) -> MDB_val {
-		var newVal = MDB_val()
-		newVal.mv_size = capacity
-		return newVal
+		return MDB_val(mv_size:capacity, mv_data:UnsafeMutableRawPointer(mutating:nil))
 	}
 
 	/// initializes a new MDB_val that overlaps with the contents of an UnsafeMutableBufferPointer.
