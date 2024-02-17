@@ -104,7 +104,7 @@ public final class Environment:MDB_env, Sendable {
     }
 
 	/// flags that can be used to open an environment
-	public struct Flags:OptionSet {
+	public struct Flags:Sendable, OptionSet {
 
 		public let rawValue:UInt32
 
