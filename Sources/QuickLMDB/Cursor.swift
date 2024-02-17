@@ -130,6 +130,13 @@ extension MDB_cursor {
 			return try value.RAW_access_mutating { valueBuff in
 				var keyVal = MDB_val(keyBuff)
 				var valueVal = MDB_val(valueBuff)
+				
+				#if DEBUG
+				// check the input key and value
+				assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
+				assert(valueVal.mv_data != nil, "cannot use NULL value data with LMDB")
+				#endif
+				
 				let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 				guard cursorResult == MDB_SUCCESS else {
 					throw LMDBError(returnCode:cursorResult)
@@ -143,11 +150,23 @@ extension MDB_cursor {
 	@discardableResult public func MDB_cursor_get_entry<K:RAW_accessible>(_ operation:Operation, key:inout K) throws -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>) {
 		return try key.RAW_access_mutating { keyBuff in
 			var keyVal = MDB_val(keyBuff)
+			
+			#if DEBUG
+			// check the input key
+			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
+			#endif
+			
 			var valueVal = MDB_val()
 			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 			guard cursorResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:cursorResult)
 			}
+			
+			#if DEBUG
+			// check the output value
+			assert(valueVal.mv_data != nil, "got NULL data value from LMDB")
+			#endif
+			
 			return (key:UnsafeMutableBufferPointer<UInt8>(keyVal), value:UnsafeMutableBufferPointer<UInt8>(valueVal))
 		}
 	}
@@ -157,10 +176,22 @@ extension MDB_cursor {
 		return try value.RAW_access_mutating { valueBuff in
 			var keyVal = MDB_val()
 			var valueVal = MDB_val(valueBuff)
+			
+			#if DEBUG
+			// check the input value
+			assert(valueVal.mv_data != nil, "cannot use NULL data values with LMDB")
+			#endif
+			
 			let cursorResult = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, operation.mdbValue)
 			guard cursorResult == MDB_SUCCESS else {
 				throw LMDBError(returnCode:cursorResult)
 			}
+			
+			#if DEBUG
+			// check the input key
+			assert(keyVal.mv_data != nil, "got NULL data key from LMDB")
+			#endif
+			
 			return (key:UnsafeMutableBufferPointer<UInt8>(keyVal), value:UnsafeMutableBufferPointer<UInt8>(valueVal))
 		}
 	}
@@ -173,6 +204,12 @@ extension MDB_cursor {
 		guard cursorResult == MDB_SUCCESS else {
 			throw LMDBError(returnCode:cursorResult)
 		}
+		
+		#if DEBUG
+		assert(keyVal.mv_data != nil, "got NULL key data from LMDB")
+		assert(valueVal.mv_data != nil, "got NULL value data from LMDB")
+		#endif
+		
 		return (key:UnsafeMutableBufferPointer<UInt8>(keyVal), value:UnsafeMutableBufferPointer<UInt8>(valueVal))
 	}
 
@@ -180,6 +217,11 @@ extension MDB_cursor {
 	public func MDB_cursor_set_entry<K:RAW_accessible, V:RAW_accessible>(key: inout K, value:inout V, flags:Operation.Flags) throws {
 		try key.RAW_access_mutating { keyBuff in
 			var keyVal = MDB_val(keyBuff)
+			
+			#if DEBUG
+			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
+			#endif
+			
 			switch flags.contains(.reserve) {
 				
 				case true:
@@ -191,16 +233,18 @@ extension MDB_cursor {
 						throw LMDBError(returnCode:result)
 					}
 					#if DEBUG
-					assert(valueVal.mv_data != nil)
+					assert(valueVal.mv_data != nil, "got null value pointer from LMDB. this is unexpected given the return value from the cursor_put func call")
 					#endif
 					value.RAW_encode(dest:valueVal.mv_data.assumingMemoryBound(to:UInt8.self))
-				
 				
 				case false:
 
 					// deploy accessable functions.
 					try value.RAW_access_mutating { valueBuff in
 						var valueVal = MDB_val(valueBuff)
+						#if DEBUG
+						assert(valueVal.mv_data != nil, "cannot use NULL value data with LMDB")
+						#endif
 						let result = mdb_cursor_put(MDB_cursor_handle, &keyVal, &valueVal, flags.rawValue)
 						guard result == MDB_SUCCESS else {
 							throw LMDBError(returnCode:result)
@@ -213,6 +257,11 @@ extension MDB_cursor {
 	public func MDB_cursor_contains_entry<K:RAW_accessible>(key:inout K) throws -> Bool {
 		return try key.RAW_access_mutating { keyBuff in
 			var keyVal = MDB_val(keyBuff)
+			
+			#if DEBUG
+			assert(keyVal.mv_data != nil, "cannot use NULL key data with LMDB")
+			#endif
+			
 			let searchKey = mdb_cursor_get(MDB_cursor_handle, &keyVal, nil, MDB_SET)
 			switch searchKey {
 				case MDB_SUCCESS:
@@ -230,6 +279,10 @@ extension MDB_cursor {
 			return try value.RAW_access_mutating { valueBuff in
 				var keyVal = MDB_val(keyBuff)
 				var valueVal = MDB_val(valueBuff)
+				#if DEBUG
+				assert(keyVal.mv_data != nil, "cannot use NULL key data from LMDB")
+				assert(valueVal.mv_data != nil, "cannot use NULL value data from LMDB")
+				#endif
 				let searchKey = mdb_cursor_get(MDB_cursor_handle, &keyVal, &valueVal, MDB_SET)
 				switch searchKey {
 					case MDB_SUCCESS:
