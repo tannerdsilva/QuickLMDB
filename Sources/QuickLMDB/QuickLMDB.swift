@@ -1,37 +1,46 @@
 import CLMDB
+import RAW
 
 public typealias MDB_val = CLMDB.MDB_val
 extension MDB_val:@unchecked Sendable {}
 
-/// special options for this database. These flags are specified
-extension Database {
-	public struct Flags:OptionSet {
-		public let rawValue:UInt32
-		public init(rawValue:UInt32) { self.rawValue = rawValue }
-
-		/// use reverse string keys
-		public static let reverseKey = Flags(rawValue:UInt32(MDB_REVERSEKEY))
-		
-		/// use sorted duplicates
-		public static let dupSort = Flags(rawValue:UInt32(MDB_DUPSORT))
-		
-		/// numeric keys in native byte order. The keys must all be of the same size.
-		public static let integerKey = Flags(rawValue:UInt32(MDB_INTEGERKEY))
-		
-		/// duplicate items have a fixed size
-		/// - use with ``dupSort``
-		public static let dupFixed = Flags(rawValue:UInt32(MDB_DUPFIXED))
-		
-		/// duplicate item are integers (``integerKey`` for duplicate items)
-		public static let integerDup = Flags(rawValue:UInt32(MDB_INTEGERDUP))
-		
-		/// use reverse string duplicate keys
-		/// - use with ``QuickLMDB/Database``
-		public static let reverseDup = Flags(rawValue:UInt32(MDB_REVERSEDUP))
-		
-		/// create the database if it does not already exist
-		public static let create = Flags(rawValue:UInt32(MDB_CREATE))
+public struct NoCopy<T>:~Copyable where T:MDB_convertible {
+	public var value:T
+	public init(_ value:T) {
+		self.value = value
 	}
+}
+
+public struct MDB_db_flags:OptionSet {
+	
+	/// the raw integer value of the flags.
+	public let rawValue:UInt32
+	
+	/// initialize a new Flags struct based on its raw integer value.
+	public init(rawValue:UInt32) { self.rawValue = rawValue }
+
+	/// use reverse string keys
+	public static let reverseKey = Self(rawValue:UInt32(MDB_REVERSEKEY))
+	
+	/// use sorted duplicates
+	public static let dupSort = Self(rawValue:UInt32(MDB_DUPSORT))
+	
+	/// numeric keys in native byte order. The keys must all be of the same size.
+	public static let integerKey = Self(rawValue:UInt32(MDB_INTEGERKEY))
+	
+	/// duplicate items have a fixed size
+	/// - use with ``dupSort``
+	public static let dupFixed = Self(rawValue:UInt32(MDB_DUPFIXED))
+	
+	/// duplicate item are integers (``integerKey`` for duplicate items)
+	public static let integerDup = Self(rawValue:UInt32(MDB_INTEGERDUP))
+	
+	/// use reverse string duplicate keys
+	/// - use with ``QuickLMDB/Database``
+	public static let reverseDup = Self(rawValue:UInt32(MDB_REVERSEDUP))
+	
+	/// create the database if it does not already exist
+	public static let create = Self(rawValue:UInt32(MDB_CREATE))
 }
 
 
@@ -41,7 +50,7 @@ public enum Operation {
 	/// operation flags modify the way that entries are stored in the database. In LMDB documentation, these are known as "write flags".
 	public struct Flags:OptionSet {
 		
-		/// the raw integer value for this flag. Can be passed directly into 
+		/// the raw integer value for this flag. can be passed directly into LMDB source functions.
 		public let rawValue:UInt32
 		
 		/// create a flag with its integer value.
@@ -73,61 +82,139 @@ public enum Operation {
 		public static let multiple = Flags(rawValue:UInt32(MDB_MULTIPLE))
 	}
 	
+	// first variants
 	/// position at first key/data item.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case first
-	
 	/// position at first data item of current key. Only use with ``Database/Flags/dupSort`` enabled.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case firstDup
-	
-	/// position at key/data pair. Only use with ``Database/Flags/dupSort`` enabled.
-	case getBoth
-	
-	/// position at key, nearest data. Only use with ``Database/Flags/dupSort`` enabled.
-	case getBothRange
-	
-	/// return the key/value entry at the cursor's current position.
-	case getCurrent
-	
-	/// return key and up to a page of duplicate data items from the current cursor position. Move cursor to prepare for ``Cursor/Operation/nextMultiple``.
-	case getMultiple
-	
+
+	// last variants
 	/// position at the last key/value item.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case last
-	
 	/// position at the last data item of the current key.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case lastDup
 	
+	// next variants
 	/// position at the next data item.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case next
-	
 	/// position at the next data item of the current key.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case nextDup
-	
-	/// return key and up to a page of duplicate data items from next cursor position. Move cursor to prepare for the next ``Cursor/Operation/nextMultiple``.
-	case nextMultiple
-	
 	/// position at first data item of the next key.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case nextNoDup
-	
+
+	// previous variants
 	/// position at previous data item.
-	case previous
-	
+	case previous	
 	/// position at previous data item of current key. Only for ``Database/Flags/dupSort``.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case previousDup
-	
-	/// position at lsat data item of previous key.
+	/// position at last data item of previous key.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case previousNoDup
+
+	/// position at key/data pair. Only use with ``Database/Flags/dupSort`` enabled.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
+	case getBoth
+	/// position at key, nearest data. Only use with ``Database/Flags/dupSort`` enabled.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
+	case getBothRange
+	/// return the key/value entry at the cursor's current position.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
+	case getCurrent
 	
 	/// position at the specified key.
-	/// - returned key will point to the same buffer that was passed into the cursor.
+	/// - WARNING: returned key will point to the same buffer that was passed into the cursor.
 	case set
-	
 	/// position at the specified key.
 	/// - returned key will point to the buffer that is stored in the memory map.
 	case setKey
-	
 	/// position at the first key greater than or equal to specified key.
+	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case setRange
+
+	/// return key and up to a page of duplicate data items from the current cursor position. Move cursor to prepare for ``Cursor/Operation/nextMultiple``.
+	case getMultiple
+	/// return key and up to a page of duplicate data items from next cursor position. Move cursor to prepare for the next ``Cursor/Operation/nextMultiple``.
+	case nextMultiple
+}
+
+extension Operation.Flags:CustomDebugStringConvertible {
+	public var debugDescription:String {
+		var desc = [String]()
+		if contains(.noOverwrite) {
+			desc.append("MDB_NOOVERWRITE")
+		}
+		if contains(.noDupData) {
+			desc.append("MDB_NODUPDATA")
+		}
+		if contains(.current) {
+			desc.append("MDB_CURRENT")
+		}
+		if contains(.reserve) {
+			desc.append("MDB_RESERVE")
+		}
+		if contains(.append) {
+			desc.append("MDB_APPEND")
+		}
+		if contains(.appendDup) {
+			desc.append("MDB_APPENDDUP")
+		}
+		if contains(.multiple) {
+			desc.append("MDB_MULTIPLE")
+		}
+		return "[\(desc.joined(separator: ", "))]"
+	}
+}
+
+extension Operation:CustomDebugStringConvertible {
+	public var debugDescription:String {
+		switch self {
+			case .first:
+				return "MDB_FIRST"
+			case .firstDup:
+				return "MDB_FIRST_DUP"
+			case .getBoth:
+				return "MDB_GET_BOTH"
+			case .getBothRange:
+				return "MDB_GET_BOTH_RANGE"
+			case .getCurrent:
+				return "MDB_GET_CURRENT"
+			case .getMultiple:
+				return "MDB_GET_MULTIPLE"
+			case .last:
+				return "MDB_LAST"
+			case .lastDup:
+				return "MDB_LAST_DUP"
+			case .next:
+				return "MDB_NEXT"
+			case .nextDup:
+				return "MDB_NEXT_DUP"
+			case .nextMultiple:
+				return "MDB_NEXT_MULTIPLE"
+			case .nextNoDup:
+				return "MDB_NEXT_NODUP"
+			case .previous:
+				return "MDB_PREV"
+			case .previousDup:
+				return "MDB_PREV_DUP"
+			case .previousNoDup:
+				return "MDB_PREV_NODUP"
+			case .set:
+				return "MDB_SET"
+			case .setKey:
+				return "MDB_SET_KEY"
+			case .setRange:
+				return "MDB_SET_RANGE"
+		}
+	}
+
 }
 
 extension Operation {
