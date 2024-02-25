@@ -4,13 +4,6 @@ import RAW
 public typealias MDB_val = CLMDB.MDB_val
 extension MDB_val:@unchecked Sendable {}
 
-public struct NoCopy<T>:~Copyable where T:MDB_convertible {
-	public var value:T
-	public init(_ value:T) {
-		self.value = value
-	}
-}
-
 public struct MDB_db_flags:OptionSet {
 	
 	/// the raw integer value of the flags.
@@ -70,7 +63,7 @@ public enum Operation {
 		public static let current = Flags(rawValue:UInt32(MDB_CURRENT))
 		
 		/// for ``Cursor/setEntry(value:forKey:flags:)``: just reserve space for the value, don't copy it. return a pointer to the reserved space.
-		public static let reserve = Flags(rawValue:UInt32(MDB_RESERVE))
+		internal static let reserve = Flags(rawValue:UInt32(MDB_RESERVE))
 		
 		/// pre-sorted keys are being stored in the database. don't split full pages.
 		public static let append = Flags(rawValue:UInt32(MDB_APPEND))

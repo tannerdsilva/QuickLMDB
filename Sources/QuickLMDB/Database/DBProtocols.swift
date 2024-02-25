@@ -15,9 +15,9 @@ public protocol MDB_db {
 	/// the environment handle primitive that this database instance is based on
 	var env:MDB_env { get }
 	/// the LMDB database name of this instance
-	var dbName:String? { get }
+	var name:String? { get }
 	/// the database handle primitive for this instance
-	var dbHandle:MDB_dbi { get }
+	var handle:MDB_dbi { get }
 
 	#if QUICKLMDB_SHOULDLOG
 	/// the primary logging facility that this database will use for debugging and auditing
@@ -114,6 +114,12 @@ public protocol MDB_db {
 extension MDB_db {
 	// default entry for all MDB_db implementations where `loadEntry` is called but the value type is not specified. in this case, the value type is assumed to be `MDB_db_val_type`
 	public borrowing func loadEntry<T:MDB_tx>(key keyVal:borrowing MDB_db_key_type, tx:borrowing T) throws -> MDB_db_val_type {
-		return try self.loadEntry(key:keyVal, as:MDB_db_val_type.self, tx:tx)
+		return try loadEntry(key:keyVal, as:MDB_db_val_type.self, tx:tx)
+	}
+
+	public borrowing func handle() -> MDB_dbi {
+		return withUnsafePointer(to:self) { selfPtr in
+			return selfPtr.pointer(to:\Self.handle)!.pointee
+		}
 	}
 }

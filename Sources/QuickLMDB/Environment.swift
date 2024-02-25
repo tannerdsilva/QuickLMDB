@@ -5,12 +5,159 @@ import SystemPackage
 import Logging
 #endif
 
+public final class Environment:Sendable {
+	/// flags that can be used to open an environment
+	public struct Flags:OptionSet, Sendable {
+		public let rawValue:UInt32
+		public init(rawValue:UInt32) { self.rawValue = rawValue }
+		
+		/// Experimental option that opens the memorymap at a fixed address.
+		public static let fixedMap = Flags(rawValue:UInt32(MDB_FIXEDMAP))
+		
+		/// Specify that the environment is a file instead of a directory.
+		public static let noSubDir = Flags(rawValue:UInt32(MDB_NOSUBDIR))
+		
+		/// Disables the `fsync` call that typically executes after a transaction is committed.
+		public static let noSync = Flags(rawValue:UInt32(MDB_NOSYNC))
+		
+		/// Open the environment as readonly.
+		public static let readOnly = Flags(rawValue:UInt32(MDB_RDONLY))
+		
+		/// Disables the `fsync` on the metapage that typically executes after a transaction is committed.
+		public static let noMetaSync = Flags(rawValue:UInt32(MDB_NOMETASYNC))
+		
+		/// Use a writable memorymap.
+		public static let writeMap = Flags(rawValue:UInt32(MDB_WRITEMAP))
+		
+		/// Sync the memorymap to disk asynchronously when used in combination with the ``Environment/Flags-swift.struct/writeMap`` flag.
+		public static let mapAsync = Flags(rawValue:UInt32(MDB_MAPASYNC))
+		
+		/// Associate reader locks with their respective ``Transaction`` objects instead of associating them with their current thread.
+		public static let noTLS = Flags(rawValue:UInt32(MDB_NOTLS))
+		
+		/// Disable all locking mechanisms for the database. Caller must manage their own locking.
+		public static let noLock = Flags(rawValue:UInt32(MDB_NOLOCK))
+		
+		/// Do not readahead (this flag has no effect on Windows).
+		public static let noReadAhead = Flags(rawValue:UInt32(MDB_NORDAHEAD))
+		
+		/// Do not initialize malloc'd memory before writing to the datafile.
+		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
+	}
+
+	internal let handle:OpaquePointer
+
+	public let flags:Flags
+
+	// initializer (conditional based on log config)
+	#if QUICKLMDB_SHOULDLOG
+	
+	/// the logger that the environment uses to document its actions.
+	var logger:Logger? { get }
+	/// create a new environment given the specified path and flags.
+	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, logger:consuming Logger? = nil) throws {
+		logger?[metadataKey:"type"] = "Environment"
+		
+		// create the environment variable
+		var environmentHandle:OpaquePointer? = nil;
+		let envStatus = mdb_env_create(&environmentHandle)
+		guard envStatus == 0 && environmentHandle != nil else {
+			logger?.critical("unable to allocate space in memory for the LMDB environment")
+			throw LMDBError(returnCode:envStatus)
+		}
+		logger?[metadataKey:"mdb_env_iid"] = "\(environmentHandle!.hashValue)"
+		logger?.debug("initializing new LMDB environment", metadata:["mdb_env_path":"'\(path)'"])
+		
+		// set the map size
+		if mapSize != nil {
+			logger?.trace("using explicit mapsize (\(mapSize!) bytes) prior to environment initialization")
+			let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
+			guard mdbSetResult == 0 else {
+				logger?.critical("unable to set explicit mapsize of (\(mapSize!) bytes)")
+				throw LMDBError(returnCode:mdbSetResult)
+			}
+		}
+		
+		// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
+		logger?.trace("assigning maximum reader count prior to environment initialization")
+		let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders)
+		guard setReadersResult == 0 else {
+			logger?.critical("unable to set maximum reader count prior to environment initialization")
+			throw LMDBError(returnCode:setReadersResult)
+		}
+		
+		// set maximum db count
+		logger?.trace("assigning maximum database count prior to environment initialization", "maximum_db_count":"\(maxDBs)")
+		let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
+		guard mdbSetResult == 0 else {
+			logger?.critical("unable to set maximum database count prior to environment initialization")
+			throw LMDBError(returnCode:mdbSetResult)
+		}
+		
+		// open the environment with the specified flags and file modes specified
+		logger?.trace("initializing lmdb environment", metadata:["mdb_env_flags":"\(flags)"])
+		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
+		guard openStatus == 0 else {
+			logger?.critical("failed to initialize lmdb environment", metadata:["return_code":"\(openStatus)"])
+			throw LMDBError(returnCode:openStatus)
+		}
+		logger?.info("successfully initialized LMDB environment", metadata:["mdb_env_path":"'\(path)'", "mdb_env_flags":"\(flags)"])
+		
+		self.MDB_env_handle = environmentHandle!
+		self.MDB_env_flags = flags
+		self.logger = logger
+	}
+	
+	#else
+	/// create a new environment given the specified path and flags.
+	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws {
+
+		// create the environment variable
+		var environmentHandle:OpaquePointer? = nil;
+		let envStatus = mdb_env_create(&environmentHandle)
+		guard envStatus == 0 else {
+			throw LMDBError(returnCode:envStatus)
+		}
+		
+		// set the map size
+		if mapSize != nil {
+			let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
+			guard mdbSetResult == 0 else {
+				throw LMDBError(returnCode:mdbSetResult)
+			}
+		}
+		
+		// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
+		let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders)
+		guard setReadersResult == 0 else {
+			throw LMDBError(returnCode:setReadersResult)
+		}
+		
+		// set maximum db count
+		let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
+		guard mdbSetResult == 0 else {
+			throw LMDBError(returnCode:mdbSetResult)
+		}
+		
+		// open the environment with the specified flags and file modes specified
+		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
+		guard openStatus == 0 else {
+			throw LMDBError(returnCode:openStatus)
+		}
+		
+		self.handle = environmentHandle!
+		self.flags = flags
+	}
+	
+	#endif
+}
+
 public protocol MDB_env {
 
 	/// the environment handle primitive that LMDB uses.
-	var envHandle:OpaquePointer { get }
+	var handle:OpaquePointer { get }
 	/// the environment flags that was used to create the environment.
-	var envFlags:Environment.Flags { get }
+	var flags:Environment.Flags { get }
 
 
 	// initializer (conditional based on log config)
@@ -30,16 +177,16 @@ public protocol MDB_env {
 	
 	// transaction functions (conditional based on log config)
 	/// transaction handler with a parent
-	func MDB_tx<T, P, R>(_ txType:T.Type, readOnly:Bool, MDB_tx_parent:UnsafeMutablePointer<P>, _ handler:(UnsafeMutablePointer<T>) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx
+	// func transact<T, P, R>(readOnly:Bool, parent:borrowing P, _ handler:(consuming T) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx
 	/// transaction handler without a parent
-	func MDB_tx<T, R>(_ txType:T.Type, readOnly:Bool, _ handler:(UnsafeMutablePointer<T>) throws -> R) rethrows -> R where T:MDB_tx
+	func transact<R>(readOnly:Bool, _ handler:(consuming Transaction) throws -> R) rethrows -> R
 }
 
 // default implementation of debug descriptions for the environment
 extension MDB_env where Self:CustomDebugStringConvertible {
 	/// 
 	public var debugDescription:String {
-		return "[MDB_env](\(MDB_env_handle.hashValue))"
+		return "[MDB_env](\(handle.hashValue))"
 	}
 }
 
@@ -49,36 +196,37 @@ extension MDB_env {
 	/// 	- type: the type of transaction to create
 	///		- readOnly: true if the newly created transaction should be restricted to readonly mode
 	///		- MDB_tx_parent: the parent LMDB transaction to use to create this child transaction
-	public func MDB_tx<T, P, R>(_ txType:T.Type, readOnly:Bool, MDB_tx_parent parent:UnsafeMutablePointer<P>, _ handler:(UnsafeMutablePointer<T>) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx {
-		return try withUnsafeMutablePointer(to:try! T(self, readOnly:readOnly, MDB_tx_parent:parent)) { txPtr in
-			let captureReturn:R
-			do {
-				#if QUICKLMDB_SHOULDLOG
-				logger?.trace("calling MDB_tx handler function (parent variant)", metadata:["MDB_tx":"\(txPtr.pointee)"])
-				#endif
-				captureReturn = try handler(txPtr)
-				if txPtr.pointee.MDB_tx_readOnly == false {
-					#if QUICKLMDB_SHOULDLOG
-					logger?.trace("MDB_tx handler returned without an error. calling transaction commit", metadata:["MDB_tx":"\(txPtr.pointee)"])
-					#endif
-					try! txPtr.pointee.MDB_tx_commit()
-				}
-			} catch let error {
-				if txPtr.pointee.MDB_tx_readOnly == false {
-					#if QUICKLMDB_SHOULDLOG
-					logger?.trace("MDB_tx handler returned with an error. calling transaction abort", metadata:["error_thrown":"\(error)", "MDB_tx":"\(txPtr.pointee)"])
-					#endif
-					txPtr.pointee.MDB_tx_abort()
-				} else {
-					#if QUICKLMDB_SHOULDLOG
-					logger?.trace("MDB_tx handler returned with an error. calling transaction abort", metadata:["error_thrown":"\(error)", "MDB_tx":"\(txPtr.pointee)"])
-					#endif
-				}
-				throw error
-			}
-			return captureReturn
-		}
-	}
+	// public func MDB_tx<T, P, R>(_ txType:T.Type, readOnly:Bool, MDB_tx_parent parent:UnsafeMutablePointer<P>, _ handler:(UnsafeMutablePointer<T>) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx {
+		
+	// 	return try withUnsafeMutablePointer(to:try! T(self, readOnly:readOnly, MDB_tx_parent:parent)) { txPtr in
+	// 		let captureReturn:R
+	// 		do {
+	// 			#if QUICKLMDB_SHOULDLOG
+	// 			logger?.trace("calling MDB_tx handler function (parent variant)", metadata:["MDB_tx":"\(txPtr.pointee)"])
+	// 			#endif
+	// 			captureReturn = try handler(txPtr)
+	// 			if txPtr.pointee.MDB_tx_readOnly == false {
+	// 				#if QUICKLMDB_SHOULDLOG
+	// 				logger?.trace("MDB_tx handler returned without an error. calling transaction commit", metadata:["MDB_tx":"\(txPtr.pointee)"])
+	// 				#endif
+	// 				try! txPtr.pointee.MDB_tx_commit()
+	// 			}
+	// 		} catch let error {
+	// 			if txPtr.pointee.MDB_tx_readOnly == false {
+	// 				#if QUICKLMDB_SHOULDLOG
+	// 				logger?.trace("MDB_tx handler returned with an error. calling transaction abort", metadata:["error_thrown":"\(error)", "MDB_tx":"\(txPtr.pointee)"])
+	// 				#endif
+	// 				txPtr.pointee.MDB_tx_abort()
+	// 			} else {
+	// 				#if QUICKLMDB_SHOULDLOG
+	// 				logger?.trace("MDB_tx handler returned with an error. calling transaction abort", metadata:["error_thrown":"\(error)", "MDB_tx":"\(txPtr.pointee)"])
+	// 				#endif
+	// 			}
+	// 			throw error
+	// 		}
+	// 		return captureReturn
+	// 	}
+	// }
 
 	/// transaction handler without a parent
 	/// - parameters:
@@ -117,7 +265,7 @@ extension MDB_env {
 	}
 }
 
-public final class Environment:MDB_env, Sendable {
+public struct Environmentb {
     public typealias MDB_tx_type = Transaction
 
 	#if QUICKLMDB_SHOULDLOG

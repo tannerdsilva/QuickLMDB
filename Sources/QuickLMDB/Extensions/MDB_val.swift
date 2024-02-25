@@ -6,28 +6,22 @@ import RAW
 extension MDB_val {
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and a length specified as the encoded count of the given encodable type.
-	internal static func reserved<E:RAW_encodable>(forRAW_encodable encodable:UnsafePointer<E>) -> MDB_val {
+	internal static func reserved<E:RAW_encodable>(RAW_encodable encodable:borrowing E) -> MDB_val {
 		var newEncodable = MDB_val()
-		encodable.pointee.RAW_encode(count:&newEncodable.mv_size)
+		encodable.RAW_encode(count:&newEncodable.mv_size)
 		return newEncodable
 	}
 	
-	internal static func unitialized() -> MDB_val {
+	internal static func uninitialized() -> MDB_val {
 		var makeVal = MDB_val()
 		makeVal.mv_size = -1
-		return makeVal
-	}
-	
-	internal static func nullValue() -> MDB_val {
-		var makeVal = MDB_val()
-		makeVal.mv_size = 0
 		return makeVal
 	}
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and specified length.
 	internal static func reserved(capacity:size_t) -> MDB_val {
 		var makeVal = MDB_val()
-		makeVal.mv_size = -1
+		makeVal.mv_size = capacity
 		return makeVal
 	}
 

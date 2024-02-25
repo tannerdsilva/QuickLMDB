@@ -21,11 +21,20 @@ extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_conv
 	}
 
 	public borrowing func setEntry<T:MDB_tx>(key:borrowing MDB_db_key_type, value:borrowing MDB_db_val_type, flags:Operation.Flags, tx:borrowing T) throws {
-		try key.MDB_encodable_access({ keyVal in 
-			try value.MDB_encodable_access({ valueVal in 
-				try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
+		switch flags.contains(.reserve) {
+		case true:
+			try key.MDB_encodable_access({ keyVal in 
+				try reserveEntry(key:keyVal, reservedSize:value.MDB_encodable_reserved_val(), flags:flags, tx:tx, { valVal in 
+					value.MDB_encodable_write(reserved:valVal)
+				})
 			})
-		})
+		case false:
+			try key.MDB_encodable_access({ keyVal in 
+				try value.MDB_encodable_access({ valueVal in 
+					try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
+				})
+			})
+		}
 	}
 
 	public borrowing func containsEntry<T:MDB_tx>(key:borrowing MDB_db_key_type, value:borrowing MDB_db_val_type, tx:borrowing T) throws -> Bool {
@@ -62,71 +71,86 @@ extension MDB_db {
 	// get entry implementations
 	public borrowing func loadEntry<T:MDB_tx>(key keyVal:consuming MDB_val, as:MDB_val.Type, tx:borrowing T) throws -> MDB_val {
 		#if QUICKLMDB_SHOULDLOG
-		return try MDB_db_get_entry_static(self, key:keyVal, tx:tx, logger:logger)
+		return try MDB_db_get_entry_static(db:self, key:keyVal, tx:tx, logger:logger)
 		#else
-		return try MDB_db_get_entry_static(self, key:keyVal, tx:tx)
+		return try MDB_db_get_entry_static(db:self, key:keyVal, tx:tx)
 		#endif
 	}
 	public borrowing func containsEntry<T:MDB_tx>(key keyVal:consuming MDB_val, tx:borrowing T) throws -> Bool {
 		#if QUICKLMDB_SHOULDLOG
-		return try MDB_db_contains_entry_static(self, key:keyVal, tx:tx, logger:logger)
+		return try MDB_db_contains_entry_static(db:self, key:keyVal, tx:tx, logger:logger)
 		#else
-		return try MDB_db_contains_entry_static(self, key:keyVal, tx:tx)
+		return try MDB_db_contains_entry_static(db:self, key:keyVal, tx:tx)
 		#endif
 	}
 	public borrowing func containsEntry<T:MDB_tx>(key keyVal:consuming MDB_val, value valueVal:consuming MDB_val, tx:borrowing T) throws -> Bool {
 		#if QUICKLMDB_SHOULDLOG
-		return try MDB_db_contains_entry_static(self, key:keyVal, value:valueVal, tx:tx, logger:logger)
+		return try MDB_db_contains_entry_static(db:self, key:keyVal, value:valueVal, tx:tx, logger:logger)
 		#else
-		return try MDB_db_contains_entry_static(self, key:keyVal, value:valueVal, tx:tx)
+		return try MDB_db_contains_entry_static(db:self, key:keyVal, value:valueVal, tx:tx)
 		#endif
 	}
 	
 	// set entry implementation
 	public borrowing func setEntry<T:MDB_tx>(key keyVal:consuming MDB_val, value valueVal:consuming MDB_val, flags:consuming Operation.Flags, tx:borrowing T) throws {
+		flags.subtract(.reserve)
 		#if QUICKLMDB_SHOULDLOG
-		try MDB_db_set_entry_static(self, key:keyVal, value:valueVal, flags:flags, tx:tx, logger:logger)
+		try MDB_db_set_entry_static(db:self, key:keyVal, value:valueVal, flags:flags, tx:tx, logger:logger)
 		#else
-		try MDB_db_set_entry_static(self, key:keyVal, value:valueVal, flags:flags, tx:tx)
+		try MDB_db_set_entry_static(db:self, key:keyVal, value:valueVal, flags:flags, tx:tx)
+		#endif
+	}
+
+	public borrowing func reserveEntry<T:MDB_tx>(key keyVal:consuming MDB_val, reservedSize valReserve:consuming MDB_val, flags:consuming Operation.Flags, tx:borrowing T, _ handlerFunc:(consuming MDB_val) throws -> Void) throws {
+		flags.formUnion(.reserve)
+
+		#if DEBUG
+		assert(valReserve.mv_size >= 0, "lmdb cannot reserve a buffer of negative size")
+		#endif
+		
+		#if QUICKLMDB_SHOULDLOG
+		try handlerFunc(try MDB_db_set_entry_static(db:self, returning:MDB_val.self, key:keyVal, value:valReserve, flags:flags, tx:tx, logger:logger))
+		#else
+		try handlerFunc(try MDB_db_set_entry_static(db:self, returning:MDB_val.self, key:keyVal, value:valReserve, flags:flags, tx:tx))
 		#endif
 	}
 	
 	// delete entry implementations
 	public borrowing func deleteEntry<T:MDB_tx>(key keyVal:consuming MDB_val, tx:borrowing T) throws {
 		#if QUICKLMDB_SHOULDLOG
-		try MDB_db_delete_entry_static(self, key:keyVal, tx:tx, logger:logger)
+		try MDB_db_delete_entry_static(db:self, key:keyVal, tx:tx, logger:logger)
 		#else
-		try MDB_db_delete_entry_static(self, key:keyVal, tx:tx)
+		try MDB_db_delete_entry_static(db:self, key:keyVal, tx:tx)
 		#endif
 	}
 	public borrowing func deleteEntry<T:MDB_tx>(key keyVal:consuming MDB_val, value valueVal:consuming MDB_val, tx:borrowing T) throws {
 		#if QUICKLMDB_SHOULDLOG
-		try MDB_db_delete_entry_static(self, key:keyVal, value:valueVal, tx:tx, logger:logger)
+		try MDB_db_delete_entry_static(db:self, key:keyVal, value:valueVal, tx:tx, logger:logger)
 		#else
-		try MDB_db_delete_entry_static(self, key:keyVal, value:valueVal, tx:tx)
+		try MDB_db_delete_entry_static(db:self, key:keyVal, value:valueVal, tx:tx)
 		#endif
 	}
 	public borrowing func deleteAllEntries<T:MDB_tx>(tx:borrowing T) throws {
 		#if QUICKLMDB_SHOULDLOG
-		try MDB_db_delete_all_entries_static(self, tx:tx, logger:logger)
+		try MDB_db_delete_all_entries_static(db:self, tx:tx, logger:logger)
 		#else
-		try MDB_db_delete_all_entries_static(self, tx:tx)
+		try MDB_db_delete_all_entries_static(db:self, tx:tx)
 		#endif
 	}
 
 	// metadata implementations
 	public borrowing func dbStatistics<T:MDB_tx>(tx:borrowing T) throws -> MDB_stat {
 		#if QUICKLMDB_SHOULDLOG
-		try MDB_db_get_statistics_static(self, tx:tx, logger:logger)
+		try MDB_db_get_statistics_static(db:self, tx:tx, logger:logger)
 		#else
-		try MDB_db_get_statistics_static(self, tx:tx)
+		try MDB_db_get_statistics_static(db:self, tx:tx)
 		#endif
 	}
 	public borrowing func dbFlags<T:MDB_tx>(tx:borrowing T) throws -> MDB_db_flags {
 		#if QUICKLMDB_SHOULDLOG
-		return MDB_db_flags(rawValue:try MDB_db_get_flags_static(self, tx:tx, logger:logger))
+		return MDB_db_flags(rawValue:try MDB_db_get_flags_static(db:self, tx:tx, logger:logger))
 		#else
-		return MDB_db_flags(rawValue:try MDB_db_get_flags_static(self, tx:tx))
+		return MDB_db_flags(rawValue:try MDB_db_get_flags_static(db:self, tx:tx))
 		#endif
 	}
 }
