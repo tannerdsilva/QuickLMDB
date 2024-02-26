@@ -1,5 +1,5 @@
 extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
-	public func compareEntryValues(_ dataL:MDB_cursor_dbtype.MDB_db_key_type, _ dataR:MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
+	public func compareEntryValues(_ dataL:borrowing MDB_cursor_dbtype.MDB_db_key_type, _ dataR:consuming MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
 		return dataL.MDB_access { lhsVal in
 			return dataR.MDB_access { rhsVal in
 				return compareEntryValues(lhsVal, rhsVal)
@@ -7,7 +7,7 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 		}
 	}
 
-	public func compareEntryKeys(_ dataL:MDB_cursor_dbtype.MDB_db_key_type, _ dataR:MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
+	public func compareEntryKeys(_ dataL:borrowing MDB_cursor_dbtype.MDB_db_key_type, _ dataR:consuming MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
 		return dataL.MDB_access { lhsVal in
 			return dataR.MDB_access { rhsVal in
 				return compareEntryKeys(lhsVal, rhsVal)
@@ -15,13 +15,13 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 		}
 	}
 
-	public func containsEntry(key:MDB_cursor_dbtype.MDB_db_key_type) throws -> Bool {
+	public func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> Bool {
 		return try key.MDB_access { keyVal in
 			try containsEntry(key:keyVal)
 		}
 	}
 
-	public func containsEntry(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool {
+	public func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool {
 		return try key.MDB_access { keyVal in
 			return try value.MDB_access { valueVal in
 				try containsEntry(key:keyVal, value:valueVal)
@@ -29,7 +29,7 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 		}
 	}
 
-	public func setEntry(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type, flags: Operation.Flags) throws {
+	public func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws {
 		return try key.MDB_access { keyVal in
 			try value.MDB_access { valueVal in
 				try setEntry(key:keyVal, value:valueVal, flags:flags)
