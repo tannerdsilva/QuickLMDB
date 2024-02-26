@@ -14,7 +14,7 @@ public protocol MDB_db {
 
 	#if QUICKLMDB_SHOULDLOG
 	/// the primary logging facility that this database will use for debugging and auditing
-	var logger:Logger? { get }
+	borrowing func logger() -> Logger?
 	/// create a new database from the specified environment
 	/// - parameters:
 	/// 	- env: a pointer to the environment that the database

@@ -37,12 +37,13 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence {
 
 	/// initialize a new cursor from a valid transaction and database handle
 	#if QUICKLMDB_SHOULDLOG
-	var logger:Logger? { get }
-	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction, logger:Logger?) throws
+	borrowing func logger() -> Logger?
+	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws
 	#else
 	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws
 	#endif
 	
+	/// returns the cursor handle primitive that LMDB uses to represent the cursor
 	borrowing func cursorHandle() -> OpaquePointer
 	
 	borrowing func dbHandle() -> MDB_dbi

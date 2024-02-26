@@ -1,6 +1,8 @@
-/*
 extension MDB_cursor {
 	// previous implementations
+	public borrowing func opPrevious() throws -> MDB_cursor_pairtype {
+		return try opPrevious(returning:MDB_cursor_pairtype.self)
+	}
 	public borrowing func opPrevious(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -21,6 +23,9 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
+	public borrowing func opPreviousDup() throws -> MDB_cursor_pairtype {
+		return try opPreviousDup(returning:MDB_cursor_pairtype.self)
+	}
 	public borrowing func opPreviousDup() throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -40,6 +45,9 @@ extension MDB_cursor {
 		#endif
 
 		return (key:keyVal, value:valueVal)
+	}
+	public borrowing func opPreviousNoDup() throws -> MDB_cursor_pairtype {
+		return try opPreviousNoDup(returning:MDB_cursor_pairtype.self)
 	}
 	public borrowing func opPreviousNoDup() throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
@@ -62,4 +70,3 @@ extension MDB_cursor {
 		return (key:keyVal, value:valueVal)
 	}
 }
-*/

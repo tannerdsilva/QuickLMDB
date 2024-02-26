@@ -1,6 +1,8 @@
-/*
 extension MDB_cursor {
 	// last implementations
+	public borrowing func opLast() throws -> MDB_cursor_pairtype {
+		return try opLast(returning:MDB_cursor_pairtype.self)
+	}
 	public borrowing func opLast(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -10,11 +12,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		#if QUICKLMDB_SHOULDLOG
-		try MDB_cursor_get_entry_static(cursor:self, .last, key:&keyVal, value:&valueVal, logger:logger)
-		#else
 		try MDB_cursor_get_entry_static(cursor:self, .last, key:&keyVal, value:&valueVal)
-		#endif
 
 		#if DEBUG
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")
@@ -24,6 +22,9 @@ extension MDB_cursor {
 		#endif
 
 		return (key:keyVal, value:valueVal)
+	}
+	public borrowing func opLastDup() throws -> MDB_cursor_pairtype {
+		return try opLastDup(returning:MDB_cursor_pairtype.self)
 	}
 	public borrowing func opLastDup(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
@@ -46,4 +47,3 @@ extension MDB_cursor {
 		return (key:keyVal, value:valueVal)
 	}
 }
-*/

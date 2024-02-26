@@ -1,6 +1,6 @@
 import CLMDB
 
-#if QUICKLMDB_MACROLOG
+#if QUICKLMDB_SHOULDLOG
 import Logging
 #endif
 
@@ -22,10 +22,13 @@ public struct Database:MDB_db {
     	return _db_handle
     }
 
-	#if QUICKLMDB_MACROLOG
+	#if QUICKLMDB_SHOULDLOG
 	/// the public logging facility that this database will use for debugging and auditing
-	public let logger:Logger?
-	
+	private let _logger:Logger?
+	public borrowing func logger() -> Logger? {
+		return _logger
+	}
+
 	/// initialize a new database instance from the specified environment.
 	/// - parameters:
 	/// 	- env: a pointer to the environment that the database will be based on.
@@ -34,8 +37,8 @@ public struct Database:MDB_db {
 	///		- tx: a pointer to the transaction that will be used to open the database.
     public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
 		var mutateLogger = logger
-		mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
-		self.logger = mutateLogger
+		mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:MDB_db_key_type.self)), \(String(describing:MDB_db_val_ptrtype.self))>"
+		self._logger = mutateLogger
 		self._db_env = copy env
 		self._db_name = name_in
 		var dbHandle = MDB_dbi()
@@ -84,10 +87,16 @@ extension Database {
 			return _db_handle
 		}
 
-		#if QUICKLMDB_MACROLOG
+		#if QUICKLMDB_SHOULDLOG
 		/// the public logging facility that this database will use for debugging and auditing
-		public let logger:Logger?
+		private let _logger:Logger?
+		public borrowing func logger() -> Logger? {
+			return _logger
+		}
 		
+		public borrowing func dbHandle() -> Logger? {
+			return _logger
+		}
 		/// initialize a new database instance from the specified environment.
 		/// - parameters:
 		/// 	- env: a pointer to the environment that the database will be based on.
@@ -100,15 +109,15 @@ extension Database {
 			self._db_env = copy env
 			self._db_name = name
 			var dbHandle = MDB_dbi()
-			mutateLogger?.trace("initializing...", metadata:["mdb_db_name":"\(String(describing:name))", "mdb_db_flags":"\(String(describing:flags))", "mdb_tx_id":"\(tx.pointee)"])
+			mutateLogger?.trace("initializing...", metadata:["mdb_db_name":"\(String(describing:name))", "mdb_db_flags":"\(String(describing:flags))", "tx_id":"\(tx.txHandle().hashValue)"])
 			let openResult = mdb_dbi_open(tx.txHandle(), name, flags.rawValue, &dbHandle)
 			guard openResult == MDB_SUCCESS else {
-				mutateLogger?.error("initialization failure", metadata:["mdb_db_name":"\(String(describing:name))", "mdb_db_flags":"\(String(describing:flags))", "mdb_tx_id":"\(tx.pointee)", "mdb_return_code":"\(openResult)"])
+				mutateLogger?.error("initialization failure", metadata:["mdb_db_name":"\(String(describing:name))", "mdb_db_flags":"\(String(describing:flags))", "tx_id":"\(tx.txHandle().hashValue)", "mdb_return_code":"\(openResult)"])
 				throw LMDBError(returnCode:openResult)
 			}
-			mutateLogger[metadataKey: "mdb_db_iid"] = "\(dbHandle.rawValue)"
+			mutateLogger?[metadataKey: "mdb_db_iid"] = "\(dbHandle.hashValue)"
 			mutateLogger?.debug("configuring...")
-			self.logger = mutateLogger
+			self._logger = mutateLogger
 			self._db_handle = dbHandle
 			
 		}
