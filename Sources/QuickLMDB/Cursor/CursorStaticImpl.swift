@@ -10,7 +10,7 @@ import Logging
 // get entry (op) [logged]
 internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, logger:Logger? = nil) {
 	logger?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:)", "mdb_op_in": "\(operation)", "mdb_key_in": "n/a", "mdb_val_in": "n/a"])
-	let cursorResult = mdb_cursor_get(cursor.handle(), nil, nil, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, nil, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		logger?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(operation)", "mdb_key_in": "n/a", "mdb_val_in": "n/a", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
@@ -28,7 +28,7 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 
 	logger?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(operation)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a"])
 
-	let cursorResult = mdb_cursor_get(cursor.handle(), &keyVal, &valueVal, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, &valueVal, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		logger?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(operation)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
@@ -51,7 +51,7 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	
 	logger?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in": "\(operation)", "mdb_key_in":"n/a", "mdb_val_in": "\(String(describing:valueVal))"])
 	
-	let cursorResult = mdb_cursor_get(cursor.handle(), nil, &valueVal, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, &valueVal, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		logger?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in": "\(operation)", "mdb_val_in": "\(String(describing:valueVal))", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
@@ -93,28 +93,28 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 #else
 // get entry (op)
 internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation) throws {
-	let cursorResult = mdb_cursor_get(cursor.handle(), nil, nil, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, nil, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
 }
 // get entry (key)
 public func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, key keyVal:inout MDB_val) throws {
-	let cursorResult = mdb_cursor_get(cursor.handle(), &keyVal, nil, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, nil, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
 }
 // get entry (value)
 public func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, value valueVal:inout MDB_val) throws {
-	let cursorResult = mdb_cursor_get(cursor.handle(), nil, &valueVal, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, &valueVal, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
 }
 // get entry (key, value)
 public func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, key keyVal:inout MDB_val, value valueVal:inout MDB_val) throws {
-	let cursorResult = mdb_cursor_get(cursor.handle(), &keyVal, &valueVal, operation.mdbValue)
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, &valueVal, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
@@ -126,7 +126,7 @@ public func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ oper
 public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:Operation.Flags, logger:Logger? = nil) throws {
 	logger?.trace(">", metadata:["_":"MDB_cursor_set_entry_static(_:key:value:flags:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))"])
 	
-	let result = mdb_cursor_put(cursor.handle(), &keyVal, &valueVal, flags.rawValue)
+	let result = mdb_cursor_put(cursor.cursorHandle(), &keyVal, &valueVal, flags.rawValue)
 	guard result == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:result)
 		logger?.error("!", metadata:["_":"MDB_cursor_set_entry_static(_:key:value:flags:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
@@ -137,7 +137,7 @@ public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key ke
 }
 #else
 public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:Operation.Flags) throws {
-	let result = mdb_cursor_put(cursor.handle(), &keyVal, &valueVal, flags.rawValue)
+	let result = mdb_cursor_put(cursor.cursorHandle(), &keyVal, &valueVal, flags.rawValue)
 	guard result == MDB_SUCCESS else {
 		throw LMDBError(returnCode:result)
 	}

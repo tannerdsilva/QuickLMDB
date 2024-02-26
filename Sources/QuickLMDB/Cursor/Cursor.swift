@@ -35,14 +35,6 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence {
 	associatedtype MDB_cursor_dbtype:MDB_db
 	/// the transaction type that is backing this cursor
 
-	/// the cursor handle for the specific instance
-	var handle:OpaquePointer { get }
-	
-	/// the database handle for the specific instance
-	var db:MDB_cursor_dbtype { get }
-	/// the transaction that this instance is operating within
-	var tx:Transaction { get }
-
 	/// initialize a new cursor from a valid transaction and database handle
 	#if QUICKLMDB_SHOULDLOG
 	var logger:Logger? { get }
@@ -50,7 +42,13 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence {
 	#else
 	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws
 	#endif
-
+	
+	borrowing func cursorHandle() -> OpaquePointer
+	
+	borrowing func dbHandle() -> MDB_dbi
+	
+	borrowing func txHandle() -> OpaquePointer
+	
 	// cursor operator functions
 	// first variants - are you looking for the first? you're in the right place
 	borrowing func opFirst(returning:MDB_cursor_pairtype.Type) throws -> MDB_cursor_pairtype
@@ -95,21 +93,6 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence {
 	
 	// returns the number of duplicate entries in the database for this key.
 	borrowing func dupCount() throws -> size_t
-}
-
-// cursor support for (MDB_val, MDB_val)
-extension MDB_cursor {
-	public borrowing func handle() -> OpaquePointer {
-		return handle
-	}
-
-	public borrowing func txHandle() -> OpaquePointer {
-		return tx.handle
-	}
-
-	public borrowing func dbHandle() -> MDB_dbi {
-		return db.handle
-	}
 }
 
 
@@ -226,100 +209,106 @@ extension MDB_cursor {
 /// LMDB cursor. this is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memory.
 /// - conforms to the ``MDB_cursor`` protocol with any database (unconditional)
 /// - conforms to the ``MDB_cursor_strict`` protocol with any database that conforms to the ``MDB_db_strict`` protocol.
-/*public final class Cursor<D:MDB_db>:Sequence {
-	/// returns a dup iterator for a specified key. if the key does not exist, an error is thrown.
-	public func makeDupIterator<A:RAW_accessible>(key:inout A) throws -> DupIterator {
-		try MDB_cursor_get_entry(.setKey, key:&key)
-		return DupIterator(self)
-	}
-	
-	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
-	public func makeIterator() -> Iterator {
-		return Iterator(self)
-	}
-	
-	/// primary dup iterator implementation
-	public struct DupIterator:IteratorProtocol, Sequence {
-		private var cursor:Cursor<D>
-		private var op:Operation
-
-		fileprivate init(_ cursor:Cursor<D>) {
-			self.cursor = cursor
-			self.op = .firstDup
-		}
-
-		public mutating func next() -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)? {
-			defer {
-				switch op {
-					case .firstDup:
-						op = .nextDup
-					default:
-						break;
-				}
-			}
-			do {
-				return try cursor.MDB_cursor_get_entry(op)
-			} catch {
-				return nil
-			}
-		}
-	}
-
-	public struct Iterator:IteratorProtocol, Sequence {
-		private var cursor:Cursor<D>
-		private var op:Operation
-
-		public init(_ cursor:Cursor<D>) {
-			self.cursor = cursor
-			self.op = .first
-		}
-
-		public mutating func next() -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)? {
-			defer {
-				switch op {
-					case .first:
-						op = .next
-					default:
-						break;
-				}
-			}
-			do {
-				return try cursor.MDB_cursor_get_entry(op)
-			} catch {
-				return nil
-			}
-		}
-	}
-
-	public typealias MDB_cursor_dbtype = D
-
-	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
-	public let MDB_cursor_handle:OpaquePointer
-	
-	/// this is the database that this cursor is associated with.
-	public let MDB_db_handle:MDB_dbi
-	
-	/// pointer to the `MDB_txn` struct associated with a given instance.
-	public let MDB_txn_handle:OpaquePointer
-
-	/// stores the readonly state of the attached transaction.
-	private let MDB_txn_readonly:Bool
-	
-	/// opens a new cursor instance from a given database and transaction pairing.
-	public init<T:MDB_tx>(MDB_db dbh:MDB_dbi, MDB_tx:inout T) throws {
-		var buildCursor:OpaquePointer? = nil
-		let openCursorResult = mdb_cursor_open(MDB_tx.MDB_tx_handle, dbh, &buildCursor)
-		guard openCursorResult == MDB_SUCCESS else {
-			throw LMDBError(returnCode:openCursorResult)
-		}
-		MDB_cursor_handle = buildCursor!
-		MDB_db_handle = dbh
-		MDB_txn_handle = MDB_tx.MDB_tx_handle
-		MDB_txn_readonly = MDB_tx.MDB_tx_readOnly
-	}
-
-	deinit {
-		// close the cursor
-		mdb_cursor_close(MDB_cursor_handle)
-	}
-}*/
+//ic final class Cursor<D:MDB_db>:Sequence {
+//	/// returns a dup iterator for a specified key. if the key does not exist, an error is thrown.
+//	public func makeDupIterator<A:RAW_accessible>(key:inout A) throws -> DupIterator {
+//		try MDB_cursor_get_entry(.setKey, key:&key)
+//		return DupIterator(self)
+//	}
+//	
+//	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
+//	public func makeIterator() -> Iterator {
+//		return Iterator(self)
+//	}
+//	
+//	/// primary dup iterator implementation
+//	public struct DupIterator:IteratorProtocol, Sequence {
+//		private var cursor:Cursor<D>
+//		private var op:Operation
+//
+//		fileprivate init(_ cursor:Cursor<D>) {
+//			self.cursor = cursor
+//			self.op = .firstDup
+//		}
+//
+//		public mutating func next() -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)? {
+//			defer {
+//				switch op {
+//					case .firstDup:
+//						op = .nextDup
+//					default:
+//						break;
+//				}
+//			}
+//			do {
+//				return try cursor.MDB_cursor_get_entry(op)
+//			} catch {
+//				return nil
+//			}
+//		}
+//	}
+//
+//	public struct Iterator:IteratorProtocol, Sequence {
+//		private var cursor:Cursor<D>
+//		private var op:Operation
+//
+//		public init(_ cursor:Cursor<D>) {
+//			self.cursor = cursor
+//			self.op = .first
+//		}
+//
+//		public mutating func next() -> (key:UnsafeMutableBufferPointer<UInt8>, value:UnsafeMutableBufferPointer<UInt8>)? {
+//			defer {
+//				switch op {
+//					case .first:
+//						op = .next
+//					default:
+//						break;
+//				}
+//			}
+//			do {
+//				return try cursor.MDB_cursor_get_entry(op)
+//			} catch {
+//				return nil
+//			}
+//		}
+//	}
+//
+//	public typealias MDB_cursor_dbtype = D
+//
+//	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
+//	private let _cursor_handle:OpaquePointer
+//	public borrowing func cursorHandle() -> OpaquePointer {
+//		return _cursor_handle
+//	}
+//	
+//	/// this is the database that this cursor is associated with.
+//	private let _db_handle:MDB_dbi
+//	public borrowing func dbHandle() -> MDB_dbi {
+//		return _db_handle
+//	}
+//	
+//	/// pointer to the `MDB_txn` struct associated with a given instance.
+//	private let _tx_handle:OpaquePointer
+//	public borrowing func txHandle() -> OpaquePointer {
+//		return _tx_handle
+//	}
+//	
+//	/// opens a new cursor instance from a given database and transaction pairing.
+//	public init<D:MDB_db>(db:borrowing D, tx:borrowing Transaction) throws {
+//		var buildCursor:OpaquePointer? = nil
+//		let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
+//		guard openCursorResult == MDB_SUCCESS else {
+//			throw LMDBError(returnCode:openCursorResult)
+//		}
+//		self._cursor_handle = buildCursor!
+//		self._db_handle = db.dbHandle()
+//		self._tx_handle = db.txHandle()
+//		MDB_txn_readonly = MDB_tx.MDB_tx_readOnly
+//	}
+//
+//	deinit {
+//		// close the cursor
+//		mdb_cursor_close(MDB_cursor_handle)
+//	}
+//}

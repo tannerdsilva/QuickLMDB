@@ -6,7 +6,7 @@ import Logging
 #endif
 
 extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible {
-	public borrowing func deleteEntry(key:borrowing MDB_db_key_type, value:borrowing MDB_db_val_type, tx:borrowing Transaction) throws {
+	public func deleteEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws {
 		try key.MDB_access({ keyVal in
 			try value.MDB_access({ valueVal in
 				try deleteEntry(key:keyVal, value:valueVal, tx:tx)
@@ -14,13 +14,13 @@ extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_conv
 		})
 	}
 
-	public borrowing func deleteEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws {
+	public func deleteEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws {
 		try key.MDB_access({ keyVal in
 			try deleteEntry(key:keyVal, tx:tx)
 		})
 	}
 
-	public borrowing func setEntry(key:borrowing MDB_db_key_type, value:borrowing MDB_db_val_type, flags:consuming Operation.Flags, tx:borrowing Transaction) throws {
+	public func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws {
 		switch flags.contains(.reserve) {
 		case true:
 			try key.MDB_access({ keyVal in
@@ -37,7 +37,7 @@ extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_conv
 		}
 	}
 
-	public borrowing func containsEntry(key:borrowing MDB_db_key_type, value:borrowing MDB_db_val_type, tx:borrowing Transaction) throws -> Bool {
+	public func containsEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws -> Bool {
 		try key.MDB_access({ keyVal in
 			try value.MDB_access({ valueVal in
 				return try containsEntry(key:keyVal, value:valueVal, tx:tx)
@@ -45,13 +45,13 @@ extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_conv
 		})
 	}
 
-	public borrowing func containsEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws -> Bool {
+	public func containsEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws -> Bool {
 		try key.MDB_access({ keyVal in
 			return try containsEntry(key:keyVal, tx:tx)
 		})
 	}
 
-	public borrowing func loadEntry(key:borrowing MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
+	public func loadEntry(key:MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
 		try key.MDB_access({ keyVal in 
 			return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
 		})
@@ -60,11 +60,11 @@ extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_conv
 
 // every MDB_db will have the ability to exchange consuming MDB_val with the database at any time.
 extension MDB_db {
-	public borrowing func cursor<C:MDB_cursor>(as:C.Type, tx:borrowing Transaction) throws -> C {
+	public borrowing func cursor<C:MDB_cursor, R>(as:C.Type, tx:borrowing Transaction, _ handler:(consuming C) throws -> R) rethrows -> R where C.MDB_cursor_dbtype == Self {
 		#if QUICKLMDB_SHOULDLOG
-		return try C(db:self, tx:tx, logger:logger)
+		return try handler(try! C(db:self, tx:tx, logger:logger))
 		#else
-		return try C(db:self, tx:tx)
+		return try handler(try! C(db:self, tx:tx))
 		#endif
 	}
 
