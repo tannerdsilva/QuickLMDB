@@ -40,6 +40,8 @@ public protocol MDB_cursor_basic:MDB_cursor where MDB_cursor_dbtype.MDB_db_key_t
 public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:MDB_db {
 
 	associatedtype Element = (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
+	
+	associatedtype Iterator = DatabaseIterator<Self>
 
 	/// the database type backing this cursor
 	associatedtype MDB_cursor_dbtype:MDB_db
@@ -219,114 +221,9 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:M
 /// - conforms to the ``MDB_cursor`` protocol with any database (unconditional)
 /// - conforms to the ``MDB_cursor_strict`` protocol with any database that conforms to the ``MDB_db_strict`` protocol.
 public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
-	
-	// public final class Strict<K:MDB_convertible, V:MDB_convertible>:MDB_cursor_strict {
-	//     public typealias MDB_cursor_key_type = K
 
-	//     public typealias MDB_cursor_val_type = V
-	// 	public struct Iterator<MDB_cursor_dbtype>:IteratorProtocol, Sequence {
-	// 		private let cursor:MDB_cursor_dbtype
-	// 		private var first:Bool
-	// 		public init(_ cursor:MDB_cursor_dbtype) {
-	// 			self.cursor = cursor
-	// 			self.first = true
-	// 		}
-		
-	// 		public mutating func next() -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type)? {
-	// 			switch first {
-	// 				case true:
-	// 					first = false
-	// 					return try? cursor.opFirst(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
-	// 				case false:
-	// 					return try? cursor.opNext(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
-	// 			}
-	// 		}
-	// 	}
-	//     /// this is the pointer to the `MDB_cursor` struct associated with a given instance.
-	// 	private let _cursor_handle:OpaquePointer
-	// 	public borrowing func cursorHandle() -> OpaquePointer {
-	// 		return _cursor_handle
-	// 	}
-		
-	// 	/// this is the database that this cursor is associated with.
-	// 	private let _db_handle:MDB_dbi
-	// 	public borrowing func dbHandle() -> MDB_dbi {
-	// 		return _db_handle
-	// 	}
-		
-	// 	/// pointer to the `MDB_txn` struct associated with a given instance.
-	// 	private let _tx_handle:OpaquePointer
-	// 	public borrowing func txHandle() -> OpaquePointer {
-	// 		return _tx_handle
-	// 	}
-		
-	// 	#if QUICKLMDB_SHOULDLOG
-	// 	private let _logger:Logger?
-	// 	public borrowing func logger() -> Logger? {
-	// 		return _logger
-	// 	}
-	// 	/// opens a new cursor instance from a given database and transaction pairing.
-	// 	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction, logger:Logger? = nil) throws {
-	// 		var buildCursor:OpaquePointer? = nil
-	// 		let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
-	// 		guard openCursorResult == MDB_SUCCESS else {
-	// 			throw LMDBError(returnCode:openCursorResult)
-	// 		}
-	// 		self._cursor_handle = buildCursor!
-	// 		self._db_handle = db.dbHandle()
-	// 		self._tx_handle = tx.txHandle()
-	// 		self._logger = logger
-	// 	}
-	// 	#else
-	// 	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
-	// 		var buildCursor:OpaquePointer? = nil
-	// 		let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
-	// 		guard openCursorResult == MDB_SUCCESS else {
-	// 			throw LMDBError(returnCode:openCursorResult)
-	// 		}
-	// 		self._cursor_handle = buildCursor!
-	// 		self._db_handle = db.dbHandle()
-	// 		self._tx_handle = tx.txHandle()
-	// 	}
-	// 	#endif
-		
-	// 	deinit {
-	// 		// close the cursor
-	// 		mdb_cursor_close(_cursor_handle)
-	// 	}
-
-	// }
     
 	public typealias MDB_cursor_dbtype = D
-   
-	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
-	public func makeIterator() -> CursorIterator<Cursor> {
-		return CursorIterator(self)
-	}
-	
-	// /// primary dup iterator implementation
-	// public struct DupIterator<C:MDB_cursor>:IteratorProtocol, Sequence {
-	// 	private let cursor:Cursor<D>
-	// 	private var first:Bool
-	
-	// 	fileprivate init(_ cursor:Cursor<D>) {
-	// 		self.cursor = cursor
-	// 		self.first = true
-	// 	}
-	
-	// 	public mutating func next() -> (key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type)? {
-	// 		switch first {
-	// 			case true:
-	// 				first = false
-	// 				return try? cursor.opFirstDup()
-	// 			case false:
-	// 				return try? cursor.opNextDup(returning: (key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
-	// 		}
-	// 	}
-	// }
-	
-	public typealias Iterator = CursorIterator<Cursor>
-	
 
 	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
 	private let _cursor_handle:OpaquePointer
@@ -382,21 +279,21 @@ public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
 	}
 }
 
-public struct CursorIterator<C:MDB_cursor>:IteratorProtocol, Sequence {
-	private let cursor:C
+public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence {
+	private let cursor:CursorType
 	private var first:Bool
-	public init(_ cursor:C) {
-		self.cursor = cursor
+	internal init(_ cursor:borrowing CursorType) {
+		self.cursor = copy cursor
 		self.first = true
 	}
 
-	public mutating func next() -> (key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type)? {
+	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
 		switch first {
 			case true:
 				first = false
-				return try? cursor.opFirst(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
+				return try? cursor.opFirst(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
 			case false:
-				return try? cursor.opNext(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
+				return try? cursor.opNext(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
 		}
 	}
 }
