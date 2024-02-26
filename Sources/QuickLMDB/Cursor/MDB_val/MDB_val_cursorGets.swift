@@ -1,3 +1,4 @@
+/*
 extension MDB_cursor {
 	// get variants
 	public borrowing func opGetBoth(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val, value valueVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
@@ -56,3 +57,4 @@ extension MDB_cursor {
 		return (key:keyVal, value:valueVal)
 	}
 }
+*/

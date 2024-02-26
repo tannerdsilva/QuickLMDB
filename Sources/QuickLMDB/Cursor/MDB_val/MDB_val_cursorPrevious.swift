@@ -1,3 +1,4 @@
+/*
 extension MDB_cursor {
 	// previous implementations
 	public borrowing func opPrevious(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
@@ -61,3 +62,4 @@ extension MDB_cursor {
 		return (key:keyVal, value:valueVal)
 	}
 }
+*/

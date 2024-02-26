@@ -9,7 +9,9 @@ public final class Environment:Sendable {
 	/// flags that can be used to open an environment
 	public struct Flags:OptionSet, Sendable {
 		public let rawValue:UInt32
-		public init(rawValue:UInt32) { self.rawValue = rawValue }
+		public init(rawValue:UInt32) {
+			self.rawValue = rawValue
+		}
 		
 		/// Experimental option that opens the memorymap at a fixed address.
 		public static let fixedMap = Flags(rawValue:UInt32(MDB_FIXEDMAP))
@@ -45,73 +47,13 @@ public final class Environment:Sendable {
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
 
-	private let _handle:OpaquePointer
-	internal borrowing func handle() -> OpaquePointer { 
-		return _handle
+	private let _env_handle:OpaquePointer
+	internal borrowing func envHandle() -> OpaquePointer { 
+		return _env_handle
 	}
 
 	public let flags:Flags
 
-	// initializer (conditional based on log config)
-	// #if QUICKLMDB_SHOULDLOG
-	
-	// /// the logger that the environment uses to document its actions.
-	// var logger:Logger? { get }
-	// /// create a new environment given the specified path and flags.
-	// init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, logger:consuming Logger? = nil) throws {
-	// 	logger?[metadataKey:"type"] = "Environment"
-		
-	// 	// create the environment variable
-	// 	var environmentHandle:OpaquePointer? = nil;
-	// 	let envStatus = mdb_env_create(&environmentHandle)
-	// 	guard envStatus == 0 && environmentHandle != nil else {
-	// 		logger?.critical("unable to allocate space in memory for the LMDB environment")
-	// 		throw LMDBError(returnCode:envStatus)
-	// 	}
-	// 	logger?[metadataKey:"mdb_env_iid"] = "\(environmentHandle!.hashValue)"
-	// 	logger?.debug("initializing new LMDB environment", metadata:["mdb_env_path":"'\(path)'"])
-		
-	// 	// set the map size
-	// 	if mapSize != nil {
-	// 		logger?.trace("using explicit mapsize (\(mapSize!) bytes) prior to environment initialization")
-	// 		let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
-	// 		guard mdbSetResult == 0 else {
-	// 			logger?.critical("unable to set explicit mapsize of (\(mapSize!) bytes)")
-	// 			throw LMDBError(returnCode:mdbSetResult)
-	// 		}
-	// 	}
-		
-	// 	// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
-	// 	logger?.trace("assigning maximum reader count prior to environment initialization")
-	// 	let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders)
-	// 	guard setReadersResult == 0 else {
-	// 		logger?.critical("unable to set maximum reader count prior to environment initialization")
-	// 		throw LMDBError(returnCode:setReadersResult)
-	// 	}
-		
-	// 	// set maximum db count
-	// 	logger?.trace("assigning maximum database count prior to environment initialization", "maximum_db_count":"\(maxDBs)")
-	// 	let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
-	// 	guard mdbSetResult == 0 else {
-	// 		logger?.critical("unable to set maximum database count prior to environment initialization")
-	// 		throw LMDBError(returnCode:mdbSetResult)
-	// 	}
-		
-	// 	// open the environment with the specified flags and file modes specified
-	// 	logger?.trace("initializing lmdb environment", metadata:["mdb_env_flags":"\(flags)"])
-	// 	let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
-	// 	guard openStatus == 0 else {
-	// 		logger?.critical("failed to initialize lmdb environment", metadata:["return_code":"\(openStatus)"])
-	// 		throw LMDBError(returnCode:openStatus)
-	// 	}
-	// 	logger?.info("successfully initialized LMDB environment", metadata:["mdb_env_path":"'\(path)'", "mdb_env_flags":"\(flags)"])
-		
-	// 	self.MDB_env_handle = environmentHandle!
-	// 	self.MDB_env_flags = flags
-	// 	self.logger = logger
-	// }
-	
-	// #else
 	/// create a new environment given the specified path and flags.
 	#if QUICKLMDB_SHOULDLOG
 	internal let logger:Logger?
@@ -153,11 +95,12 @@ public final class Environment:Sendable {
 		// open the environment with the specified flags and file modes specified
 		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
 		guard openStatus == 0 else {
-			loggerMutate?.critical("init", metadata:["env_path":"\(path)", "env_flags":"\(flags)", "mdb_return_code":"\(openStatus)"])
+			loggerMutate?.critical("init failed", metadata:["env_path":"\(path)", "env_flags":"\(flags)", "mdb_return_code":"\(openStatus)"])
 			throw LMDBError(returnCode:openStatus)
 		}
 		
-		self._handle = environmentHandle!
+		loggerMutate?.info("init successful", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
+		self._env_handle = environmentHandle!
 		self.flags = flags
 		self.logger = loggerMutate
 	}
@@ -197,11 +140,12 @@ public final class Environment:Sendable {
 			throw LMDBError(returnCode:openStatus)
 		}
 		
-		self._handle = environmentHandle!
+		self._env_handle = environmentHandle!
 		self.flags = flags
 	}
 	#endif
 	
+	// create a new root-level transaction.
 	public borrowing func transact<R>(readOnly:Bool, _ handler:(consuming Transaction) throws -> R) rethrows -> R {
 		#if QUICKLMDB_SHOULDLOG
 		return try handler(try! Transaction(env:self, readOnly:readOnly, logger:logger))
@@ -210,13 +154,13 @@ public final class Environment:Sendable {
 		#endif
 	}
 
+	// create a sub-transaction with a provided parent.
 	public borrowing func transact<R>(readOnly:Bool, parent:borrowing Transaction, _ handler:(consuming Transaction) throws -> R) rethrows -> R {
 		#if QUICKLMDB_SHOULDLOG
 		return try handler(try! Transaction(env:self, readOnly:readOnly, parent:parent, logger:logger))
 		#else
 		return try handler(try! Transaction(env:self, readOnly:readOnly, parent:parent))
 		#endif
-		
 	}
 }
 
@@ -230,19 +174,19 @@ public final class Environment:Sendable {
 
 // 	// initializer (conditional based on log config)
 // 	#if QUICKLMDB_SHOULDLOG
-	
+
 // 	/// the logger that the environment uses to document its actions.
 // 	var logger:Logger? { get }
 // 	/// create a new environment given the specified path and flags.
 // 	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, logger:Logger?) throws
-	
+
 // 	#else
 // 	/// create a new environment given the specified path and flags.
 // 	init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws
-	
+
 // 	#endif
-	
-	
+
+
 // 	// transaction functions (conditional based on log config)
 // 	/// transaction handler with a parent
 // 	// func transact<T, P, R>(readOnly:Bool, parent:borrowing P, _ handler:(consuming T) throws -> R) rethrows -> R where T:MDB_tx, P:MDB_tx

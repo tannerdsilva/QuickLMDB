@@ -145,7 +145,7 @@ public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key ke
 #endif
 
 #if QUICKLMDB_SHOULDLOG
-public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:consuming MDB_val, rhs dataR:consuming MDB_val, logger:Logger? = nil) -> Int32 {
+public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout MDB_val, rhs dataR:inout MDB_val, logger:Logger? = nil) -> Int32 {
 	logger?.trace(">", metadata:["_":"MDB_cursor_compare_keys_static(_:lhs:rhs:)", "mdb_val_l":"\(String(describing:dataL))", "mdb_val_r":"\(String(describing:dataR))"])
 	
 	let result = mdb_cmp(cursor.txHandle(), cursor.dbHandle(), &dataL, &dataR)
@@ -154,13 +154,13 @@ public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs
 	return result
 }
 #else
-public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:consuming MDB_val, rhs dataR:consuming MDB_val) -> Int32 {
+public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout MDB_val, rhs dataR:inout MDB_val) -> Int32 {
 	return mdb_cmp(cursor.txHandle(), cursor.dbHandle(), &dataL, &dataR)
 }
 #endif
 
 #if QUICKLMDB_SHOULDLOG
-public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:consuming MDB_val, rhs dataR:consuming MDB_val, logger:Logger? = nil) -> Int32 {
+public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout MDB_val, rhs dataR:inout MDB_val, logger:Logger? = nil) -> Int32 {
 	logger?.trace(">", metadata:["_":"MDB_cursor_compare_values_static(_:lhs:rhs:)", "mdb_val_l":"\(String(describing:dataL))", "mdb_val_r":"\(String(describing:dataR))"])
 	
 	let result = mdb_dcmp(cursor.txHandle(), cursor.dbHandle(), &dataL, &dataR)
@@ -169,7 +169,7 @@ public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, l
 	return result
 }
 #else
-public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, _ dataL:consuming MDB_val, _ dataR:consuming MDB_val) -> Int32 {
+public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, _ dataL:inout MDB_val, _ dataR:inout MDB_val) -> Int32 {
 	return mdb_dcmp(cursor.txHandle(), cursor.dbHandle(), &dataL, &dataR)
 }
 #endif

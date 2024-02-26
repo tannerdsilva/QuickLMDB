@@ -1,3 +1,4 @@
+/*
 extension MDB_cursor {
 		
 	
@@ -57,3 +58,4 @@ extension MDB_cursor {
 		return (key:keyVal, value:valueVal)
 	}
 }
+*/

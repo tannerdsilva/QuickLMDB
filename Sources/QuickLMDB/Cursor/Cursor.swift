@@ -27,14 +27,13 @@ import Logging
 // }
 
 /// the protocol for open ended data storage type
-public protocol MDB_cursor<MDB_cursor_dbtype, MDB_cursor_txtype>:Sequence {
+public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence {
 	/// the native pair type that the cursor operates with. reflects the underlying key/value types of the backing database type
 	typealias MDB_cursor_pairtype = (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
 
 	/// the database type backing this cursor
 	associatedtype MDB_cursor_dbtype:MDB_db
 	/// the transaction type that is backing this cursor
-	associatedtype MDB_cursor_txtype:MDB_tx
 
 	/// the cursor handle for the specific instance
 	var handle:OpaquePointer { get }
@@ -42,14 +41,14 @@ public protocol MDB_cursor<MDB_cursor_dbtype, MDB_cursor_txtype>:Sequence {
 	/// the database handle for the specific instance
 	var db:MDB_cursor_dbtype { get }
 	/// the transaction that this instance is operating within
-	var tx:MDB_cursor_txtype { get }
+	var tx:Transaction { get }
 
 	/// initialize a new cursor from a valid transaction and database handle
 	#if QUICKLMDB_SHOULDLOG
 	var logger:Logger? { get }
-	init(db:borrowing MDB_cursor_dbtype, tx:borrowing MDB_cursor_txtype, logger:Logger?) throws
+	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction, logger:Logger?) throws
 	#else
-	init(db:borrowing MDB_cursor_dbtype, tx:borrowing MDB_cursor_txtype) throws
+	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws
 	#endif
 
 	// cursor operator functions
@@ -227,7 +226,7 @@ extension MDB_cursor {
 /// LMDB cursor. this is defined as a class so that the cursor can be auto-closed when references to this instances are free'd from memory.
 /// - conforms to the ``MDB_cursor`` protocol with any database (unconditional)
 /// - conforms to the ``MDB_cursor_strict`` protocol with any database that conforms to the ``MDB_db_strict`` protocol.
-public final class Cursor<D:MDB_db>:Sequence {
+/*public final class Cursor<D:MDB_db>:Sequence {
 	/// returns a dup iterator for a specified key. if the key does not exist, an error is thrown.
 	public func makeDupIterator<A:RAW_accessible>(key:inout A) throws -> DupIterator {
 		try MDB_cursor_get_entry(.setKey, key:&key)
@@ -323,4 +322,4 @@ public final class Cursor<D:MDB_db>:Sequence {
 		// close the cursor
 		mdb_cursor_close(MDB_cursor_handle)
 	}
-}
+}*/
