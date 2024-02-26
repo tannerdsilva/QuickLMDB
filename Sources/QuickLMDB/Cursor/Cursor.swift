@@ -300,8 +300,8 @@ public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
 	public typealias MDB_cursor_dbtype = D
    
 	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
-	public func makeIterator() -> Iterator<Cursor> {
-		return Iterator(self)
+	public func makeIterator() -> CursorIterator<Cursor> {
+		return CursorIterator(self)
 	}
 	
 	// /// primary dup iterator implementation
@@ -325,24 +325,8 @@ public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
 	// 	}
 	// }
 	
-	public struct Iterator<C:MDB_cursor>:IteratorProtocol, Sequence {
-		private let cursor:C
-		private var first:Bool
-		public init(_ cursor:C) {
-			self.cursor = cursor
-			self.first = true
-		}
+	public typealias Iterator = CursorIterator<Cursor>
 	
-		public mutating func next() -> (key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type)? {
-			switch first {
-				case true:
-					first = false
-					return try? cursor.opFirst(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
-				case false:
-					return try? cursor.opNext(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
-			}
-		}
-	}
 
 	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
 	private let _cursor_handle:OpaquePointer
@@ -368,7 +352,7 @@ public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
 		return _logger
 	}
 	/// opens a new cursor instance from a given database and transaction pairing.
-	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction, logger:Logger? = nil) throws {
+	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
 		var buildCursor:OpaquePointer? = nil
 		let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
 		guard openCursorResult == MDB_SUCCESS else {
@@ -377,7 +361,7 @@ public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
 		self._cursor_handle = buildCursor!
 		self._db_handle = db.dbHandle()
 		self._tx_handle = tx.txHandle()
-		self._logger = logger
+		self._logger = db.logger()
 	}
 	#else
 	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
@@ -395,5 +379,24 @@ public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
 	deinit {
 		// close the cursor
 		mdb_cursor_close(_cursor_handle)
+	}
+}
+
+public struct CursorIterator<C:MDB_cursor>:IteratorProtocol, Sequence {
+	private let cursor:C
+	private var first:Bool
+	public init(_ cursor:C) {
+		self.cursor = cursor
+		self.first = true
+	}
+
+	public mutating func next() -> (key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type)? {
+		switch first {
+			case true:
+				first = false
+				return try? cursor.opFirst(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
+			case false:
+				return try? cursor.opNext(returning:(key:C.MDB_cursor_dbtype.MDB_db_key_type, value:C.MDB_cursor_dbtype.MDB_db_val_type).self)
+		}
 	}
 }

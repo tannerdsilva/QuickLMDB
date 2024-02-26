@@ -241,19 +241,19 @@ public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, l
 
 public func MDB_cursor_get_dupcount_static<C:MDB_cursor>(cursor:borrowing C) throws -> size_t {
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_cursor":"\(cursor)"])
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)"])
 	#endif
 	var count:size_t = 0
 	let result = mdb_cursor_count(cursor.cursorHandle(), &count)
 	guard result == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:result)
 		#if QUICKLMDB_SHOULDLOG
-		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_cursor":"\(cursor)", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
 		#endif
 		throw throwError
 	}
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_cursor":"\(cursor)", "mdb_return_code":"\(result)", "mdb_dupcount":"\(count)"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_return_code":"\(result)", "mdb_dupcount":"\(count)"])
 	#endif
 	return count
 }
