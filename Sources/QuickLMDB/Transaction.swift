@@ -120,6 +120,7 @@ public struct Transaction:~Copyable {
     }
     #endif
     
+    /// returns the LMDB primitive type that  
     internal borrowing func txHandle() -> OpaquePointer {
     	return _tx_handle
     }

@@ -1,5 +1,4 @@
 extension MDB_cursor {
-		
 	
 	// set variants
 	public borrowing func opSet(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
@@ -21,8 +20,8 @@ extension MDB_cursor {
 
 		return valueVal
 	}
-	public borrowing func opSetKey(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_pairtype {
-		return try opSetKey(returning:MDB_cursor_pairtype.self, key:keyVal)
+	public borrowing func opSetKey(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self, key:keyVal)
 	}
 	public borrowing func opSetKey(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
 		var valueVal = MDB_val.uninitialized()
@@ -42,8 +41,8 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-	public borrowing func opSetRange(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_pairtype {
-		return try opSetRange(returning:MDB_cursor_pairtype.self, key:keyVal)
+	public borrowing func opSetRange(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self, key:keyVal)
 	}
 	public borrowing func opSetRange(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
 		var valueVal = MDB_val.uninitialized()

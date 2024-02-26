@@ -1,8 +1,13 @@
 extension MDB_cursor {
-	// first implementations
-	public borrowing func opFirst() throws -> MDB_cursor_pairtype {
-		return try opFirst(returning:MDB_cursor_pairtype.self)
+	public borrowing func opFirst() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opFirst(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
 	}
+	public borrowing func opFirstDup() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opFirstDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
+	}
+}
+extension MDB_cursor {
+	// first implementations
 	public borrowing func opFirst(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -22,9 +27,6 @@ extension MDB_cursor {
 		#endif
 
 		return (key:keyVal, value:valueVal)
-	}
-	public borrowing func opFirstDup() throws -> MDB_cursor_pairtype {
-		return try opFirstDup(returning:MDB_cursor_pairtype.self)
 	}
 	public borrowing func opFirstDup(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()

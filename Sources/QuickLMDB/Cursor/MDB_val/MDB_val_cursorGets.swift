@@ -1,8 +1,17 @@
 extension MDB_cursor {
-	// get variants
-	public borrowing func opGetBoth(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> MDB_cursor_pairtype {
-		return try opGetBoth(returning:MDB_cursor_pairtype.self, key:keyVal, value:valueVal)
+	public borrowing func opGetBoth(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opGetBoth(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self, key:keyVal, value:valueVal)
 	}
+	public borrowing func opGetBothRange(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opGetBothRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self, key:keyVal, value:valueVal)
+	}
+	public borrowing func opGetCurrent() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opGetCurrent(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
+	}
+}
+
+extension MDB_cursor {
+	// get variants
 	public borrowing func opGetBoth(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val, value valueVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -18,9 +27,6 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-	public borrowing func opGetBothRange(key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> MDB_cursor_pairtype {
-		return try opGetBothRange(returning:MDB_cursor_pairtype.self, key:keyVal, value:valueVal)
-	}
 	public borrowing func opGetBothRange(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val, value valueVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -35,9 +41,6 @@ extension MDB_cursor {
 		#endif
 
 		return (key:keyVal, value:valueVal)
-	}
-	public borrowing func opGetCurrent() throws -> MDB_cursor_pairtype {
-		return try opGetCurrent(returning:MDB_cursor_pairtype.self)
 	}
 	public borrowing func opGetCurrent(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()

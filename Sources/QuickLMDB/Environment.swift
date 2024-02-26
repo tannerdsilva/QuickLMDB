@@ -48,6 +48,8 @@ public final class Environment:Sendable {
 	}
 
 	private let _env_handle:OpaquePointer
+	
+	/// returns the primitive that LMDB uses to convey this instance
 	internal borrowing func envHandle() -> OpaquePointer { 
 		return _env_handle
 	}

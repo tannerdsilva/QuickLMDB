@@ -5,6 +5,75 @@ import RAW
 import Logging
 #endif
 
+// delete entry
+internal func MDB_cursor_delete_current_entry_static<C:MDB_cursor>(cursor:borrowing C, flags:Operation.Flags) throws {
+	#if QUICKLMDB_SHOULDLOG
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flags)"])
+	#endif
+	let result = mdb_cursor_del(cursor.cursorHandle(), flags.rawValue)
+	guard result == MDB_SUCCESS else {
+		let throwError = LMDBError(returnCode:result)
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flags)", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
+		#endif
+		throw throwError
+	}
+	#if QUICKLMDB_SHOULDLOG
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flags)"])
+	#endif
+}
+
+// contains entry
+internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout MDB_val) throws -> Bool {
+	#if QUICKLMDB_SHOULDLOG
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:)", "mdb_key_in":"\(String(describing:keyVal))"])
+	#endif
+	let result = mdb_cursor_get(cursor.cursorHandle(), &keyVal, nil, Operation.set.mdbValue)
+	switch result {
+	case MDB_SUCCESS:
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_return_code":"\(result)"])
+		#endif
+		return true
+	case MDB_NOTFOUND:
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_return_code":"\(result)"])
+		#endif
+		return false
+	default:
+		let throwError = LMDBError(returnCode:result)
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
+		#endif
+		throw throwError
+	}
+}
+
+internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout MDB_val, value valueVal:inout MDB_val) throws -> Bool {
+	#if QUICKLMDB_SHOULDLOG
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:value:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))"])
+	#endif
+	let result = mdb_cursor_get(cursor.cursorHandle(), &keyVal, &valueVal, Operation.getBoth.mdbValue)
+	switch result {
+	case MDB_SUCCESS:
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:value:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))", "mdb_return_code":"\(result)"])
+		#endif
+		return true
+	case MDB_NOTFOUND:
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:value:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))", "mdb_return_code":"\(result)"])
+		#endif
+		return false
+	default:
+		let throwError = LMDBError(returnCode:result)
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:value:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
+		#endif
+		throw throwError
+	}
+}
+
 // get entries from a cursor
 internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation) throws {
 	#if QUICKLMDB_SHOULDLOG
@@ -22,7 +91,8 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:)", "mdb_op_in":"\(operation)", "mdb_key_out": "n/a", "mdb_val_out": "n/a"])
 	#endif
 }
-// get entry (key) [logged]
+
+// get entry (key)
 internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, key keyVal:inout MDB_val) throws {
 
 	#if DEBUG
@@ -167,4 +237,23 @@ public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, l
 	#endif
 
 	return result
+}
+
+public func MDB_cursor_get_dupcount_static<C:MDB_cursor>(cursor:borrowing C) throws -> size_t {
+	#if QUICKLMDB_SHOULDLOG
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_cursor":"\(cursor)"])
+	#endif
+	var count:size_t = 0
+	let result = mdb_cursor_count(cursor.cursorHandle(), &count)
+	guard result == MDB_SUCCESS else {
+		let throwError = LMDBError(returnCode:result)
+		#if QUICKLMDB_SHOULDLOG
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_cursor":"\(cursor)", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
+		#endif
+		throw throwError
+	}
+	#if QUICKLMDB_SHOULDLOG
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)", "mdb_cursor":"\(cursor)", "mdb_return_code":"\(result)", "mdb_dupcount":"\(count)"])
+	#endif
+	return count
 }

@@ -1,8 +1,17 @@
 extension MDB_cursor {
-	// previous implementations
-	public borrowing func opPrevious() throws -> MDB_cursor_pairtype {
-		return try opPrevious(returning:MDB_cursor_pairtype.self)
+	public borrowing func opPrevious() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opPrevious(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
 	}
+	public borrowing func opPreviousDup() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opPreviousDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
+	}
+	public borrowing func opPreviousNoDup() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opPreviousNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
+	}
+}
+
+extension MDB_cursor {
+	// previous implementations
 	public borrowing func opPrevious(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -23,10 +32,7 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-	public borrowing func opPreviousDup() throws -> MDB_cursor_pairtype {
-		return try opPreviousDup(returning:MDB_cursor_pairtype.self)
-	}
-	public borrowing func opPreviousDup() throws -> (key:MDB_val, value:MDB_val) {
+	public borrowing func opPreviousDup(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
@@ -46,10 +52,7 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-	public borrowing func opPreviousNoDup() throws -> MDB_cursor_pairtype {
-		return try opPreviousNoDup(returning:MDB_cursor_pairtype.self)
-	}
-	public borrowing func opPreviousNoDup() throws -> (key:MDB_val, value:MDB_val) {
+	public borrowing func opPreviousNoDup(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
