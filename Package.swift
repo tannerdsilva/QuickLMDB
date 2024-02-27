@@ -15,7 +15,7 @@ let package = Package(
     ],
     dependencies: [
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", from:"0.9.31"),
-		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"7.0.0"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"7.1.0"),
 		.package(url:"https://github.com/apple/swift-system.git", from:"1.0.0"),
 		.package(url:"https://github.com/apple/swift-syntax.git", from:"509.0.1"),
 		.package(url:"https://github.com/apple/swift-log.git", from:"1.4.2")
@@ -24,7 +24,7 @@ let package = Package(
 		.target(
 			name: "QuickLMDB",
 			dependencies:[
-				"CLMDB", 
+				"CLMDB",
 				.product(name:"SystemPackage", package:"swift-system"),
 				.product(name:"RAW", package:"rawdog"),
 				"QuickLMDBMacros"

@@ -1,37 +1,37 @@
 extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 	public func compareEntryValues(_ dataL:borrowing MDB_cursor_dbtype.MDB_db_key_type, _ dataR:consuming MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
-		return dataL.MDB_access { lhsVal in
-			return dataR.MDB_access { rhsVal in
+		return dataL.MDB_access { (lhsVal:consuming MDB_val) in
+			return dataR.MDB_access { (rhsVal:consuming MDB_val) in
 				return compareEntryValues(lhsVal, rhsVal)
 			}
 		}
 	}
 
 	public func compareEntryKeys(_ dataL:borrowing MDB_cursor_dbtype.MDB_db_key_type, _ dataR:consuming MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
-		return dataL.MDB_access { lhsVal in
-			return dataR.MDB_access { rhsVal in
+		return dataL.MDB_access { (lhsVal:consuming MDB_val) in
+			return dataR.MDB_access { (rhsVal:consuming MDB_val) in
 				return compareEntryKeys(lhsVal, rhsVal)
 			}
 		}
 	}
 
 	public func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> Bool {
-		return try key.MDB_access { keyVal in
+		return try key.MDB_access { (keyVal:consuming MDB_val) in
 			try containsEntry(key:keyVal)
 		}
 	}
 
 	public func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool {
-		return try key.MDB_access { keyVal in
-			return try value.MDB_access { valueVal in
+		return try key.MDB_access { (keyVal:consuming MDB_val) in
+			return try value.MDB_access { (valueVal:consuming MDB_val) in
 				try containsEntry(key:keyVal, value:valueVal)
 			}
 		}
 	}
 
 	public func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws {
-		return try key.MDB_access { keyVal in
-			try value.MDB_access { valueVal in
+		return try key.MDB_access { (keyVal:consuming MDB_val) in
+			try value.MDB_access { (valueVal:consuming MDB_val) in
 				try setEntry(key:keyVal, value:valueVal, flags:flags)
 			}
 		}
@@ -39,8 +39,7 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 
 	public func opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
 		return try key.MDB_access { keyVal in
-			let getVals = try opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:keyVal)
-			return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+			return try opSetRange(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyVal)
 		}
 	}
 
@@ -51,83 +50,68 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 	}
 
 	public func opGetCurrent(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+		return try opGetCurrent(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
-
+	// public func 
 	public func opGetBoth(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
 		return try key.MDB_access { (mdbKey:consuming MDB_val) in
 			return try value.MDB_access { (mdbVal:consuming MDB_val) in
-				let rawVals = try opGetBoth(returning:(key:MDB_val, value:MDB_val).self, key:mdbKey, value:mdbVal)
-				return (key:MDB_cursor_dbtype.MDB_db_key_type(rawVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(rawVals.value)!)
+				return try opGetBoth(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:mdbKey, value:mdbVal)
 			}
 		}
 	}
-	public func opPreviousNoDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opPreviousNoDup(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opPreviousNoDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opPreviousNoDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opPreviousDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opPreviousDup(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opPreviousDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opPreviousDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opPrevious(returning: (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opPrevious(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opPrevious(returning: (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opPrevious(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opNextNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opNextNoDup(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opNextNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opNextNoDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opGetBothRange(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		return try key.MDB_access { mdbKey in
-			return try value.MDB_access { mdbVal in
-				let rawVals = try opGetBothRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbKey, value:mdbVal)
-				return (key:MDB_cursor_dbtype.MDB_db_key_type(rawVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(rawVals.value)!)
+	public func opGetBothRange(returning: (key:MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try key.MDB_access { (mdbKey:consuming MDB_val) in
+			return try value.MDB_access { (mdbVal:consuming MDB_val) in
+				return try opGetBothRange(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:mdbKey, value:mdbVal)
 			}
 		}
 	}
 
-	public func opNextDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opNextDup(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opNextDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opNextDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opNext(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opNext(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opNext(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opNext(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opLastDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opLastDup(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opLastDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opLastDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opLast(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opLast(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opLast(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opLast(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-
-	public func opFirstDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opFirstDup(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opFirstDup(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opFirstDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
-	public func opFirst(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		let getVals = try opFirst(returning:(key:MDB_val, value:MDB_val).self)
-		return (key:MDB_cursor_dbtype.MDB_db_key_type(getVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(getVals.value)!)
+	public borrowing func opFirst(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+		return try opFirst(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 	}
 
 	
-	public func opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:consuming MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+	public func opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try key.MDB_access({ mdbKey in
-			let rawVals = try opSetKey(returning:(key:MDB_val, value:MDB_val).self, key:mdbKey)
-			return (key:MDB_cursor_dbtype.MDB_db_key_type(rawVals.key)!, value:MDB_cursor_dbtype.MDB_db_val_type(rawVals.value)!)
+			return try opSetKey(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:mdbKey)
 		})
 	}
 }
