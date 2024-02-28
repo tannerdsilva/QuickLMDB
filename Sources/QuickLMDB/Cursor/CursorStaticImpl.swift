@@ -7,20 +7,23 @@ import Logging
 #endif
 
 // delete entry
-internal func MDB_cursor_delete_current_entry_static<C:MDB_cursor>(cursor:borrowing C, flags:Operation.Flags) throws {
+internal func MDB_cursor_delete_current_entry_static<C:MDB_cursor>(cursor:borrowing C, flags:consuming Operation.Flags) throws {
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flags)"])
-	#endif
+	let flagsCopy = flags
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flagsCopy)"])
+	let result = mdb_cursor_del(cursor.cursorHandle(), flagsCopy.rawValue)
+	#else
 	let result = mdb_cursor_del(cursor.cursorHandle(), flags.rawValue)
+	#endif
 	guard result == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:result)
 		#if QUICKLMDB_SHOULDLOG
-		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flags)", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flagsCopy)", "mdb_return_code":"\(result)", "_throwing":"\(throwError)"])
 		#endif
 		throw throwError
 	}
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flags)"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flagsCopy)"])
 	#endif
 }
 
@@ -76,25 +79,28 @@ internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C,
 }
 
 // get entries from a cursor
-internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation) throws {
+internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:consuming Operation) throws {
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:)", "mdb_op_in": "\(operation)", "mdb_key_in": "n/a", "mdb_val_in": "n/a"])
-	#endif
+	let copyOp = operation
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:)", "mdb_op_in": "\(copyOp)", "mdb_key_in": "n/a", "mdb_val_in": "n/a"])
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, nil, copyOp.mdbValue)
+	#else
 	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, nil, operation.mdbValue)
+	#endif
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		#if QUICKLMDB_SHOULDLOG
-		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(operation)", "mdb_key_in": "n/a", "mdb_val_in": "n/a", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(copyOp)", "mdb_key_in": "n/a", "mdb_val_in": "n/a", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
 		#endif
 		throw throwError
 	}
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:)", "mdb_op_in":"\(operation)", "mdb_key_out": "n/a", "mdb_val_out": "n/a"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:)", "mdb_op_in":"\(copyOp)", "mdb_key_out": "n/a", "mdb_val_out": "n/a"])
 	#endif
 }
 
 // get entry (key)
-internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, key keyVal:inout MDB_val) throws {
+internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:consuming Operation, key keyVal:inout MDB_val) throws {
 
 	#if DEBUG
 	// do pointer modification tracking when in debug mode. this is helpful for debugging but not something we can actually assert against, since there are some LMDB operations that do not return pointers.
@@ -102,14 +108,17 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	#endif
 
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(operation)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a"])
+	let copyOp = operation
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(copyOp)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a"])
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, nil, copyOp.mdbValue)
+	#else
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, nil, operation.mdbValue)
 	#endif
 
-	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, nil, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		#if QUICKLMDB_SHOULDLOG
-		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(operation)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in": "\(copyOp)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
 		#endif
 		throw throwError
 	}
@@ -118,30 +127,33 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	let keyModified = keyIn != keyVal
 	assert(keyModified == true, "key value was not modified so it cannot be returned")
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in":"\(operation)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "n/a", "mdb_key_in": "\(String(describing:keyIn))", "mdb_val_in": "n/a", "mdb_key_modified": "\(keyModified)", "mdb_val_modified": "n/a"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in":"\(copyOp)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "n/a", "mdb_key_in": "\(String(describing:keyIn))", "mdb_val_in": "n/a", "mdb_key_modified": "\(keyModified)", "mdb_val_modified": "n/a"])
 	#endif
 	#else
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in":"\(operation)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "n/a"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:)", "mdb_op_in":"\(copyOp)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "n/a"])
 	#endif
 	#endif
 }
 // get entry (value) [logged]
-internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, value valueVal:inout MDB_val) throws {
+internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:consuming Operation, value valueVal:inout MDB_val) throws {
 	#if DEBUG
 	// do pointer modification tracking when in debug mode. this is helpful for debugging but not something we can actually assert against, since there are some LMDB operations that do not return pointers.
 	let valueIn = valueVal
 	#endif
 	
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in": "\(operation)", "mdb_key_in":"n/a", "mdb_val_in": "\(String(describing:valueVal))"])
+	let copyOp = operation
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in": "\(copyOp)", "mdb_key_in":"n/a", "mdb_val_in": "\(String(describing:valueVal))"])
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, &valueVal, copyOp.mdbValue)
+	#else
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, &valueVal, operation.mdbValue)
 	#endif
 
-	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), nil, &valueVal, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		#if QUICKLMDB_SHOULDLOG
-		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in": "\(operation)", "mdb_key_in":"n/a", "mdb_val_in": "\(String(describing:valueVal))", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in": "\(copyOp)", "mdb_key_in":"n/a", "mdb_val_in": "\(String(describing:valueVal))", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
 		#endif
 		throw throwError
 	}
@@ -149,16 +161,16 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	let valueModified = valueIn != valueVal
 	assert(valueModified == true, "value value was not modified so it cannot be returned")
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_key_out": "n/a", "mdb_val_out": "\(String(describing:valueVal))", "mdb_key_in": "n/a", "mdb_val_in": "\(String(describing:valueIn))", "mdb_key_modified": "n/a", "mdb_val_modified": "\(valueModified)"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in":"\(copyOp)", "mdb_key_out": "n/a", "mdb_val_out": "\(String(describing:valueVal))", "mdb_key_in": "n/a", "mdb_val_in": "\(String(describing:valueIn))", "mdb_key_modified": "n/a", "mdb_val_modified": "\(valueModified)"])
 	#endif
 	#else
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_key_out": "n/a", "mdb_val_out": "\(String(describing:valueVal))"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:value:)", "mdb_op_in":"\(copyOp)", "mdb_key_out": "n/a", "mdb_val_out": "\(String(describing:valueVal))"])
 	#endif
 	#endif
 }
 // get entry (key, value)
-internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:Operation, key keyVal:inout MDB_val, value valueVal:inout MDB_val) throws {
+internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:consuming Operation, key keyVal:inout MDB_val, value valueVal:inout MDB_val) throws {
 	
 	#if DEBUG
 	// do pointer modification tracking when in debug mode. this is helpful for debugging but not something we can actually assert against, since there are some LMDB operations that do not return pointers.
@@ -167,14 +179,17 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	#endif
 
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(operation)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))"])
+	let copyOp = operation
+	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(copyOp)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))"])
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, &valueVal, copyOp.mdbValue)
+	#else
+	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, &valueVal, operation.mdbValue)
 	#endif
 
-	let cursorResult = mdb_cursor_get(cursor.cursorHandle(), &keyVal, &valueVal, operation.mdbValue)
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		#if QUICKLMDB_SHOULDLOG
-		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(operation)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
+		cursor.logger()?.error("!", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(copyOp)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_return_code": "\(cursorResult)", "_throwing": "\(throwError)"])
 		#endif
 		throw throwError
 	}
@@ -185,17 +200,17 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 	assert(keyModified == true, "key value was not modified so it cannot be returned")
 	assert(valueModified == true, "value value was not modified so it cannot be returned")
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(operation)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "\(String(describing:valueVal))", "mdb_key_in": "\(String(describing:keyIn))", "mdb_val_in": "\(String(describing:valueIn))", "mdb_key_modified": "\(keyModified)", "mdb_val_modified": "\(valueModified)"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(copyOp)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "\(String(describing:valueVal))", "mdb_key_in": "\(String(describing:keyIn))", "mdb_val_in": "\(String(describing:valueIn))", "mdb_key_modified": "\(keyModified)", "mdb_val_modified": "\(valueModified)"])
 	#endif
 	#else
 	#if QUICKLMDB_SHOULDLOG
-	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(operation)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "\(String(describing:valueVal))"])
+	cursor.logger()?.trace("<", metadata:["_":"MDB_cursor_get_entry_static(cursor:_:key:value:)", "mdb_op_in": "\(copyOp)", "mdb_key_out": "\(String(describing:keyVal))", "mdb_val_out": "\(String(describing:valueVal))"])
 	#endif
 	#endif
 }
 
 // set entries from a cursor
-public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:Operation.Flags) throws {
+public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags) throws {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_set_entry_static(_:key:value:flags:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))"])
 	#endif

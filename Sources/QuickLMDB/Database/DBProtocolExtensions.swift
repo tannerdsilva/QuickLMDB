@@ -37,6 +37,7 @@ extension MDB_db_strict {
 		}
 	}
 
+
 	public func containsEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws -> Bool {
 		try key.MDB_access({ keyVal in
 			return try value.MDB_access({ valueVal in

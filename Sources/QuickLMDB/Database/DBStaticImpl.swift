@@ -34,9 +34,9 @@ internal func MDB_db_get_entry_static<D:MDB_db>(db database:borrowing D, key key
 }
 
 // set entry (key, value)
-internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:Operation.Flags, tx:borrowing Transaction) throws {
+internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws {
 	#if QUICKLMDB_SHOULDLOG
-	database.logger()?.trace(">", metadata:["_":"MDB_db_set_entry_static(_:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:flags))", "tx_id":"\(tx.txHandle().hashValue)"])
+	database.logger()?.trace(">", metadata:["_":"MDB_db_set_entry_static(_:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:copy flags))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
 	#if DEBUG
 	assert(flags.contains(.reserve) == false, "cannot use MDB_RESERVE on non-returning MDB_db_set_entry_static")
@@ -54,20 +54,26 @@ internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key key
 	#endif
 
 	#if QUICKLMDB_SHOULDLOG
-	database.logger()?.trace("<", metadata:["_":"MDB_db_set_entry_static(_:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:flags))", "tx_id":"\(tx.txHandle().hashValue)"])
+	database.logger()?.trace("<", metadata:["_":"MDB_db_set_entry_static(_:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", /*"mdb_op_flags_in":"\(String(describing:copy flags))",*/"tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
 }
 // set entry returns value pointer [logged] [RETURNS]
-internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returning:MDB_val.Type, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:Operation.Flags, tx:borrowing Transaction) throws -> MDB_val {
+internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returning:MDB_val.Type, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws -> MDB_val {
 	
 	#if QUICKLMDB_SHOULDLOG
-	database.logger()?.trace(">", metadata:["_":"MDB_db_set_entry_static(_:returning:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:flags))", "tx_id":"\(tx.txHandle().hashValue)"])
+	let consumeFlags = flags
+	database.logger()?.trace(">", metadata:["_":"MDB_db_set_entry_static(_:returning:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:consumeFlags))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
 
 	#if DEBUG
 	let inPtr = valueVal.mv_data
 	#endif
+
+	#if QUICKLMDB_SHOULDLOG
+	let cursorResult = mdb_put(tx.txHandle(), database.dbHandle(), &keyVal, &valueVal, consumeFlags.rawValue)
+	#else
 	let cursorResult = mdb_put(tx.txHandle(), database.dbHandle(), &keyVal, &valueVal, flags.rawValue)
+	#endif
 	guard cursorResult == MDB_SUCCESS else {
 		let throwError = LMDBError(returnCode:cursorResult)
 		#if QUICKLMDB_SHOULDLOG
@@ -79,7 +85,7 @@ internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returni
 	assert(valueVal.mv_data != inPtr, "mdb_put did not rewrite the value with the pointers in the database")
 	#endif
 	#if QUICKLMDB_SHOULDLOG
-	database.logger()?.trace("<", metadata:["_":"MDB_db_set_entry_static(_:returning:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:flags))", "tx_id":"\(tx.txHandle().hashValue)"])
+	database.logger()?.trace("<", metadata:["_":"MDB_db_set_entry_static(_:returning:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:consumeFlags))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
 	return valueVal
 }
@@ -225,7 +231,7 @@ internal func MDB_db_get_flags_static<D:MDB_db>(db database:borrowing D, tx:borr
 		throw throwError
 	}
 	#if QUICKLMDB_SHOULDLOG
-	database.logger()?.trace("<", metadata:["_":"MDB_db_get_flags_static(_:tx:)", "mdb_flags_out_raw-uint32":"\(String(describing:flagsOut))"])
+	database.logger()?.trace("<", metadata:["_":"MDB_db_get_flags_static(_:tx:)", "mdb_flags_out_raw-uint32":"\(String(describing:copy flagsOut))"])
 	#endif
 	return flagsOut
 }
