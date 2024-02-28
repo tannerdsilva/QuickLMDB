@@ -71,7 +71,7 @@ public protocol MDB_db {
 	/// 	- tx: a pointer to the lmdb transaction that will be used to check for the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be found.
 	/// - returns: true if the entry exists, false if it does not.
-	borrowing func containsEntry(key:borrowing MDB_db_key_type, value:MDB_db_val_type, tx:borrowing Transaction) throws -> Bool
+	borrowing func containsEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws -> Bool
 	
 	// writing entries to the database
 	/// assign an entry to the database. flags can be used to modify the behavior of the entry assignment as needed
@@ -81,7 +81,7 @@ public protocol MDB_db {
 	/// 	- flags: the flags that will be used when assigning the entry in the database.
 	/// 	- tx: a pointer to the lmdb transaction that will be used to set the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be set. the particular set of errors that can be thrown are dependent on the database and environment flags being used, as well as the operation flags.
-	borrowing func setEntry(key:borrowing MDB_db_key_type, value:MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws
+	borrowing func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws
 
 	// remove entries from the database.
 	/// remove all entries matching a specified key from the database
@@ -97,7 +97,7 @@ public protocol MDB_db {
 	/// 	- tx: the transaction to use for the entry removal.
 	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
-	borrowing func deleteEntry(key:borrowing MDB_db_key_type, value:MDB_db_val_type, tx:borrowing Transaction) throws
+	borrowing func deleteEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws
 
 	/// remove all entries from the database
 	/// - parameters:

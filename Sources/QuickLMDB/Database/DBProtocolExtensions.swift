@@ -20,7 +20,7 @@ extension MDB_db_strict {
 		})
 	}
 
-	public func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws {
+	public func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:consuming Operation.Flags, tx:borrowing Transaction) throws {
 		switch flags.contains(.reserve) {
 		case true:
 			try key.MDB_access({ keyVal in
@@ -51,7 +51,7 @@ extension MDB_db_strict {
 		})
 	}
 
-	public func loadEntry(key:MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
+	public func loadEntry(key:borrowing MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
 		try key.MDB_access({ keyVal in 
 			return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
 		})
