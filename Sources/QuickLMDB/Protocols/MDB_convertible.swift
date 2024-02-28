@@ -1,16 +1,24 @@
-import CLMDB
+import RAW
 
-/// This typealias defines a protocol that is both encodable and decodable from the database.
-public typealias MDB_convertible = MDB_encodable & MDB_decodable
 
-/// This protocol defines how data is deserialized from the database
-public protocol MDB_decodable {
-	/// Initialize a type by copying the data from a specified `MDB_val`. Types that are initialized in this way may be freely moved and copied independently of the `Transaction` in which they were created.
-	init?(_ value:MDB_val)
+public typealias MDB_convertible = RAW_accessible & RAW_decodable & RAW_encodable
+
+extension RAW_accessible where Self:RAW_decodable, Self:RAW_encodable {
+	public borrowing func MDB_access<R>(_ aHandler:(consuming MDB_val) throws -> R) rethrows -> R {
+		try RAW_access { byteBuffer in
+			try aHandler(MDB_val(byteBuffer))
+		}
+	}
+	public borrowing func MDB_encodable_reserved_val() -> MDB_val {
+		var myVar = MDB_val()
+		RAW_encode(count:&myVar.mv_size)
+		return myVar
+	}
+	public borrowing func MDB_encodable_write(reserved:consuming MDB_val) {
+		RAW_encode(dest:reserved.mv_data.assumingMemoryBound(to: UInt8.self))
+	}
+	public init?(_ mdbVal:consuming MDB_val) {
+		self.init(RAW_decode:mdbVal.mv_data, count:mdbVal.mv_size)
+	}
 }
 
-/// This protocol defines how data is serialized into the database
-public protocol MDB_encodable {
-	/// Export a type into an `MDB_val`. The respective mutable `MDB_val` is passed into a function that is intended to handle the exported value.
-	func asMDB_val<R>(_ valFunc:(inout MDB_val) throws -> R) rethrows -> R
-}

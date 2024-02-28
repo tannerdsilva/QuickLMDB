@@ -1,92 +1,64 @@
-import CLMDB
-import Foundation
+import struct CLMDB.MDB_val
+import RAW
 
-// MARK: Static functions
+
+
 extension MDB_val {
-	/// Returns an MDB_val that represents a null value.
-	/// - Returned value is a zero-length value with a nil pointer.
-	public static func nullValue() -> MDB_val {
-		return MDB_val(mv_size:0, mv_data:nil)
-	}
-}
 
-// MARK: Hashable & Equatable
-extension MDB_val:Hashable, Equatable {
-	public func hash(into hasher: inout Hasher) {
-		hasher.combine(bytes:UnsafeRawBufferPointer(start:self.mv_data, count:self.mv_size))
+	/// returns a new MDB_val with an unspecified (garbage) pointer and a length specified as the encoded count of the given encodable type.
+	internal static func reserved<E:RAW_encodable>(RAW_encodable encodable:borrowing E) -> MDB_val {
+		var newEncodable = MDB_val()
+		encodable.RAW_encode(count:&newEncodable.mv_size)
+		return newEncodable
 	}
 	
-	public static func == (lhs: MDB_val, rhs: MDB_val) -> Bool {
-		if (lhs.mv_size == rhs.mv_size) {
-			return memcmp(lhs.mv_data, rhs.mv_data, lhs.mv_size) == 0
-		} else {
-			return false
-		}
+	internal static func uninitialized() -> MDB_val {
+		var makeVal = MDB_val()
+		makeVal.mv_size = -1
+		return makeVal
+	}
+
+	/// returns a new MDB_val with an unspecified (garbage) pointer and specified length.
+	internal static func reserved(capacity:size_t) -> MDB_val {
+		var makeVal = MDB_val()
+		makeVal.mv_size = capacity
+		return makeVal
+	}
+
+	/// initializes a new MDB_val that overlaps with the contents of an UnsafeMutableBufferPointer.
+	internal init(_ buffer:UnsafeMutableBufferPointer<UInt8>) {
+		self = MDB_val(mv_size:buffer.count, mv_data:buffer.baseAddress)
+	}
+	
+	/// initializes a new MDB_val that overlaps with the contents of the UnsafeBufferPointer.
+	internal init(_ buffer:UnsafeBufferPointer<UInt8>) {
+		self = MDB_val(mv_size:buffer.count, mv_data:UnsafeMutableRawPointer(mutating:buffer.baseAddress))
 	}
 }
 
-// MARK: ContiguousBytes
-extension MDB_val:ContiguousBytes {
-	public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
-		return try body(UnsafeRawBufferPointer(start:self.mv_data, count:self.mv_size))
-	}
-}
-
-// MARK: MDB_encodable
-extension MDB_val:MDB_encodable {
-	public func asMDB_val<R>(_ valFunc: (inout MDB_val) throws -> R) rethrows -> R {
-		var copyVal = self
-		return try valFunc(&copyVal)
-	}
-}
-
-// MARK: Sequence<UInt8>
 extension MDB_val:Sequence {
-	public struct Iterator:IteratorProtocol {
-		public typealias Element = UInt8
-		let memory:UnsafeMutablePointer<UInt8>
-		var size:size_t
-		var i:size_t = 0
-		init(_ val:MDB_val) {
-			self.memory = val.mv_data.assumingMemoryBound(to:UInt8.self)
-			self.size = val.mv_size
-		}
-		public mutating func next() -> Self.Element? {
-			if (i >= size) {
-				return nil
-			} else {
-				defer {
-					i += 1;
-				}
-				return memory[i]
-			}
-		}
-	}
 	public typealias Element = UInt8
+	public typealias Iterator = UnsafeBufferPointer<UInt8>.Iterator
 	public func makeIterator() -> Iterator {
-		return Iterator(self)
+		return UnsafeBufferPointer(start:mv_data.assumingMemoryBound(to:UInt8.self), count:mv_size).makeIterator()
 	}
 }
 
-// MARK: Collection<UInt8>
-extension MDB_val:Collection {
-	public func index(after i:size_t) -> size_t {
-		return i + 1;
+extension MDB_val:CustomDebugStringConvertible {
+	public var debugDescription:String {
+		return "[MDB_val](\(hashValue % Int(UInt16.max)){ \(mv_size)b }"
 	}
-	
-	public subscript(position:size_t) -> UInt8 {
-		get {
-			self.mv_data.assumingMemoryBound(to:UInt8.self)[position]
-		}
+}
+
+extension MDB_val:Hashable {
+	public func hash(into hasher:inout Hasher) {
+		hasher.combine(mv_size)
+		hasher.combine(mv_data)
 	}
-	
-	public var startIndex:size_t {
-		return 0
+}
+
+extension MDB_val:Equatable {
+	public static func == (lhs:MDB_val, rhs:MDB_val) -> Bool {
+		return lhs.mv_size == rhs.mv_size && lhs.mv_data == rhs.mv_data
 	}
-	
-	public var endIndex:size_t {
-		return self.mv_size
-	}
-	
-	public typealias Index = size_t
 }
