@@ -3,12 +3,15 @@ import RAW
 
 public typealias MDB_convertible = RAW_accessible & RAW_decodable & RAW_encodable
 
-extension RAW_accessible where Self:RAW_decodable, Self:RAW_encodable {
+extension RAW_accessible {
 	public borrowing func MDB_access<R>(_ aHandler:(consuming MDB_val) throws -> R) rethrows -> R {
 		try RAW_access { byteBuffer in
 			try aHandler(MDB_val(byteBuffer))
 		}
 	}
+}
+
+extension RAW_encodable {
 	public borrowing func MDB_encodable_reserved_val() -> MDB_val {
 		var myVar = MDB_val()
 		RAW_encode(count:&myVar.mv_size)
@@ -17,6 +20,9 @@ extension RAW_accessible where Self:RAW_decodable, Self:RAW_encodable {
 	public borrowing func MDB_encodable_write(reserved:consuming MDB_val) {
 		RAW_encode(dest:reserved.mv_data.assumingMemoryBound(to: UInt8.self))
 	}
+}
+
+extension RAW_decodable {
 	public init?(_ mdbVal:consuming MDB_val) {
 		self.init(RAW_decode:mdbVal.mv_data, count:mdbVal.mv_size)
 	}
