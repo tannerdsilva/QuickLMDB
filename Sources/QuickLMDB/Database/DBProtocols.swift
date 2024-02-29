@@ -5,9 +5,9 @@ import RAW
 import Logging
 #endif
 
-public protocol MDB_db_strict:MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible {}
-public protocol MDB_db_basic:MDB_db where MDB_db_key_type == MDB_val, MDB_db_val_type == MDB_val {}
-public protocol MDB_db_dupfixed:MDB_db where MDB_db_key_type:RAW_staticbuff, MDB_db_val_type:RAW_staticbuff, MDB_db_cursor_type:MDB_cursor_dupfixed {}
+public protocol MDB_db_strict:MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_key_type:MDB_comparable, MDB_db_val_type:MDB_convertible, MDB_db_cursor_type:MDB_cursor_strict {}
+public protocol MDB_db_basic:MDB_db where MDB_db_key_type == MDB_val, MDB_db_val_type == MDB_val, MDB_db_cursor_type:MDB_cursor_basic {}
+public protocol MDB_db_dupfixed:MDB_db where MDB_db_key_type:RAW_staticbuff, MDB_db_key_type:MDB_comparable, MDB_db_val_type:RAW_staticbuff, MDB_db_val_type:MDB_comparable, MDB_db_cursor_type:MDB_cursor_dupfixed {}
 
 public protocol MDB_db {
 	
@@ -56,14 +56,14 @@ public protocol MDB_db {
 	///		- tx: a pointer to the lmdb transaction that will be used to retrieve the entry.
 	/// - throws: a corresponding ``LMDBError.notFound`` if the key does not exist, or other ``LMDBError`` for more obscure circumstances.
 	///	- returns: the decoded value type.
-	borrowing func loadEntry(key:borrowing MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type
+	borrowing func loadEntry(key:MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type
 	/// check if an entry key exists in the database
 	/// - parameters:
 	/// 	- key: a pointer to the type that conveys the key to search for. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
 	/// 	- tx: a pointer to the lmdb transaction that will be used to check for the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be found.
 	/// - returns: true if an entry exists, false if it does not.
-	borrowing func containsEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws -> Bool
+	borrowing func containsEntry(key:MDB_db_key_type, tx:borrowing Transaction) throws -> Bool
 	/// check if an entry key and value exists in the database
 	/// - parameters:
 	/// 	- key: a pointer to the type that conveys the key to search for. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
@@ -71,7 +71,7 @@ public protocol MDB_db {
 	/// 	- tx: a pointer to the lmdb transaction that will be used to check for the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be found.
 	/// - returns: true if the entry exists, false if it does not.
-	borrowing func containsEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws -> Bool
+	borrowing func containsEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws -> Bool
 	
 	// writing entries to the database
 	/// assign an entry to the database. flags can be used to modify the behavior of the entry assignment as needed
@@ -81,14 +81,14 @@ public protocol MDB_db {
 	/// 	- flags: the flags that will be used when assigning the entry in the database.
 	/// 	- tx: a pointer to the lmdb transaction that will be used to set the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be set. the particular set of errors that can be thrown are dependent on the database and environment flags being used, as well as the operation flags.
-	borrowing func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws
+	borrowing func setEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws
 
 	// remove entries from the database.
 	/// remove all entries matching a specified key from the database
 	/// - parameters:
 	/// 	- key: the key that will be removed from the database.
 	/// 	- tx: the transaction to use for the entry removal.
-	borrowing func deleteEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws
+	borrowing func deleteEntry(key:MDB_db_key_type, tx:borrowing Transaction) throws
 
 	/// remove a specific key and value pairing from the database
 	/// - parameters:
@@ -97,7 +97,7 @@ public protocol MDB_db {
 	/// 	- tx: the transaction to use for the entry removal.
 	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
-	borrowing func deleteEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws
+	borrowing func deleteEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws
 
 	/// remove all entries from the database
 	/// - parameters:

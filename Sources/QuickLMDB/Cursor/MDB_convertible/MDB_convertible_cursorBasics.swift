@@ -1,4 +1,4 @@
-extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
+extension MDB_cursor where MDB_cursor_dbtype.MDB_db_key_type:MDB_convertible, MDB_cursor_dbtype.MDB_db_val_type:MDB_convertible {
 	public func compareEntryValues(_ dataL:borrowing MDB_cursor_dbtype.MDB_db_key_type, _ dataR:consuming MDB_cursor_dbtype.MDB_db_val_type) -> Int32 {
 		return dataL.MDB_access { (lhsVal:consuming MDB_val) in
 			return dataR.MDB_access { (rhsVal:consuming MDB_val) in
@@ -38,13 +38,13 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 	}
 
 	public func opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-		return try key.MDB_access { keyVal in
+		return try key.MDB_access { (keyVal:consuming MDB_val) in
 			return try opSetRange(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyVal)
 		}
 	}
 
 	public func opSet(returning:MDB_cursor_dbtype.MDB_db_val_type.Type, key: MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
-		return try key.MDB_access({ mdbKey in
+		return try key.MDB_access({ (mdbKey:consuming MDB_val) in
 			return MDB_cursor_dbtype.MDB_db_val_type(try opSet(returning:MDB_val.self, key:mdbKey))!
 		})
 	}
@@ -110,7 +110,7 @@ extension MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {
 
 	
 	public func opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-		return try key.MDB_access({ mdbKey in
+		return try key.MDB_access({ (mdbKey:consuming MDB_val) in
 			return try opSetKey(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:mdbKey)
 		})
 	}

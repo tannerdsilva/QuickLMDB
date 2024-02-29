@@ -57,7 +57,7 @@ internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key key
 	database.logger()?.trace("<", metadata:["_":"MDB_db_set_entry_static(_:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", /*"mdb_op_flags_in":"\(String(describing:copy flags))",*/"tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
 }
-// set entry returns value pointer [logged] [RETURNS]
+// set entry returns value pointer [RETURNS]
 internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returning:MDB_val.Type, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws -> MDB_val {
 	
 	#if QUICKLMDB_SHOULDLOG
@@ -234,4 +234,44 @@ internal func MDB_db_get_flags_static<D:MDB_db>(db database:borrowing D, tx:borr
 	database.logger()?.trace("<", metadata:["_":"MDB_db_get_flags_static(_:tx:)", "mdb_flags_out_raw-uint32":"\(String(describing:copy flagsOut))"])
 	#endif
 	return flagsOut
+}
+
+// compare key set
+internal func MDB_db_assign_compare_key_f<D:MDB_db>(db database:borrowing D, type assignType:MDB_comparable.Type, tx:borrowing Transaction) {
+	#if QUICKLMDB_SHOULDLOG
+	database.logger()?.trace(">", metadata:["_":"MDB_db_assign_compare_key_f(_:tx:)"])
+	#endif
+
+	let setCmpResult = mdb_set_compare(tx.txHandle(), database.dbHandle(), assignType.MDB_compare_f)
+	guard setCmpResult == MDB_SUCCESS else {
+		let throwError = LMDBError(returnCode:setCmpResult)
+		#if QUICKLMDB_SHOULDLOG
+		database.logger()?.error("!", metadata:["_":"MDB_db_assign_compare_key_f(_:tx:)", "mdb_return_code": "\(setCmpResult)", "_throwing": "\(throwError)"])
+		#endif
+		fatalError("failed to assign compare function to database")
+	}
+
+	#if QUICKLMDB_SHOULDLOG
+	database.logger()?.trace("<", metadata:["_":"MDB_db_assign_compare_key_f(_:tx:)"])
+	#endif
+}
+
+// compare data set
+internal func MDB_db_assign_compare_val_f<D:MDB_db>(db database:borrowing D, type assignType:MDB_comparable.Type, tx:borrowing Transaction) {
+	#if QUICKLMDB_SHOULDLOG
+	database.logger()?.trace(">", metadata:["_":"MDB_db_assign_compare_data_f(_:tx:)"])
+	#endif
+
+	let setCmpResult = mdb_set_dupsort(tx.txHandle(), database.dbHandle(), assignType.MDB_compare_f)
+	guard setCmpResult == MDB_SUCCESS else {
+		let throwError = LMDBError(returnCode:setCmpResult)
+		#if QUICKLMDB_SHOULDLOG
+		database.logger()?.error("!", metadata:["_":"MDB_db_assign_compare_data_f(_:tx:)", "mdb_return_code": "\(setCmpResult)", "_throwing": "\(throwError)"])
+		#endif
+		fatalError("failed to assign compare function to database")
+	}
+
+	#if QUICKLMDB_SHOULDLOG
+	database.logger()?.trace("<", metadata:["_":"MDB_db_assign_compare_data_f(_:tx:)"])
+	#endif
 }

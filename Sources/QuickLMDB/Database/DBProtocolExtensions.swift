@@ -5,7 +5,7 @@ import RAW
 import Logging
 #endif
 
-extension MDB_db_strict {
+extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible {
 	public func deleteEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws {
 		try key.MDB_access({ keyVal in
 			try value.MDB_access({ valueVal in

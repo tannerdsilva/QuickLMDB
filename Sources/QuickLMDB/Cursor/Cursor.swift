@@ -5,90 +5,10 @@ import RAW
 import Logging
 #endif
 
-// /// the protocol for type-strict cursors
-public protocol MDB_cursor_strict:MDB_cursor where MDB_cursor_dbtype:MDB_db_strict {}
 
-public protocol MDB_cursor_dupfixed:MDB_cursor where MDB_cursor_dbtype:MDB_db_dupfixed {
-	// multiple variants - theres more than meets the eye
-	borrowing func opGetMultiple(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> [MDB_cursor_dbtype.MDB_db_val_type]
-	borrowing func opNextMultiple(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> [MDB_cursor_dbtype.MDB_db_val_type]
-}
-
-public protocol MDB_cursor_basic:MDB_cursor where MDB_cursor_dbtype.MDB_db_key_type == MDB_val, MDB_cursor_dbtype.MDB_db_val_type == MDB_val {}
-
-/// the protocol for open ended data storage type
-public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:MDB_db {
-
-	associatedtype Element = (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	
-	associatedtype Iterator = DatabaseIterator<Self>
-
-	/// the database type backing this cursor
-	associatedtype MDB_cursor_dbtype:MDB_db
-	/// the transaction type that is backing this cursor
-
-	/// initialize a new cursor from a valid transaction and database handle
-	#if QUICKLMDB_SHOULDLOG
-	borrowing func logger() -> Logger?
-	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws
-	#else
-	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws
-	#endif
-	
-	/// returns the cursor handle primitive that LMDB uses to represent the cursor
-	borrowing func cursorHandle() -> OpaquePointer
-	
-	borrowing func dbHandle() -> MDB_dbi
-	
-	borrowing func txHandle() -> OpaquePointer
-	
-	// cursor operator functions
-	// first variants - are you looking for the first? you're in the right place
-	borrowing func opFirst(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opFirstDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	// last variants - skip the line and go straight to the end
-	borrowing func opLast(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opLastDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	// next variants - move forward
-	borrowing func opNext(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opNextDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opNextNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	// previous variants - take it back
-	borrowing func opPrevious(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opPreviousDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opPreviousNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	// get variants - find your footing
-	borrowing func opGetBoth(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opGetBothRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opGetCurrent(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	// set variants - make your mark
-	// (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opSet(returning:MDB_cursor_dbtype.MDB_db_val_type.Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_dbtype.MDB_db_val_type
-	borrowing func opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	borrowing func opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
-	
-	// write entry function
-	/// set an entry in the database with a specified key and value. the operation will be committed with the specified flags.
-	borrowing func setEntry(key:MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws
-
-	// checking for entries
-	borrowing func containsEntry(key:MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool
-	borrowing func containsEntry(key:MDB_cursor_dbtype.MDB_db_key_type) throws -> Bool
-
-	// delete the current entry
-	borrowing func deleteCurrentEntry(flags:Operation.Flags) throws
-
-	// comparing
-	borrowing func compareEntryKeys(_ dataL:MDB_cursor_dbtype.MDB_db_key_type, _ dataR:MDB_cursor_dbtype.MDB_db_val_type) -> Int32
-	borrowing func compareEntryValues(_ dataL:MDB_cursor_dbtype.MDB_db_key_type, _ dataR:MDB_cursor_dbtype.MDB_db_val_type) -> Int32
-	
-	// returns the number of duplicate entries in the database for this key.
-	borrowing func dupCount() throws -> size_t
-}
-
-public final class Cursor<D:MDB_db_basic>:MDB_cursor_basic {
+public final class Cursor:MDB_cursor_basic {
     
-	public typealias MDB_cursor_dbtype = D
+	public typealias MDB_cursor_dbtype = Database
 
 	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
 	private let _cursor_handle:OpaquePointer
@@ -154,61 +74,178 @@ public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence
 	}
 }
 
+extension Cursor {
+	public final class DupFixed<D:MDB_db_dupfixed>:MDB_cursor_dupfixed {
+		public borrowing func opGetMultiple(returning:[D.MDB_db_val_type].Type, key:borrowing D.MDB_db_key_type) throws -> [D.MDB_db_val_type] {
+			try key.MDB_access { (keyVal:consuming MDB_val) in
+				var valueVal = MDB_val.uninitialized()
 
-public final class Strict<D:MDB_db_strict>:MDB_cursor_strict {
+				#if DEBUG
+				let keyPtr = keyVal.mv_data
+				let valuePtr = valueVal.mv_data
+				#endif
 
-	public typealias MDB_cursor_dbtype = D
+				try MDB_cursor_get_entry_static(cursor:self, .getMultiple, key:&keyVal, value:&valueVal)
 
-	/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
-	private let _cursor_handle:OpaquePointer
-	public borrowing func cursorHandle() -> OpaquePointer {
-		return _cursor_handle
-	}
-	
-	/// this is the database that this cursor is associated with.
-	private let _db_handle:MDB_dbi
-	public borrowing func dbHandle() -> MDB_dbi {
-		return _db_handle
-	}
-	
-	/// pointer to the `MDB_txn` struct associated with a given instance.
-	private let _tx_handle:OpaquePointer
-	public borrowing func txHandle() -> OpaquePointer {
-		return _tx_handle
-	}
-	
-	#if QUICKLMDB_SHOULDLOG
-	private let _logger:Logger?
-	public borrowing func logger() -> Logger? {
-		return _logger
-	}
-	/// opens a new cursor instance from a given database and transaction pairing.
-	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
-		var buildCursor:OpaquePointer? = nil
-		let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
-		guard openCursorResult == MDB_SUCCESS else {
-			throw LMDBError(returnCode:openCursorResult)
+				#if DEBUG
+				assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
+				assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
+				assert(valueVal.mv_size % MemoryLayout<D.MDB_db_val_type.RAW_staticbuff_storetype>.size == 0, "value buffer must be evenly divisible by the expected size of the value type")
+				assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+				#endif
+
+				return [D.MDB_db_val_type](unsafeUninitializedCapacity:(valueVal.mv_size / MemoryLayout<D.MDB_db_val_type.RAW_staticbuff_storetype>.size), initializingWith: { buff, count in
+					var dataSeeker = UnsafeRawPointer(valueVal.mv_data)!
+					while valueVal.mv_size > 0 {
+						buff[count] = D.MDB_db_val_type(RAW_staticbuff_seeking:&dataSeeker)
+						valueVal.mv_size -= MemoryLayout<D.MDB_db_val_type.RAW_staticbuff_storetype>.size
+						count += 1
+					}
+				})
+			}
 		}
-		self._cursor_handle = buildCursor!
-		self._db_handle = db.dbHandle()
-		self._tx_handle = tx.txHandle()
-		self._logger = db.logger()
-	}
-	#else
-	public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
-		var buildCursor:OpaquePointer? = nil
-		let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
-		guard openCursorResult == MDB_SUCCESS else {
-			throw LMDBError(returnCode:openCursorResult)
+
+	    public borrowing func opNextMultiple(returning:[D.MDB_db_val_type].Type, key:borrowing D.MDB_db_key_type) throws -> [D.MDB_db_val_type] {
+	        try key.MDB_access { (keyVal:consuming MDB_val) in
+				var valueVal = MDB_val.uninitialized()
+
+				#if DEBUG
+				let keyPtr = keyVal.mv_data
+				let valuePtr = valueVal.mv_data
+				#endif
+
+				try MDB_cursor_get_entry_static(cursor:self, .nextMultiple, key:&keyVal, value:&valueVal)
+
+				#if DEBUG
+				assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
+				assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
+				assert(valueVal.mv_size % MemoryLayout<D.MDB_db_val_type.RAW_staticbuff_storetype>.size == 0, "value buffer must be evenly divisible by the expected size of the value type")
+				assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+				#endif
+
+				var dataSeeker = UnsafeRawPointer(valueVal.mv_data)!
+				return [D.MDB_db_val_type](unsafeUninitializedCapacity:(valueVal.mv_size / MemoryLayout<D.MDB_db_val_type.RAW_staticbuff_storetype>.size), initializingWith: { buff, count in
+					while valueVal.mv_size > 0 {
+						buff[count] = D.MDB_db_val_type(RAW_staticbuff_seeking:&dataSeeker)
+						valueVal.mv_size -= MemoryLayout<D.MDB_db_val_type.RAW_staticbuff_storetype>.size
+						count += 1
+					}
+				})
+			}
+	    }
+		
+		public typealias MDB_cursor_dbtype = D
+		
+		/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
+		private let _cursor_handle:OpaquePointer
+		public borrowing func cursorHandle() -> OpaquePointer {
+			return _cursor_handle
 		}
-		self._cursor_handle = buildCursor!
-		self._db_handle = db.dbHandle()
-		self._tx_handle = tx.txHandle()
+		
+		/// this is the database that this cursor is associated with.
+		private let _db_handle:MDB_dbi
+		public borrowing func dbHandle() -> MDB_dbi {
+			return _db_handle
+		}
+		
+		/// pointer to the `MDB_txn` struct associated with a given instance.
+		private let _tx_handle:OpaquePointer
+		public borrowing func txHandle() -> OpaquePointer {
+			return _tx_handle
+		}
+		
+		#if QUICKLMDB_SHOULDLOG
+		private let _logger:Logger?
+		public borrowing func logger() -> Logger? {
+			return _logger
+		}
+		/// opens a new cursor instance from a given database and transaction pairing.
+		public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
+			var buildCursor:OpaquePointer? = nil
+			let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
+			guard openCursorResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:openCursorResult)
+			}
+			self._cursor_handle = buildCursor!
+			self._db_handle = db.dbHandle()
+			self._tx_handle = tx.txHandle()
+			self._logger = db.logger()
+		}
+		#else
+		public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
+			var buildCursor:OpaquePointer? = nil
+			let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
+			guard openCursorResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:openCursorResult)
+			}
+			self._cursor_handle = buildCursor!
+			self._db_handle = db.dbHandle()
+			self._tx_handle = tx.txHandle()
+		}
+		#endif
+		
+		deinit {
+			// close the cursor
+			mdb_cursor_close(_cursor_handle)
+		}
 	}
-	#endif
+	public final class Strict<D:MDB_db_strict>:MDB_cursor_strict {
 	
-	deinit {
-		// close the cursor
-		mdb_cursor_close(_cursor_handle)
+		public typealias MDB_cursor_dbtype = D
+	
+		/// this is the pointer to the `MDB_cursor` struct associated with a given instance.
+		private let _cursor_handle:OpaquePointer
+		public borrowing func cursorHandle() -> OpaquePointer {
+			return _cursor_handle
+		}
+		
+		/// this is the database that this cursor is associated with.
+		private let _db_handle:MDB_dbi
+		public borrowing func dbHandle() -> MDB_dbi {
+			return _db_handle
+		}
+		
+		/// pointer to the `MDB_txn` struct associated with a given instance.
+		private let _tx_handle:OpaquePointer
+		public borrowing func txHandle() -> OpaquePointer {
+			return _tx_handle
+		}
+		
+		#if QUICKLMDB_SHOULDLOG
+		private let _logger:Logger?
+		public borrowing func logger() -> Logger? {
+			return _logger
+		}
+		/// opens a new cursor instance from a given database and transaction pairing.
+		public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
+			var buildCursor:OpaquePointer? = nil
+			let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
+			guard openCursorResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:openCursorResult)
+			}
+			self._cursor_handle = buildCursor!
+			self._db_handle = db.dbHandle()
+			self._tx_handle = tx.txHandle()
+			self._logger = db.logger()
+		}
+		#else
+		public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
+			var buildCursor:OpaquePointer? = nil
+			let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
+			guard openCursorResult == MDB_SUCCESS else {
+				throw LMDBError(returnCode:openCursorResult)
+			}
+			self._cursor_handle = buildCursor!
+			self._db_handle = db.dbHandle()
+			self._tx_handle = tx.txHandle()
+		}
+		#endif
+		
+		deinit {
+			// close the cursor
+			mdb_cursor_close(_cursor_handle)
+		}
 	}
+
+
 }
