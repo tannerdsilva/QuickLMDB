@@ -10,7 +10,7 @@ public struct Transaction:~Copyable {
 	
 	#if QUICKLMDB_SHOULDLOG
 	// init no parent [LOGGED]
-	internal init(env:borrowing Environment, readOnly:Bool, logger:Logger?) throws {
+	public init(env:borrowing Environment, readOnly:Bool, logger:Logger?) throws {
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
@@ -22,7 +22,7 @@ public struct Transaction:~Copyable {
 		self._tx_handle = startHandle!
 	}
 	// init with parent [LOGGED]
-	internal init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction, logger:Logger?) throws {
+	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction, logger:Logger?) throws {
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
@@ -35,7 +35,7 @@ public struct Transaction:~Copyable {
 	}
 	#else
 	// init no parent
-	internal init(env:borrowing Environment, readOnly:Bool) throws {
+	public init(env:borrowing Environment, readOnly:Bool) throws {
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
@@ -44,7 +44,7 @@ public struct Transaction:~Copyable {
 		self._tx_handle = startHandle!
 	}
 	// init with parent
-	internal init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws {
+	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws {
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
