@@ -46,7 +46,7 @@ public protocol MDB_db {
 	///		- tx: a pointer to the transaction to use for the creation of the cursor.
 	/// - throws: a corresponding ``LMDBError.notFound`` if the entry could not be found.
 	/// - returns: the newly initialized instance of the cursor type.
-	borrowing func cursor<C:MDB_cursor, R>(as:C.Type, tx:borrowing Transaction, _ handler:(consuming C) throws -> R) rethrows -> R where C.MDB_cursor_dbtype == Self
+	borrowing func cursor<R>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws -> R) rethrows -> R
 
 	// reading entries in the database
 	/// retrieve an entry from the database. if ``Database/Flags/dupSort`` is set and multiple entries exist for the specified key, the first entry will be returned

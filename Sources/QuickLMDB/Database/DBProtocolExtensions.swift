@@ -112,8 +112,8 @@ extension MDB_db {
 
 // every MDB_db will have the ability to exchange consuming MDB_val with the database at any time.
 extension MDB_db {
-	public borrowing func cursor<C:MDB_cursor, R>(as:C.Type, tx:borrowing Transaction, _ handler:(consuming C) throws -> R) rethrows -> R where C.MDB_cursor_dbtype == Self {
-		return try handler(try! C(db:self, tx:tx))
+	public borrowing func cursor<R>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws -> R) rethrows -> R {
+		return try handler(try! MDB_db_cursor_type(db:self, tx:tx))
 	}
 
 	// get entry implementations
