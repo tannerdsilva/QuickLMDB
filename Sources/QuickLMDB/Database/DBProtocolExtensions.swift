@@ -51,11 +51,11 @@ extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_conv
 //		})
 //	}
 
-//	public func loadEntry(key:borrowing MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
-//		try key.MDB_access({ keyVal in 
-//			return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
-//		})
-//	}
+	public func loadEntry(key:borrowing MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
+		try key.MDB_access({ keyVal in 
+			return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
+		})
+	}
 }
 
 extension MDB_db {
@@ -103,9 +103,9 @@ extension MDB_db {
 			return try containsEntry(key:keyVal, tx:tx)
 		})
 	}
-	public func loadEntry<K:RAW_accessible, V:RAW_decodable>(key:borrowing K, as _:V.Type, tx:borrowing Transaction) throws -> V {
+	public func loadEntry<K:RAW_accessible, V:RAW_decodable>(key:borrowing K, as _:V.Type, tx:borrowing Transaction) throws -> V? {
 		try key.MDB_access({ keyVal in 
-			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
+			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
 		})
 	}
 }
