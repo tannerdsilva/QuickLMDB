@@ -5,7 +5,7 @@ import RAW
 import Logging
 #endif
 
-public struct Database:MDB_db_basic {
+public struct Database:Sendable, MDB_db_basic {
 
     public typealias MDB_db_cursor_type = Cursor
 	
@@ -72,7 +72,7 @@ public struct Database:MDB_db_basic {
 }
 
 extension Database {
-	public struct DupFixed<K:RAW_staticbuff & MDB_convertible & MDB_comparable, V:RAW_staticbuff & MDB_convertible & MDB_comparable>:MDB_db_dupfixed {
+	public struct DupFixed<K:RAW_staticbuff & MDB_convertible & MDB_comparable, V:RAW_staticbuff & MDB_convertible & MDB_comparable>:Sendable, MDB_db_dupfixed {
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 
@@ -135,7 +135,7 @@ extension Database {
 		#endif
 	}
 
-	public struct Strict<K:MDB_convertible & MDB_comparable, V:MDB_convertible>:MDB_db_strict {
+	public struct Strict<K:MDB_convertible & MDB_comparable, V:MDB_convertible>:Sendable, MDB_db_strict {
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 

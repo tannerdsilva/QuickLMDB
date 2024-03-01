@@ -16,7 +16,7 @@ public protocol MDB_cursor_dupfixed:MDB_cursor where MDB_cursor_dbtype:MDB_db_du
 
 public protocol MDB_cursor_basic:MDB_cursor where MDB_cursor_dbtype:MDB_db_basic {}
 
-/// the protocol for open ended data storage type
+/// the core protocol for LMDB cursors, encompassing the most primitive types (MDB_val based - known as MDB_cursor_basic) all the way up to the highest level abstractions (MDB_cursor_dupfixed)
 public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:MDB_db {
 
 	associatedtype Element = (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
