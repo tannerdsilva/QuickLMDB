@@ -55,11 +55,8 @@ internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
 				switch (lhs!.pointee.mv_size, rhs!.pointee.mv_size) {
 				
 					case (0, 0):
-						#if DEBUG
-						fatalError("should not be comparing two values of zero length")
-						#endif
 						return 0
-					
+						
 					case (_, 0):
 						return Int32(lhs!.pointee.mv_size)
 						
@@ -70,7 +67,7 @@ internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
 						return Self.RAW_compare(lhs_data:lhs!.pointee.mv_data, lhs_count:lhs!.pointee.mv_size, rhs_data:rhs!.pointee.mv_data, rhs_count:rhs!.pointee.mv_size)
 						
 					default:
-						fatalError("unexpected case in MDB_compare_f")
+						return 0
 				}
 				
 			}
