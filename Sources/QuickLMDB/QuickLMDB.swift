@@ -16,14 +16,14 @@ public struct MDB_db_flags:OptionSet {
 	private static let reverseKey = Self(rawValue:UInt32(MDB_REVERSEKEY))
 	
 	/// use sorted duplicates
-	private static let dupSort = Self(rawValue:UInt32(MDB_DUPSORT))
+	internal static let dupSort = Self(rawValue:UInt32(MDB_DUPSORT))
 	
 	/// numeric keys in native byte order. The keys must all be of the same size.
 	public static let integerKey = Self(rawValue:UInt32(MDB_INTEGERKEY))
 	
 	/// duplicate items have a fixed size
 	/// - use with ``dupSort``
-	private static let dupFixed = Self(rawValue:UInt32(MDB_DUPFIXED))
+	internal static let dupFixed = Self(rawValue:UInt32(MDB_DUPFIXED))
 	
 	/// duplicate item are integers (``integerKey`` for duplicate items)
 	public static let integerDup = Self(rawValue:UInt32(MDB_INTEGERDUP))

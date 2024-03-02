@@ -104,7 +104,8 @@ extension Database {
 		/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
-		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
+			flags.update(with:.dupSort)
 			var mutateLogger = logger
 			mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
 			self._db_env = copy env
@@ -120,7 +121,8 @@ extension Database {
 			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
 		}
 		#else
-		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction) throws {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws {
+			flags.update(with:.dupSort)
 			self._db_env = copy env
 			self._db_name = name
 			var handle = MDB_dbi()
@@ -167,7 +169,8 @@ extension Database {
 		/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
-		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
+			flags.update(with:.dupFixed)
 			var mutateLogger = logger
 			mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
 			self._db_env = copy env
@@ -183,7 +186,8 @@ extension Database {
 			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
 		}
 		#else
-		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction) throws {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws {
+			flags.update(with:.dupFixed)
 			self._db_env = copy env
 			self._db_name = name
 			var handle = MDB_dbi()
@@ -198,7 +202,7 @@ extension Database {
 		#endif
 	}
 
-	public struct Strict<K:MDB_convertible, V:MDB_convertible>:Sendable, MDB_db_strict {
+	public struct Strict<K:MDB_convertible & MDB_comparable, V:MDB_convertible>:Sendable, MDB_db_strict {
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 
@@ -233,7 +237,7 @@ extension Database {
 		/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
-		public init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
+		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
 			var mutateLogger = logger
 			mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
 			self._db_env = copy env
@@ -249,6 +253,7 @@ extension Database {
 			mutateLogger?.debug("configuring...")
 			self._logger = mutateLogger
 			self._db_handle = dbHandle
+			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
 		}
 		#else
 		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction) throws {
@@ -260,6 +265,7 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = handle
+			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
 		}
 		#endif
 	}
