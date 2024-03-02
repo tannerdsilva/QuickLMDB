@@ -68,6 +68,9 @@ internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
 					
 					case (MemoryLayout<RAW_staticbuff_storetype>.size, MemoryLayout<RAW_staticbuff_storetype>.size):
 						return Self.RAW_compare(lhs_data:lhs!.pointee.mv_data, lhs_count:lhs!.pointee.mv_size, rhs_data:rhs!.pointee.mv_data, rhs_count:rhs!.pointee.mv_size)
+						
+					default:
+						fatalError("unexpected case in MDB_compare_f")
 				}
 				
 			}
