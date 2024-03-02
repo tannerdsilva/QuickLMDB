@@ -14,6 +14,8 @@ public protocol MDB_cursor_dupfixed:MDB_cursor where MDB_cursor_dbtype:MDB_db_du
 	borrowing func opNextMultiple(returning:[MDB_cursor_dbtype.MDB_db_val_type].Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> [MDB_cursor_dbtype.MDB_db_val_type]
 }
 
+public protocol MDB_cursor_dupsort:MDB_cursor where MDB_cursor_dbtype:MDB_db_dupsort {}
+
 public protocol MDB_cursor_basic:MDB_cursor where MDB_cursor_dbtype:MDB_db_basic {}
 
 /// the core protocol for LMDB cursors, encompassing the most primitive types (MDB_val based - known as MDB_cursor_basic) all the way up to the highest level abstractions (MDB_cursor_dupfixed)

@@ -72,7 +72,9 @@ public struct Database:Sendable, MDB_db_basic {
 }
 
 extension Database {
-	public struct DupFixed<K:RAW_staticbuff & MDB_convertible & MDB_comparable, V:RAW_staticbuff & MDB_convertible & MDB_comparable>:Sendable, MDB_db_dupfixed {
+	public typealias DupFixed<K:RAW_staticbuff & MDB_comparable, V:RAW_staticbuff & MDB_comparable> = DupSort<K, V>
+
+	public struct DupSort<K:RAW_staticbuff & MDB_comparable, V:RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 
@@ -135,7 +137,7 @@ extension Database {
 		#endif
 	}
 
-	public struct Strict<K:MDB_convertible & MDB_comparable, V:MDB_convertible>:Sendable, MDB_db_strict {
+	public struct Strict<K:MDB_convertible, V:MDB_convertible>:Sendable, MDB_db_strict {
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 
@@ -186,7 +188,6 @@ extension Database {
 			mutateLogger?.debug("configuring...")
 			self._logger = mutateLogger
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
 		}
 		#else
 		public init(env:borrowing Environment, name:String?, flags:borrowing MDB_db_flags, tx:borrowing Transaction) throws {
@@ -198,7 +199,6 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = handle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
 		}
 		#endif
 	}
