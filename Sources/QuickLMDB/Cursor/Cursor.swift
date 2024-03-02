@@ -31,7 +31,12 @@ public struct DatabaseDupIterator<CursorType:MDB_cursor>:IteratorProtocol, Seque
 	/// returns the next database entry to be consumed in the sequence.
 	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
 		if firstKey == nil {
-			return try? cursor.opNextDup(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
+			do {
+				try cursor.opNextDup()
+				return try! cursor.opGetCurrent(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
+			} catch {
+				return nil
+			}
 		} else {
 			defer {
 				firstKey = nil
@@ -57,12 +62,17 @@ public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence
 				first = false
 				do {
 					try cursor.opFirst()
-					return try? cursor.opGetCurrent(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
+					return try! cursor.opGetCurrent(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
 				} catch {
 					return nil
 				}
 			case false:
-				return try? cursor.opNext(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
+				do {
+					try cursor.opNext()
+					return try! cursor.opGetCurrent(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self)
+				} catch {
+					return nil
+				}
 		}
 	}
 }
