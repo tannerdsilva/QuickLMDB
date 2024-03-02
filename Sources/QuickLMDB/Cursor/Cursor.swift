@@ -72,6 +72,15 @@ extension Cursor {
 		public typealias MDB_cursor_dbtype = D
 		
 	}
+	
+	@MDB_cursor_basics()
+	// @MDB_cursor_dupfixed()
+	@MDB_cursor_RAW_access_members() 
+	public final class DupSort<D:MDB_db_dupsort>:MDB_cursor_dupsort {
+		
+		public typealias MDB_cursor_dbtype = D
+		
+	}
 
 	@MDB_cursor_basics()
 	@MDB_cursor_RAW_access_members() // this is needed so that members that typically would be extended can be implemented as borrowing. when the same code is applied as an extension, the compiler does not allow the functions to be `borrowing`. hence, this macro.

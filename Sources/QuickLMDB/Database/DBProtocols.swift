@@ -10,7 +10,7 @@ public protocol MDB_db_basic:MDB_db where MDB_db_key_type == MDB_val, MDB_db_val
 // defines a database of strict key and value types
 public protocol MDB_db_strict:MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible, MDB_db_cursor_type:MDB_cursor_strict {}
 // defines a database where the key and value type have explicit ordering
-public protocol MDB_db_dupsort:MDB_db_strict where MDB_db_key_type:MDB_comparable, MDB_db_val_type:MDB_comparable, MDB_db_cursor_type:MDB_cursor_dupsort {}
+public protocol MDB_db_dupsort:MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible, MDB_db_key_type:MDB_comparable, MDB_db_val_type:MDB_comparable, MDB_db_cursor_type:MDB_cursor_dupsort {}
 // defines a database where the key and value type are fixed size
 public protocol MDB_db_dupfixed:MDB_db where MDB_db_key_type:RAW_staticbuff, MDB_db_key_type:MDB_comparable, MDB_db_val_type:RAW_staticbuff, MDB_db_val_type:MDB_comparable, MDB_db_cursor_type:MDB_cursor_dupfixed {}
 
