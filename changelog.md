@@ -1,5 +1,7 @@
 # 2.0.0
 
+- Foundation-free implementation.
+
 - Introduction of ``changelog.md`` to document the changes to this library over time.
 
 - Eliminates all default implementations for serialization. Each application of this library must define their own conformances to serializing data.

@@ -5,7 +5,7 @@ import RAW
 import Logging
 #endif
 
-public protocol MDB_db_strict:MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_key_type:MDB_comparable, MDB_db_val_type:MDB_convertible, MDB_db_cursor_type:MDB_cursor_strict {}
+public protocol MDB_db_strict:MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible, MDB_db_cursor_type:MDB_cursor_strict {}
 public protocol MDB_db_basic:MDB_db where MDB_db_key_type == MDB_val, MDB_db_val_type == MDB_val, MDB_db_cursor_type:MDB_cursor_basic {}
 public protocol MDB_db_dupfixed:MDB_db where MDB_db_key_type:RAW_staticbuff, MDB_db_key_type:MDB_comparable, MDB_db_val_type:RAW_staticbuff, MDB_db_val_type:MDB_comparable, MDB_db_cursor_type:MDB_cursor_dupfixed {}
 

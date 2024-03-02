@@ -13,24 +13,24 @@ public struct MDB_db_flags:OptionSet {
 	public init(rawValue:UInt32) { self.rawValue = rawValue }
 
 	/// use reverse string keys
-	public static let reverseKey = Self(rawValue:UInt32(MDB_REVERSEKEY))
+	private static let reverseKey = Self(rawValue:UInt32(MDB_REVERSEKEY))
 	
 	/// use sorted duplicates
-	public static let dupSort = Self(rawValue:UInt32(MDB_DUPSORT))
+	private static let dupSort = Self(rawValue:UInt32(MDB_DUPSORT))
 	
 	/// numeric keys in native byte order. The keys must all be of the same size.
 	public static let integerKey = Self(rawValue:UInt32(MDB_INTEGERKEY))
 	
 	/// duplicate items have a fixed size
 	/// - use with ``dupSort``
-	public static let dupFixed = Self(rawValue:UInt32(MDB_DUPFIXED))
+	private static let dupFixed = Self(rawValue:UInt32(MDB_DUPFIXED))
 	
 	/// duplicate item are integers (``integerKey`` for duplicate items)
 	public static let integerDup = Self(rawValue:UInt32(MDB_INTEGERDUP))
 	
 	/// use reverse string duplicate keys
 	/// - use with ``QuickLMDB/Database``
-	public static let reverseDup = Self(rawValue:UInt32(MDB_REVERSEDUP))
+	private static let reverseDup = Self(rawValue:UInt32(MDB_REVERSEDUP))
 	
 	/// create the database if it does not already exist
 	public static let create = Self(rawValue:UInt32(MDB_CREATE))

@@ -4,33 +4,31 @@ import PackageDescription
 import CompilerPluginSupport
 
 let package = Package(
-    name: "QuickLMDB",
-	platforms: [
+    name:"QuickLMDB",
+	platforms:[
 		.macOS(.v10_15)
 	],
-    products: [
+    products:[
         .library(
             name: "QuickLMDB",
-            targets: ["QuickLMDB"]),
+            targets: ["QuickLMDB"]
+        ),
     ],
-    dependencies: [
+    dependencies:[
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", from:"0.9.31"),
 		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"7.1.0"),
 		.package(url:"https://github.com/apple/swift-system.git", from:"1.0.0"),
 		.package(url:"https://github.com/apple/swift-syntax.git", from:"509.0.1"),
-		.package(url:"https://github.com/apple/swift-log.git", from:"1.4.2")
+		.package(url:"https://github.com/apple/swift-log.git", from:"1.0.0")
     ],
 	targets: [
 		.target(
-			name: "QuickLMDB",
+			name:"QuickLMDB",
 			dependencies:[
 				"CLMDB",
 				.product(name:"SystemPackage", package:"swift-system"),
 				.product(name:"RAW", package:"rawdog"),
 				"QuickLMDBMacros"
-			],
-			swiftSettings:[
-				.define("QUICKLMDB_MACRO_LOG")
 			]
 		),
 		.macro(
