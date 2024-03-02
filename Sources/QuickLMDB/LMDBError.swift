@@ -1,5 +1,9 @@
 import CLMDB
 
+#if os(Linux)
+import Glibc // needed on linux for error values
+#endif
+
 public enum LMDBError:Error {
 
 	//LMDB specific errors
