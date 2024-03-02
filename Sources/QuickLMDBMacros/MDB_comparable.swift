@@ -49,10 +49,10 @@ internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
 		return [DeclSyntax("""
 			\(foundModList) static let MDB_compare_f:MDB_compare_ftype = { lhs, rhs in
 				#if DEBUG
-				assert(lhs.mv_size >= 0, "expected a lhs size greater than or equal to zero")
-				assert(rhs.mv_size >= 0, "expected a rhs size greater than or equal to zero")
+				assert(lhs!.pointee.mv_size >= 0, "expected a lhs size greater than or equal to zero")
+				assert(rhs!.pointee.mv_size >= 0, "expected a rhs size greater than or equal to zero")
 				#endif
-				switch (lhs.mv_size, rhs.mv_size) {
+				switch (lhs!.pointee.mv_size, rhs!.pointee.mv_size) {
 				
 					case (0, 0):
 						#if DEBUG
@@ -61,10 +61,10 @@ internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
 						return 0
 					
 					case (_, 0):
-						return lhs.mv_size
+						return lhs!.pointee.mv_size
 						
 					case (0, _):
-						return -1 * rhs.mv_size
+						return -1 * rhs!.pointee.mv_size
 					
 					case (MemoryLayout<RAW_staticbuff_storetype>.size, MemoryLayout<RAW_staticbuff_storetype>.size):
 						return Self.RAW_compare(lhs_data:lhs!.pointee.mv_data, lhs_count:lhs!.pointee.mv_size, rhs_data:rhs!.pointee.mv_data, rhs_count:rhs!.pointee.mv_size)
