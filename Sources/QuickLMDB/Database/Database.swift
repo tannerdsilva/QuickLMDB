@@ -171,6 +171,7 @@ extension Database {
 		///		- tx: a pointer to the transaction that will be used to open the database.
 		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction, logger:Logger? = nil) throws {
 			flags.update(with:.dupFixed)
+			flags.update(with:.dupSort)
 			var mutateLogger = logger
 			mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
 			self._db_env = copy env
@@ -188,6 +189,7 @@ extension Database {
 		#else
 		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws {
 			flags.update(with:.dupFixed)
+			flags.update(with:.dupSort)
 			self._db_env = copy env
 			self._db_name = name
 			var handle = MDB_dbi()
