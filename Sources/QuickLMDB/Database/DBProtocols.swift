@@ -31,7 +31,7 @@ public protocol MDB_db {
 	/// - parameters:
 	/// 	- env: a pointer to the environment that the database
 	/// 	- name: the name of the database to 
-	init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction, logger:Logger?) throws
+	init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws
 	#else
 	/// create a new database from the specified environment
 	init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws

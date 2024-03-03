@@ -58,7 +58,10 @@ public final class Environment:Sendable {
 
 	/// create a new environment given the specified path and flags.
 	#if QUICKLMDB_SHOULDLOG
-	internal let logger:Logger?
+	private let _logger:Logger?
+	public borrowing func logger() -> Logger? {
+		return _logger
+	}
 	public init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, logger loggerIn:Logger? = nil) throws {
 		var loggerMutate = loggerIn
 		loggerMutate?[metadataKey:"type"] = "env"
@@ -104,7 +107,7 @@ public final class Environment:Sendable {
 		loggerMutate?.info("init successful", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
 		self._env_handle = environmentHandle!
 		self.flags = flags
-		self.logger = loggerMutate
+		self._logger = loggerMutate
 	}
 	#else
 	public init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws {
@@ -150,7 +153,7 @@ public final class Environment:Sendable {
 	// create a new root-level transaction.
 	public borrowing func transact<R>(readOnly:Bool, _ handler:(consuming Transaction) throws -> R) rethrows -> R {
 		#if QUICKLMDB_SHOULDLOG
-		return try handler(try! Transaction(env:self, readOnly:readOnly, logger:logger))
+		return try handler(try! Transaction(env:self, readOnly:readOnly))
 		#else
 		return try handler(try! Transaction(env:self, readOnly:readOnly))
 		#endif
@@ -159,7 +162,7 @@ public final class Environment:Sendable {
 	// create a sub-transaction with a provided parent.
 	public borrowing func transact<R>(readOnly:Bool, parent:borrowing Transaction, _ handler:(consuming Transaction) throws -> R) rethrows -> R {
 		#if QUICKLMDB_SHOULDLOG
-		return try handler(try! Transaction(env:self, readOnly:readOnly, parent:parent, logger:logger))
+		return try handler(try! Transaction(env:self, readOnly:readOnly, parent:parent))
 		#else
 		return try handler(try! Transaction(env:self, readOnly:readOnly, parent:parent))
 		#endif
