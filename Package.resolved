@@ -14,8 +14,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tannerdsilva/rawdog.git",
       "state" : {
-        "revision" : "b6488d4064915a46f2d8aca752c43bc78cfdc261",
-        "version" : "7.1.0"
+        "revision" : "6ebbf0796310c70ecc2b9c933536556e0c7886d7",
+        "version" : "8.0.0"
       }
     },
     {
