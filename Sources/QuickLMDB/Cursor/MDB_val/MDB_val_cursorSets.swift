@@ -23,7 +23,7 @@ extension MDB_cursor {
 
 		#if DEBUG
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-		assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif
 
 		return valueVal
@@ -41,7 +41,7 @@ extension MDB_cursor {
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-		assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif
 
 		return (key:keyVal, value:valueVal)
@@ -59,7 +59,7 @@ extension MDB_cursor {
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-		assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif
 
 		return (key:keyVal, value:valueVal)
@@ -81,7 +81,7 @@ extension MDB_cursor {
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-		assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
@@ -99,7 +99,7 @@ extension MDB_cursor {
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-		assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
@@ -117,7 +117,7 @@ extension MDB_cursor {
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-		assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
