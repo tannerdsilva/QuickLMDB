@@ -167,6 +167,60 @@ public final class Environment:Sendable {
 		return try handler(try! Transaction(env:self, readOnly:readOnly, parent:parent))
 		#endif
 	}
+	
+	/// flush the data buffers to disk. needed for environments that are operating with ``QuickLMDB/Environment/Flags/writeMap`` or ``QuickLMDB/Environment/Flags/noSync`` enabled.
+	public func sync(force:Bool = true) throws {
+		#if QUICKLMDB_SHOULDLOG
+		logger()?.trace(">", metadata:["_func":"sync()", "type":"Environment", "sync_force":"'\(force)'"])
+		defer {
+			logger()?.trace("<", metadata:["_func":"sync()", "type":"Environment", "sync_force":"'\(force)'"])
+		}
+		#endif
+		let syncStatus = mdb_env_sync(envHandle(), (force == true ? 1 : 0))
+		guard syncStatus == 0 else {
+			#if QUICKLMDB_SHOULDLOG
+			logger()?.error("failed to sync LMDB environment", metadata:["mdb_return_code":"\(syncStatus)"])
+			#endif
+			throw LMDBError(returnCode:syncStatus)
+		}
+		#if QUICKLMDB_SHOULDLOG
+		logger()?.info("successfully synced LMDB environment with disk")
+		#endif
+	}
+	
+	@discardableResult public func readerCheck() throws -> Int32 {
+		#if QUICKLMDB_SHOULDLOG
+		logger?.trace(">", metadata:["_func":"readerCheck()"])
+		defer {
+			logger?.trace("<", metadata:["_func":"readerCheck()"])
+		}
+		#endif
+		var deadCheck:Int32 = 0
+		let clearCheck = mdb_reader_check(envHandle(), &deadCheck)
+		guard clearCheck == MDB_SUCCESS else {
+			#if QUICKLMDB_SHOULDLOG
+			logger?.error("failed to check for readers", metadata:["_func":"readerCheck()", "mdb_return_code":"\(syncStatus)"])
+			#endif
+			throw LMDBError(returnCode:clearCheck)
+		}
+		#if QUICKLMDB_SHOULDLOG
+		logger?.info("successfully checked LMDB environment for stale readers.", metadata:["_func":"readerCheck()", "dead_readers_found":"\(deadCheck)"])
+		#endif
+		return deadCheck
+	}
+
+
+	deinit {
+		// close the environment handle when all references to this instance are released
+		#if QUICKLMDB_SHOULDLOG
+		logger()?.trace("deinitializing LMDB environment instance")
+		#endif
+		mdb_env_close(envHandle())
+		#if QUICKLMDB_SHOULDLOG
+		logger()?.notice("deinitialized LMDB environment instance")
+		#endif
+	}
+
 }
 
 // public protocol MDB_env {
@@ -510,54 +564,54 @@ public final class Environment:Sendable {
 //     /// flush the data buffers to disk. Useful for Environments with ``QuickLMDB/Environment/Flags-swift.struct/writeMap`` enabled.
 //     /// - parameter force: if true, the operation forces a synchronus flush. If false, an asynchronus flush is preformed.
 //     /// - throws: this function will throw an ``LMDBError`` if the environment operation fails.
-// 	public func sync(force:Bool = true) throws {
-// 		#if QUICKLMDB_SHOULDLOG
-// 		logger?.trace("ENTER>: sync()", metadata:["sync_force":"'\(force)'"])
-// 		defer {
-// 			logger?.trace("<EXIT: sync()", metadata:["sync_force":"'\(force)'"])
-// 		}
-// 		#endif
-// 		let syncStatus = mdb_env_sync(MDB_env_handle, (force == true ? 1 : 0))
-// 		guard syncStatus == 0 else {
-// 			#if QUICKLMDB_SHOULDLOG
-// 			logger?.error("failed to sync LMDB environment", metadata:["mdb_return_code":"\(syncStatus)"])
-// 			#endif
-// 			throw LMDBError(returnCode:syncStatus)
-// 		}
-// 		#if QUICKLMDB_SHOULDLOG
-// 		logger?.info("successfully synced LMDB environment with disk")
-// 		#endif
-// 	}
+//	public func sync(force:Bool = true) throws {
+//		#if QUICKLMDB_SHOULDLOG
+//		logger?.trace("ENTER>: sync()", metadata:["sync_force":"'\(force)'"])
+//		defer {
+//			logger?.trace("<EXIT: sync()", metadata:["sync_force":"'\(force)'"])
+//		}
+//		#endif
+//		let syncStatus = mdb_env_sync(MDB_env_handle, (force == true ? 1 : 0))
+//		guard syncStatus == 0 else {
+//			#if QUICKLMDB_SHOULDLOG
+//			logger?.error("failed to sync LMDB environment", metadata:["mdb_return_code":"\(syncStatus)"])
+//			#endif
+//			throw LMDBError(returnCode:syncStatus)
+//		}
+//		#if QUICKLMDB_SHOULDLOG
+//		logger?.info("successfully synced LMDB environment with disk")
+//		#endif
+//	}
     
 //     /// checks for stale entries in the reader lock table.
 //     /// - throws: this function will throw an ``LMDBError`` if the environment operation fails.
 //     /// - returns: the number of stale slots that were cleared.
-// 	@discardableResult public func readerCheck() throws -> Int32 {
-// 		#if QUICKLMDB_SHOULDLOG
-// 		logger?.trace("ENTER>: readerCheck()")
-// 		defer {
-// 			logger?.trace("<EXIT: readerCheck()")
-// 		}
-// 		#endif
-// 		var deadCheck:Int32 = 0
-// 		let clearCheck = mdb_reader_check(MDB_env_handle, &deadCheck)
-// 		guard clearCheck == MDB_SUCCESS else {
-// 			#if QUICKLMDB_SHOULDLOG
-// 			logger?.error("failed to check for readers", metadata:["mdb_return_code":"\(syncStatus)"])
-// 			#endif
-// 			throw LMDBError(returnCode:clearCheck)
-// 		}
-// 		#if QUICKLMDB_SHOULDLOG
-// 		logger?.info("successfully checked LMDB environment for stale readers.", metadata:["dead_readers_found":"\(deadCheck)"])
-// 		#endif
-// 		return deadCheck
-// 	}
+//	@discardableResult public func readerCheck() throws -> Int32 {
+//		#if QUICKLMDB_SHOULDLOG
+//		logger?.trace("ENTER>: readerCheck()")
+//		defer {
+//			logger?.trace("<EXIT: readerCheck()")
+//		}
+//		#endif
+//		var deadCheck:Int32 = 0
+//		let clearCheck = mdb_reader_check(MDB_env_handle, &deadCheck)
+//		guard clearCheck == MDB_SUCCESS else {
+//			#if QUICKLMDB_SHOULDLOG
+//			logger?.error("failed to check for readers", metadata:["mdb_return_code":"\(syncStatus)"])
+//			#endif
+//			throw LMDBError(returnCode:clearCheck)
+//		}
+//		#if QUICKLMDB_SHOULDLOG
+//		logger?.info("successfully checked LMDB environment for stale readers.", metadata:["dead_readers_found":"\(deadCheck)"])
+//		#endif
+//		return deadCheck
+//	}
 	
-// 	deinit {
-// 		// close the environment handle when all references to this instance are released
-// 		logger?.trace("deinitializing LMDB environment instance")
-// 		mdb_env_close(MDB_env_handle)
-// 		logger?.notice("deinitialized LMDB environment instance")
-// 	}
+//	deinit {
+//		// close the environment handle when all references to this instance are released
+//		logger?.trace("deinitializing LMDB environment instance")
+//		mdb_env_close(MDB_env_handle)
+//		logger?.notice("deinitialized LMDB environment instance")
+//	}
 // }
 
