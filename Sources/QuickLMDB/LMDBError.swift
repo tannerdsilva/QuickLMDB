@@ -1,5 +1,8 @@
 import CLMDB
-import Foundation
+
+#if os(Linux)
+import Glibc // needed on linux for error values
+#endif
 
 public enum LMDBError:Error {
 
@@ -105,7 +108,7 @@ public enum LMDBError:Error {
 			case EIO: self = .ioError
 			case EACCES: self = .accessViolation
 			
-			default: self = .other(returnCode: returnCode)
+			default: self = .other(returnCode:returnCode)
 		}
 	}
 	

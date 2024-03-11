@@ -1,25 +1,50 @@
 {
-  "object": {
-    "pins": [
-      {
-        "package": "CLMDB",
-        "repositoryURL": "https://github.com/tannerdsilva/CLMDB.git",
-        "state": {
-          "branch": null,
-          "revision": "4ce5826424f8e65f395efc5b4c611479384722b1",
-          "version": "0.9.30"
-        }
-      },
-      {
-        "package": "swift-system",
-        "repositoryURL": "https:///github.com/apple/swift-system.git",
-        "state": {
-          "branch": null,
-          "revision": "836bc4557b74fe6d2660218d56e3ce96aff76574",
-          "version": "1.1.1"
-        }
+  "pins" : [
+    {
+      "identity" : "clmdb",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tannerdsilva/CLMDB.git",
+      "state" : {
+        "revision" : "30d45263c8e512b01ab073e77ebff09039bdc593",
+        "version" : "0.9.31"
       }
-    ]
-  },
-  "version": 1
+    },
+    {
+      "identity" : "rawdog",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tannerdsilva/rawdog.git",
+      "state" : {
+        "revision" : "6ebbf0796310c70ecc2b9c933536556e0c7886d7",
+        "version" : "8.0.0"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "532d8b529501fb73a2455b179e0bbb6d49b652ed",
+        "version" : "1.5.3"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-syntax.git",
+      "state" : {
+        "revision" : "43c802fb7f96e090dde015344a94b5e85779eff1",
+        "version" : "509.1.0"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https:///github.com/apple/swift-system.git",
+      "state" : {
+        "revision" : "836bc4557b74fe6d2660218d56e3ce96aff76574",
+        "version" : "1.1.1"
+      }
+    }
+  ],
+  "version" : 2
 }

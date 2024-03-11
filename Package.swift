@@ -1,32 +1,54 @@
-// swift-tools-version:5.5
-// The swift-tools-version declares the minimum version of Swift required to build this package.
+// swift-tools-version: 5.9
 
 import PackageDescription
+import CompilerPluginSupport
 
 let package = Package(
-    name: "QuickLMDB",
-    products: [
-        // Products define the executables and libraries a package produces, and make them visible to other packages.
+    name:"QuickLMDB",
+	platforms:[
+		.macOS(.v10_15)
+	],
+    products:[
         .library(
             name: "QuickLMDB",
-            targets: ["QuickLMDB"]),
+            targets: ["QuickLMDB"]
+        ),
     ],
-    dependencies: [
-        // Dependencies declare other packages that this package depends on.
-        // .package(url: /* package url */, from: "1.0.0"),
-		/*.package(name:"CLMDB", path:"../CLMDB"),
-		.package(name:"swift-system", path:"../swift-system")*/
-		.package(url:"https://github.com/tannerdsilva/CLMDB.git", .exact("0.9.30")),
-		.package(url:"https://github.com/apple/swift-system.git", .upToNextMajor(from:"1.0.0"))
+    dependencies:[
+		.package(url:"https://github.com/tannerdsilva/CLMDB.git", from:"0.9.31"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"8.0.0"),
+		.package(url:"https://github.com/apple/swift-system.git", from:"1.0.0"),
+		.package(url:"https://github.com/apple/swift-syntax.git", from:"509.0.1"),
+		.package(url:"https://github.com/apple/swift-log.git", from:"1.0.0")
     ],
-    targets: [
-        // Targets are the basic building blocks of a package. A target can define a module or a test suite.
-        // Targets can depend on other targets in this package, and on products in packages this package depends on.
-        .target(
-            name: "QuickLMDB",
-			dependencies: ["CLMDB", .product(name:"SystemPackage", package:"swift-system")]),
-        .testTarget(
-            name: "QuickLMDBTests",
-            dependencies: ["QuickLMDB"]),
-    ]
+	targets: [
+		.target(
+			name:"QuickLMDB",
+			dependencies:[
+				"CLMDB",
+				.product(name:"SystemPackage", package:"swift-system"),
+				.product(name:"RAW", package:"rawdog"),
+				"QuickLMDBMacros"
+			]
+		),
+		.macro(
+			name:"QuickLMDBMacros",
+			dependencies:[
+				.product(name:"SwiftSyntax", package:"swift-syntax"),
+				.product(name:"SwiftSyntaxMacros", package:"swift-syntax"),
+				.product(name:"SwiftOperators", package:"swift-syntax"),
+				.product(name:"SwiftParser", package:"swift-syntax"),
+				.product(name:"SwiftParserDiagnostics", package:"swift-syntax"),
+				.product(name:"SwiftCompilerPlugin", package:"swift-syntax"),
+				.product(name:"Logging", package:"swift-log")
+			],
+			swiftSettings:[
+				.define("QUICKLMDB_MACRO_LOG")
+			]	
+		),
+		.testTarget(
+			name: "QuickLMDBTests",
+			dependencies: ["QuickLMDB"]
+		),
+	]
 )

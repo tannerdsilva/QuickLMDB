@@ -1,115 +1,133 @@
 import CLMDB
 
-public class Transaction:Transactable {
+#if QUICKLMDB_SHOULDLOG
+import Logging
+#endif
 
-	/// Pointer to the `MDB_env` that an instance is associated with.
-	public let env_handle:OpaquePointer?
+public struct Transaction:~Copyable {
+	// the underlying pointer handle that LMDB uses to represent this transaction
+	private let _tx_handle:OpaquePointer
 	
-	/// Pointer to the `MDB_txn` struct associated with a given instance.
-	public var txn_handle:OpaquePointer?
-	
-	/// Indicates if a given instance is a read-only transaction.
-	public let readOnly:Bool
-	
-	internal var isOpen = true
-	
-	internal static func instantTransaction<R>(environment:OpaquePointer?, readOnly:Bool, parent:OpaquePointer?, _ handler:(Transaction) throws -> R) throws -> R {
-		let newTransaction = try Transaction(environment:environment, readOnly:readOnly, parent:parent)
-		let captureReturn:R
-		do {
-			captureReturn = try handler(newTransaction)
-		} catch let error {
-			if newTransaction.isOpen == true {
-				newTransaction.abort()
-			}
-			throw error
+	#if QUICKLMDB_SHOULDLOG
+	// init no parent [LOGGED]
+	public init(env:borrowing Environment, readOnly:Bool) throws {
+		let logger = env.logger()
+		var startHandle:OpaquePointer? = nil
+		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
+		guard createResult == 0 else {
+			let errThrown = LMDBError(returnCode:createResult)
+			logger?.error("init", metadata:["type":"tx", "mdb_return_code": "\(createResult)", "_throwing":"\(String(describing:errThrown))"])
+			throw errThrown
 		}
-		if newTransaction.isOpen == true {
-			try newTransaction.commit()
-		}
-		return captureReturn
+		logger?.debug("init", metadata:["type":"tx", "id_tx":"\(startHandle!.hashValue)", "tx_readonly":"\(readOnly)"])
+		self._tx_handle = startHandle!
 	}
-	
-	/// Creates a new transaction from an Environment and optional parent.
-	public convenience init(_ environment:Environment, readOnly:Bool, parent:Transaction? = nil) throws {
-		try self.init(environment:environment.env_handle, readOnly:readOnly, parent:parent?.txn_handle)
-	}
-	
-	/// The primary initializer for a Transaction. This is used by the other initializers and should not be called directly.
-	/// - Implements `mdb_txn_begin`
-	/// - Parameters:
-	/// 	- environment: The `MDB_env` that the transaction will be associated with.
-	/// 	- readOnly: Indicates if the transaction should be read-only.
-	/// 	- parent: An optional parent transaction. 
-	/// 		- If this is not `nil`, the transaction will be a child transaction.
-	/// 			- This is only evaluated if `readOnly` is `false`, since child transactions cannot be read-only.
-	required internal init(environment env_handle:OpaquePointer?, readOnly:Bool, parent:OpaquePointer? = nil) throws {
-		self.env_handle = env_handle
-		self.readOnly = readOnly
-		var start_handle:OpaquePointer? = nil
-		let createResult:Int32
-		if (readOnly == true) {
-			createResult = mdb_txn_begin(env_handle, nil, UInt32(MDB_RDONLY), &start_handle)
-		} else {
-			createResult = mdb_txn_begin(env_handle, parent, 0, &start_handle)
+	// init with parent [LOGGED]
+	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws {
+		var logger = env.logger()
+		var startHandle:OpaquePointer? = nil
+		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
+		guard createResult == 0 else {
+			let errThrown = LMDBError(returnCode:createResult)
+			logger?.error("init", metadata:["type":"tx", "id_tx_parent":"\(parent._tx_handle.hashValue)", "mdb_return_code": "\(createResult)", "_throwing":"\(String(describing:errThrown))"])
+			throw errThrown
 		}
+		logger?.debug("init", metadata:["type":"tx", "id_tx":"\(startHandle!.hashValue)", "id_tx_parent":"\(parent._tx_handle.hashValue)", "tx_readonly":"\(readOnly)"])
+		self._tx_handle = startHandle!
+	}
+	#else
+	// init no parent
+	public init(env:borrowing Environment, readOnly:Bool) throws {
+		var startHandle:OpaquePointer? = nil
+		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
 			throw LMDBError(returnCode:createResult)
 		}
-		self.txn_handle = start_handle
+		self._tx_handle = startHandle!
 	}
-	
-	/// Transactable conformance
-	public func transact<R>(readOnly: Bool, _ txFunc: (Transaction) throws -> R) throws -> R {
-		let newTransaction = try Transaction(environment:self.env_handle, readOnly:readOnly, parent:self.txn_handle)
-		let captureReturn:R
-		do {
-			captureReturn = try txFunc(newTransaction)
-		} catch let error {
-			if newTransaction.isOpen == true {
-				newTransaction.abort()
-			}
-			throw error
+	// init with parent
+	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws {
+		var startHandle:OpaquePointer? = nil
+		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
+		guard createResult == 0 else {
+			throw LMDBError(returnCode:createResult)
 		}
-		if newTransaction.isOpen == true {
-			try newTransaction.commit()
-		}
-		return captureReturn
+		self._tx_handle = startHandle!
 	}
+	#endif
 	
-    /// Commit all the operations of a transaction into the database.
-    /// - Throws: This function will throw an ``LMDBError`` if the commit fails.
-	public func commit() throws {
-		let commitResult = mdb_txn_commit(txn_handle)
+	#if QUICKLMDB_SHOULDLOG
+	public consuming func commit(logger _logger:Logger? = nil) throws {
+		_logger?.trace("committing...", metadata:["type":"tx", "id_tx":"\(_tx_handle.hashValue)"])
+		let commitResult = mdb_txn_commit(_tx_handle)
 		guard commitResult == 0 else {
+			_logger?.error("commitment failed", metadata:["type":"tx", "id_tx":"\(_tx_handle.hashValue)", "mdb_return_code":"\(commitResult)"])
+			discard self
 			throw LMDBError(returnCode:commitResult)
 		}
-		self.isOpen = false
+		_logger?.info("commitment successful", metadata:["type":"tx", "id_tx":"\(_tx_handle.hashValue)"])
+		discard self
 	}
-    
-    /// Resets a read-only transaction so that it may be renewed for later use.
-	public func reset() {
-		mdb_txn_reset(txn_handle)
+	#else
+	public consuming func commit() throws {
+		let commitResult = mdb_txn_commit(_tx_handle)
+		guard commitResult == 0 else {
+			discard self
+			throw LMDBError(returnCode:commitResult)
+		}
+		discard self
 	}
-    
-    /// Renews a read-only transaction that has been previously reset. This must be called before a reset transaction can be used again.
-    /// - Throws: This function will throw an ``LMDBError`` if renewing fails.
-	public func renew() throws {
-		let renewResult = mdb_txn_renew(txn_handle)
+	#endif
+
+	#if QUICKLMDB_SHOULDLOG
+	public consuming func abort(logger _logger:Logger? = nil) {
+		mdb_txn_abort(_tx_handle)
+		_logger?.info("abort successful", metadata:["type":"tx", "id_tx":"\(_tx_handle.hashValue)"])
+		discard self
+	}
+	#else
+	public consuming func abort() {
+		mdb_txn_abort(_tx_handle)
+		discard self
+	}
+	#endif
+
+	#if QUICKLMDB_SHOULDLOG
+	public borrowing func reset(logger _logger:Logger? = nil) {
+		mdb_txn_reset(_tx_handle)
+		_logger?.debug("reset successful", metadata:["type":"tx", "id_tx":"\(_tx_handle.hashValue)"])
+	}
+	#else
+	public borrowing func reset() {
+		mdb_txn_reset(_tx_handle)
+	}
+	#endif
+	
+	#if QUICKLMDB_SHOULDLOG
+	public borrowing func renew(logger _logger:Logger? = nil) throws {
+		_logger?.trace("renewing...")
+		let renewResult = mdb_txn_renew(_tx_handle)
+		guard renewResult == 0 else {
+			_logger?.error("renewal failed", metadata:["mdb_return_code":"\(renewResult)"])
+			throw LMDBError(returnCode:renewResult)
+		}
+		_logger?.debug("renewal successful")
+    }
+    #else
+	public borrowing func renew() throws {
+		let renewResult = mdb_txn_renew(_tx_handle)
 		guard renewResult == 0 else {
 			throw LMDBError(returnCode:renewResult)
 		}
     }
+    #endif
     
-    /// Abandon all operations of the transaction. Frees the transaction.
-	public func abort() {
-		mdb_txn_abort(txn_handle)
-		self.isOpen = false
-	}
-	
+    /// returns the LMDB primitive type that  
+    internal borrowing func txHandle() -> OpaquePointer {
+    	return _tx_handle
+    }
+
 	deinit {
-		if self.isOpen == true {
-			mdb_txn_abort(txn_handle)
-		}
+		mdb_txn_abort(_tx_handle)
 	}
 }
