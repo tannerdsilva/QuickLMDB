@@ -13,7 +13,7 @@ public final class Cursor:MDB_cursor_basic {
 }
 
 /// a general purpose duplicate entry iterator for databases that is dupsort configured.
-public struct DatabaseDupIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence {
+public struct DatabaseDupIterator<CursorType:MDB_db_dupsort>:IteratorProtocol, Sequence {
 	// the underlying cursor that we are using to iterate
 	private let cursor:CursorType
 	// will be true if the first entry has not been returned yet
@@ -53,7 +53,7 @@ public struct DatabaseDupIterator<CursorType:MDB_cursor>:IteratorProtocol, Seque
 }
 
 /// a general purpose entry iterator for databases using their native type.
-public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence {
+public struct DatabaseIterator<CursorType:MDB_cursor_dupsort>:IteratorProtocol, Sequence {
 	// the underlying cursor that we are using to iterate the database contents
 	private let cursor:CursorType
 	private var first:Bool
