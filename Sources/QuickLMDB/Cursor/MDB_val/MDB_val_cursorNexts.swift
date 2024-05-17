@@ -2,12 +2,12 @@ extension MDB_cursor {
 	public borrowing func opNext() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try opNext(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
 	}
-	public borrowing func opNextDup() throws -> MDB_cursor_dbtype.MDB_db_val_type {
-		return try opNextDup(returning:MDB_cursor_dbtype.MDB_db_val_type.self)
-	}
-	public borrowing func opNextNoDup() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-		return try opNextNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
-	}
+	// public borrowing func opNextDup() throws -> MDB_cursor_dbtype.MDB_db_val_type {
+	// 	return try opNextDup(returning:MDB_cursor_dbtype.MDB_db_val_type.self)
+	// }
+	// public borrowing func opNextNoDup() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+	// 	return try opNextNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
+	// }
 }
 
 extension MDB_cursor {
@@ -32,7 +32,7 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-	public borrowing func opNextDup(returning:MDB_val.Type) throws -> MDB_val {
+	/*public borrowing func opNextDup(returning:MDB_val.Type) throws -> MDB_val {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
@@ -69,7 +69,7 @@ extension MDB_cursor {
 		#endif
 
 		return (key:keyVal, value:valueVal)
-	}
+	}*/
 }
 
 extension MDB_cursor {
@@ -93,7 +93,7 @@ extension MDB_cursor {
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
 	}
-	public borrowing func opNextDup<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V) throws -> V {
+	/*public borrowing func opNextDup<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V) throws -> V {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
@@ -130,5 +130,5 @@ extension MDB_cursor {
 		#endif
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
-	}
+	}*/
 }

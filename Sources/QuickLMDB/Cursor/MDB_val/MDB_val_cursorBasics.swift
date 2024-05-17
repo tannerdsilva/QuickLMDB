@@ -1,11 +1,11 @@
 import RAW
 
-extension MDB_cursor {
-	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
-	public func makeIterator() -> DatabaseIterator<Self> {
-		return DatabaseIterator(self)
-	}
-}
+// extension MDB_cursor_strict {
+// 	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
+// 	public func makeIterator() -> DatabaseIterator<Self> {
+// 		return DatabaseIterator(self)
+// 	}
+// }
 
 extension MDB_cursor {
 	public borrowing func dupCount() throws -> RAW.size_t {
