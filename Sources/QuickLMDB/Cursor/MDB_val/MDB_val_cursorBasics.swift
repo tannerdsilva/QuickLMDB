@@ -1,12 +1,5 @@
 import RAW
 
-// extension MDB_cursor_strict {
-// 	/// traditional 'makeiterator' that allows a cursor to conform to Sequence
-// 	public func makeIterator() -> DatabaseIterator<Self> {
-// 		return DatabaseIterator(self)
-// 	}
-// }
-
 extension MDB_cursor {
 	public borrowing func dupCount() throws -> RAW.size_t {
 		return try MDB_cursor_get_dupcount_static(cursor:self)
@@ -24,7 +17,7 @@ extension MDB_cursor {
 		return try MDB_cursor_contains_entry_static(cursor:self, key:&key)
 	}
 
-	public borrowing func deleteCurrentEntry(flags:Operation.Flags) throws {
+	public borrowing func deleteCurrentEntry(flags:consuming Operation.Flags) throws {
 		return try MDB_cursor_delete_current_entry_static(cursor:self, flags:flags)
 	}
 

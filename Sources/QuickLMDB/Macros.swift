@@ -20,6 +20,9 @@ internal macro MDB_cursor_RAW_access_members() = #externalMacro(module:"QuickLMD
 @attached(member,		names:			arbitrary)
 internal macro MDB_cursor_basics() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_init_basics_impl")
 
+@attached(member, names: arbitrary)
+internal macro MDB_db_strict_impl() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_database_strict_impl")
+
 /// applies member implementations for the dupsort-based cursor functions.
 @attached(member,		names:			named(opGetMultiple(returning:key:)),
 										named(opNextMultiple(returning:key:)))

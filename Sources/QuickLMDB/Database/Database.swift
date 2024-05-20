@@ -69,9 +69,24 @@ public struct Database:Sendable, MDB_db_basic {
 		self._db_handle = dbHandle
 	}
 	#endif
+	public borrowing func setEntry<K, V>(key keyVal:borrowing K, value valueVal:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws where K:MDB_convertible, V:MDB_convertible {
+		flags.subtract(.reserve)
+		try keyVal.MDB_access({ keyVal in
+			try valueVal.MDB_access({ valueVal in
+				try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
+			})
+		})
+	}
+
+	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx: borrowing Transaction) throws -> V where K:MDB_convertible, V:MDB_convertible {
+		return try key.MDB_access({ keyVal in 
+			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
+		})
+	}
 }
 
 extension Database {
+	@MDB_db_strict_impl()
 	public struct DupSort<K:MDB_comparable & MDB_convertible, V:MDB_comparable & MDB_convertible>:Sendable, MDB_db_dupsort {
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
@@ -137,6 +152,7 @@ extension Database {
 		#endif
 	}
 
+	@MDB_db_strict_impl()
 	public struct DupFixed<KeyType:RAW_staticbuff & MDB_comparable, ValueType:RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
 		/// the key type that the database uses.
 		/// 	- must be MDB_comparable
@@ -217,7 +233,9 @@ extension Database {
 		#endif
 	}
 
+	@MDB_db_strict_impl()
 	public struct Strict<K:MDB_convertible & MDB_comparable, V:MDB_convertible>:Sendable, MDB_db_strict {
+
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 

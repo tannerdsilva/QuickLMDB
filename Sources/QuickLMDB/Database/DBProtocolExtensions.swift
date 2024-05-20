@@ -5,68 +5,50 @@ import RAW
 import Logging
 #endif
 
-extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible {
-	public func loadEntry(key:borrowing MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
-		try key.MDB_access({ keyVal in 
-			return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
-		})
-	}
-}
+// extension MDB_db where MDB_db_key_type:MDB_convertible, MDB_db_val_type:MDB_convertible {
+// 	public func loadEntry(key:borrowing MDB_db_key_type, as _:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type {
+// 		try key.MDB_access({ keyVal in 
+// 			return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
+// 		})
+// 	}
+// }
 
-extension MDB_db {
-	public func deleteEntry<K:RAW_accessible, V:RAW_accessible>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws {
-		try key.MDB_access({ keyVal in
-			try value.MDB_access({ valueVal in
-				try deleteEntry(key:keyVal, value:valueVal, tx:tx)
-			})
-		})
-	}
+// extension MDB_db {
+// 	public func deleteEntry<K:RAW_accessible, V:RAW_accessible>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws {
+// 		try key.MDB_access({ keyVal in
+// 			try value.MDB_access({ valueVal in
+// 				try deleteEntry(key:keyVal, value:valueVal, tx:tx)
+// 			})
+// 		})
+// 	}
 
-	public func deleteEntry<K:RAW_accessible>(key:borrowing K, tx:borrowing Transaction) throws {
-		try key.MDB_access({ keyVal in
-			try deleteEntry(key:keyVal, tx:tx)
-		})
-	}
+// 	public func deleteEntry<K:RAW_accessible>(key:borrowing K, tx:borrowing Transaction) throws {
+// 		try key.MDB_access({ keyVal in
+// 			try deleteEntry(key:keyVal, tx:tx)
+// 		})
+// 	}
 
-	public func setEntry<K:RAW_accessible, V:RAW_accessible & RAW_encodable>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws {
-		switch flags.contains(.reserve) {
-		case true:
-			try key.MDB_access({ keyVal in
-				try reserveEntry(key:keyVal, reservedSize:value.MDB_encodable_reserved_val(), flags:flags, tx:tx, { valVal in 
-					value.MDB_encodable_write(reserved:valVal)
-				})
-			})
-		case false:
-			try key.MDB_access({ keyVal in
-				try value.MDB_access({ valueVal in
-					try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
-				})
-			})
-		}
-	}
-
-	public func containsEntry<K:RAW_accessible, V:RAW_accessible>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws -> Bool {
-		try key.MDB_access({ keyVal in
-			return try value.MDB_access({ valueVal in
-				return try containsEntry(key:keyVal, value:valueVal, tx:tx)
-			})
-		})
-	}
-	
-	public func containsEntry<K:RAW_accessible>(key:borrowing K, tx:borrowing Transaction) throws -> Bool {
-		try key.MDB_access({ keyVal in
-			return try containsEntry(key:keyVal, tx:tx)
-		})
-	}
-	public func loadEntry<K:RAW_accessible, V:RAW_decodable>(key:borrowing K, as _:V.Type, tx:borrowing Transaction) throws -> V? {
-		try key.MDB_access({ keyVal in 
-			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
-		})
-	}
-}
+// 	public func setEntry<K:RAW_accessible, V:RAW_accessible & RAW_encodable>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws {
+// 		switch flags.contains(.reserve) {
+// 		case true:
+// 			try key.MDB_access({ keyVal in
+// 				try reserveEntry(key:keyVal, reservedSize:value.MDB_encodable_reserved_val(), flags:flags, tx:tx, { valVal in 
+// 					value.MDB_encodable_write(reserved:valVal)
+// 				})
+// 			})
+// 		case false:
+// 			try key.MDB_access({ keyVal in
+// 				try value.MDB_access({ valueVal in
+// 					try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
+// 				})
+// 			})
+// 		}
+// 	}
+// }
 
 // every MDB_db will have the ability to exchange consuming MDB_val with the database at any time.
 extension MDB_db {
+	
 	public borrowing func cursor<R>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws -> R) rethrows -> R {
 		return try handler(try! MDB_db_cursor_type(db:self, tx:tx))
 	}
@@ -117,4 +99,3 @@ extension MDB_db {
 		return MDB_db_flags(rawValue:try MDB_db_get_flags_static(db:self, tx:tx))
 	}
 }
-
