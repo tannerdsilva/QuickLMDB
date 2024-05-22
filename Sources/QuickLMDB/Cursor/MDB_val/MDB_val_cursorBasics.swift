@@ -5,7 +5,7 @@ extension MDB_cursor {
 		return try MDB_cursor_get_dupcount_static(cursor:self)
 	}
 
-	public borrowing func setEntry(key:consuming MDB_val, value:consuming MDB_val, flags:Operation.Flags) throws {
+	public borrowing func setEntry(key:consuming MDB_val, value:consuming MDB_val, flags:consuming Operation.Flags) throws {
 		return try MDB_cursor_set_entry_static(cursor:self, key:&key, value:&value, flags:flags)
 	}
 	

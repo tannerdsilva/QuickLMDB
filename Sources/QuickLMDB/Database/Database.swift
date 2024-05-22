@@ -69,23 +69,52 @@ public struct Database:Sendable, MDB_db_basic {
 		self._db_handle = dbHandle
 	}
 	#endif
-	public borrowing func setEntry<K, V>(key keyVal:borrowing K, value valueVal:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws where K:MDB_convertible, V:MDB_convertible {
-		flags.subtract(.reserve)
-		try keyVal.MDB_access({ keyVal in
-			try valueVal.MDB_access({ valueVal in
-				try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
-			})
-		})
-	}
 
 	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx: borrowing Transaction) throws -> V where K:MDB_convertible, V:MDB_convertible {
 		return try key.MDB_access({ keyVal in 
 			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
 		})
 	}
+
+	public borrowing func containsEntry<K, V>(key:borrowing K, value:consuming V, tx: borrowing Transaction) throws -> Bool where K:MDB_convertible, V:MDB_convertible {
+		return try key.MDB_access { keyVal in
+			return try value.MDB_access { valueVal in
+				return try containsEntry(key:keyVal, value:valueVal, tx:tx)
+			}
+		}
+	}
+	public borrowing func containsEntry<K>(key:borrowing K, tx: borrowing Transaction) throws -> Bool where K:MDB_convertible {
+		return try key.MDB_access { keyVal in
+			return try containsEntry(key:keyVal, tx:tx)
+		}
+	}
+
+	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws where K:MDB_convertible, V:MDB_convertible {
+		flags.subtract(.reserve)
+		return try key.MDB_access { (keyVal:consuming MDB_val) in
+			return try value.MDB_access { (valueVal:consuming MDB_val) in
+				return try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
+			}
+		}
+	}
+
+	public borrowing func deleteEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws where K:MDB_convertible, V:MDB_convertible {
+		return try key.MDB_access { keyVal in
+			return try value.MDB_access { valueVal in
+				return try deleteEntry(key:keyVal, value:valueVal, tx:tx)
+			}
+		}
+	}
+
+	public borrowing func deleteEntry<K>(key:borrowing K, tx:borrowing Transaction) throws where K:MDB_convertible {
+		return try key.MDB_access { keyVal in
+			return try deleteEntry(key:keyVal, tx:tx)
+		}
+	}
 }
 
 extension Database {
+	
 	@MDB_db_strict_impl()
 	public struct DupSort<K:MDB_comparable & MDB_convertible, V:MDB_comparable & MDB_convertible>:Sendable, MDB_db_dupsort {
 		public typealias MDB_db_key_type = K
