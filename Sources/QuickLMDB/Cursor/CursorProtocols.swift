@@ -15,6 +15,9 @@ public protocol MDB_cursor_dupfixed:MDB_cursor_dupsort where MDB_cursor_dbtype:M
 }
 
 public protocol MDB_cursor_dupsort:MDB_cursor where MDB_cursor_dbtype:MDB_db_dupsort {
+
+	// returns the number of duplicate entries in the database for this key.
+	borrowing func dupCount() throws -> size_t
 	borrowing func opFirstDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws -> MDB_cursor_dbtype.MDB_db_val_type
 	borrowing func opLastDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws -> MDB_cursor_dbtype.MDB_db_val_type
 	
@@ -87,6 +90,4 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:M
 	borrowing func compareEntryKeys(_ dataL:MDB_cursor_dbtype.MDB_db_key_type, _ dataR:MDB_cursor_dbtype.MDB_db_val_type) -> Int32
 	borrowing func compareEntryValues(_ dataL:MDB_cursor_dbtype.MDB_db_key_type, _ dataR:MDB_cursor_dbtype.MDB_db_val_type) -> Int32
 	
-	// returns the number of duplicate entries in the database for this key.
-	borrowing func dupCount() throws -> size_t
 }

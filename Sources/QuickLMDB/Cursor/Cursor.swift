@@ -77,35 +77,10 @@ public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence
 	}
 }
 
-extension MDB_cursor_dupsort {
-		public borrowing func opFirstDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
-			return try opFirstDup(transforming:MDB_val.self, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
-		}
-
-		public borrowing func opLastDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
-			return try opLastDup(transforming:MDB_val.self, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
-		}
-
-		public borrowing func opNextNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-			return try opNextNoDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
-		}
-
-		public borrowing func opNextDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
-			return try opNextDup(transforming:MDB_val.self, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
-		}
-
-		public borrowing func opPreviousDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
-			return try opPreviousDup(transforming:MDB_val.self, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
-		}
-
-		public borrowing func opPreviousNoDup(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-			return try opPreviousNoDup(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
-		}
-}
-
 extension Cursor {
 	
 	@MDB_cursor_basics()
+	@MDB_cursor_dupsort()
 	@MDB_cursor_dupfixed()
 	@MDB_cursor_RAW_access_members()	// this is needed so that members that typically would be extended can be implemented as borrowing. when the same code is applied as an extension, the compiler does not allow the functions to be `borrowing`. hence, this macro.
 	public final class DupFixed<D:MDB_db_dupfixed>:MDB_cursor_dupfixed {
@@ -113,48 +88,16 @@ extension Cursor {
 		public func makeIterator() -> DatabaseIterator<DupFixed<D>> {
 			return DatabaseIterator(self)
 		}
-
-		public borrowing func opGetBoth(returning _: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type, key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-			return try keyVal.MDB_access({ (keyMDBVal:consuming MDB_val) in
-				return try valueVal.MDB_access({ (valueMDBVal:consuming MDB_val) in
-					return try opGetBoth(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyMDBVal, value:valueMDBVal)
-				})
-			})
-		}
-
-		public borrowing func opGetBothRange(returning _: (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-			return try keyVal.MDB_access({ (keyMDBVal:consuming MDB_val) in
-				return try valueVal.MDB_access({ (valueMDBVal:consuming MDB_val) in
-					return try opGetBothRange(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyMDBVal, value:valueMDBVal)
-				})
-			})
-		}
 	}
 	
 	@MDB_cursor_basics()
-	@MDB_cursor_RAW_access_members() 
+	@MDB_cursor_RAW_access_members()
+	@MDB_cursor_dupsort()
 	public final class DupSort<D:MDB_db_dupsort>:MDB_cursor_dupsort {
 		public func makeIterator() -> DatabaseIterator<DupSort<D>> {
 			return DatabaseIterator(self)
 		}
 		public typealias MDB_cursor_dbtype = D
-		
-		
-		public borrowing func opGetBoth(returning _: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type, key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-			return try keyVal.MDB_access({ (keyMDBVal:consuming MDB_val) in
-				return try valueVal.MDB_access({ (valueMDBVal:consuming MDB_val) in
-					return try opGetBoth(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyMDBVal, value:valueMDBVal)
-				})
-			})
-		}
-
-		public borrowing func opGetBothRange(returning _: (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key keyVal:consuming MDB_cursor_dbtype.MDB_db_key_type, value valueVal:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-			return try keyVal.MDB_access({ (keyMDBVal:consuming MDB_val) in
-				return try valueVal.MDB_access({ (valueMDBVal:consuming MDB_val) in
-					return try opGetBothRange(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyMDBVal, value:valueMDBVal)
-				})
-			})
-		}
 	}
 
 	@MDB_cursor_basics()
