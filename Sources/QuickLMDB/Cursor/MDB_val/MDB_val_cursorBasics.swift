@@ -1,9 +1,13 @@
 import RAW
 
-extension MDB_cursor {
+extension MDB_cursor_dupsort {
 	/// get the current key from the database
 	public borrowing func dupCount() throws -> RAW.size_t {
 		return try MDB_cursor_get_dupcount_static(cursor:self)
+	}
+
+	public consuming func makeDupIterator(key:consuming MDB_cursor_dbtype.MDB_db_key_type) -> DatabaseDupIterator<Self> {
+		return DatabaseDupIterator(self, key:key)
 	}
 }
 

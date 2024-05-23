@@ -264,7 +264,6 @@ extension Database {
 
 	@MDB_db_strict_impl()
 	public struct Strict<K:MDB_convertible & MDB_comparable, V:MDB_convertible>:Sendable, MDB_db_strict {
-
 		public typealias MDB_db_key_type = K
 		public typealias MDB_db_val_type = V
 

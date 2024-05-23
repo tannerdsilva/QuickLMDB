@@ -17,44 +17,44 @@ public final class Cursor:MDB_cursor_basic {
 }
 
 /// a general purpose duplicate entry iterator for databases that is dupsort configured.
-// public struct DatabaseDupIterator<CursorType:MDB_cursor_dupsort>:IteratorProtocol, Sequence {
-// 	// the underlying cursor that we are using to iterate
-// 	private let cursor:CursorType
-// 	// will be true if the first entry has not been returned yet
-// 	private let focusKey:CursorType.MDB_cursor_dbtype.MDB_db_key_type
-// 	// does the cursor need to seek to the first key?
-// 	private var needsSeek:Bool = true
+public struct DatabaseDupIterator<CursorType:MDB_cursor_dupsort>:IteratorProtocol, Sequence {
+	// the underlying cursor that we are using to iterate
+	private let cursor:CursorType
+	// will be true if the first entry has not been returned yet
+	private let focusKey:CursorType.MDB_cursor_dbtype.MDB_db_key_type
+	// does the cursor need to seek to the first key?
+	private var needsSeek:Bool = true
 	
-// 	/// initialize a general purpose dupsort iterator based on the native key type for the database
-// 	/// - parameters:
-// 	/// 	- cursor: the cursor that this iterator will be representing
-// 	/// 	- key: the key that the cursor will read duplicate value entries from
-// 	internal init(_ cursor:consuming CursorType, key inputKey:consuming CursorType.MDB_cursor_dbtype.MDB_db_key_type) {
-// 		self.cursor = cursor
-// 		self.focusKey = inputKey
-// 	}
+	/// initialize a general purpose dupsort iterator based on the native key type for the database
+	/// - parameters:
+	/// 	- cursor: the cursor that this iterator will be representing
+	/// 	- key: the key that the cursor will read duplicate value entries from
+	internal init(_ cursor:consuming CursorType, key inputKey:consuming CursorType.MDB_cursor_dbtype.MDB_db_key_type) {
+		self.cursor = cursor
+		self.focusKey = inputKey
+	}
 	
-// 	/// returns the next database entry to be consumed in the sequence.
-// 	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
-// 		switch needsSeek {
-// 			case false:
-// 				do {
-// 					return (key:focusKey, value:try cursor.opNextDup(returning:CursorType.MDB_cursor_dbtype.MDB_db_val_type.self))
-// 				} catch {
-// 					return nil
-// 				}
-// 			case true:
-// 				defer {
-// 					needsSeek = false
-// 				}
-// 				do {
-// 					return try cursor.opSetKey(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self, key:focusKey)
-// 				} catch {
-// 					return nil
-// 				}
-// 		}
-// 	}
-// }
+	/// returns the next database entry to be consumed in the sequence.
+	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
+		switch needsSeek {
+			case false:
+				do {
+					return (key:focusKey, value:try cursor.opNextDup(returning:CursorType.MDB_cursor_dbtype.MDB_db_val_type.self))
+				} catch {
+					return nil
+				}
+			case true:
+				defer {
+					needsSeek = false
+				}
+				do {
+					return try cursor.opSetKey(returning:(key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type).self, key:focusKey)
+				} catch {
+					return nil
+				}
+		}
+	}
+}
 
 /// a general purpose entry iterator for databases using their native type.
 public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence {
