@@ -6,7 +6,7 @@ import SwiftParser
 
 #if QUICKLMDB_MACRO_LOG
 import Logging
-fileprivate let logger = makeDefaultLogger(label:"RAW_function_add_transaction_macro")
+fileprivate let logger = makeDefaultLogger(label:"_QUICKLMDB_INTERNAL_cursor_dupfixed_impl")
 fileprivate func makeDefaultLogger(label:String) -> Logger {
 	var logger = Logger(label:label)
 	logger.logLevel = .debug

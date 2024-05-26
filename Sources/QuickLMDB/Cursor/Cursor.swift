@@ -10,10 +10,14 @@ import Logging
 public final class Cursor:MDB_cursor_basic {
 	/// a basic cursor uses a basic database type
 	public typealias MDB_cursor_dbtype = Database
+
+	public func makeIterator() -> DatabaseIterator<Cursor> {
+		return DatabaseIterator(self)
+	}
 }
 
 /// a general purpose duplicate entry iterator for databases that is dupsort configured.
-public struct DatabaseDupIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence {
+public struct DatabaseDupIterator<CursorType:MDB_cursor_dupsort>:IteratorProtocol, Sequence {
 	// the underlying cursor that we are using to iterate
 	private let cursor:CursorType
 	// will be true if the first entry has not been returned yet
@@ -76,21 +80,32 @@ public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence
 extension Cursor {
 	
 	@MDB_cursor_basics()
+	@MDB_cursor_dupsort()
 	@MDB_cursor_dupfixed()
-	@MDB_cursor_RAW_access_members() // this is needed so that members that typically would be extended can be implemented as borrowing. when the same code is applied as an extension, the compiler does not allow the functions to be `borrowing`. hence, this macro.
+	@MDB_cursor_RAW_access_members()	// this is needed so that members that typically would be extended can be implemented as borrowing. when the same code is applied as an extension, the compiler does not allow the functions to be `borrowing`. hence, this macro.
 	public final class DupFixed<D:MDB_db_dupfixed>:MDB_cursor_dupfixed {
 		public typealias MDB_cursor_dbtype = D
+		public func makeIterator() -> DatabaseIterator<DupFixed<D>> {
+			return DatabaseIterator(self)
+		}
 	}
 	
 	@MDB_cursor_basics()
-	@MDB_cursor_RAW_access_members() 
+	@MDB_cursor_RAW_access_members()
+	@MDB_cursor_dupsort()
 	public final class DupSort<D:MDB_db_dupsort>:MDB_cursor_dupsort {
+		public func makeIterator() -> DatabaseIterator<DupSort<D>> {
+			return DatabaseIterator(self)
+		}
 		public typealias MDB_cursor_dbtype = D
 	}
 
 	@MDB_cursor_basics()
-	@MDB_cursor_RAW_access_members() // this is needed so that members that typically would be extended can be implemented as borrowing. when the same code is applied as an extension, the compiler does not allow the functions to be `borrowing`. hence, this macro.
+	@MDB_cursor_RAW_access_members()	// this is needed so that members that typically would be extended can be implemented as borrowing. when the same code is applied as an extension, the compiler does not allow the functions to be `borrowing`. hence, this macro.
 	public final class Strict<D:MDB_db_strict>:MDB_cursor_strict {
 		public typealias MDB_cursor_dbtype = D
+		public func makeIterator() -> DatabaseIterator<Strict<D>> {
+			return DatabaseIterator(self)
+		}
 	}
 }
