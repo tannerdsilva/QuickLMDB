@@ -16,7 +16,7 @@ let package = Package(
     ],
     dependencies:[
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", from:"0.9.31"),
-		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"9.0.0"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", from:"10.0.0"),
 		.package(url:"https://github.com/apple/swift-system.git", from:"1.0.0"),
 		.package(url:"https://github.com/apple/swift-syntax.git", from:"509.0.1"),
 		.package(url:"https://github.com/apple/swift-log.git", from:"1.0.0")
