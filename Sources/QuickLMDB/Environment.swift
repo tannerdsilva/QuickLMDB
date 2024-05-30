@@ -5,7 +5,7 @@ import SystemPackage
 import Logging
 #endif
 
-public final class Environment:Sendable {
+public final class Environment:@unchecked Sendable {
 	/// flags that can be used to open an environment
 	public struct Flags:OptionSet, Sendable {
 		public let rawValue:UInt32
