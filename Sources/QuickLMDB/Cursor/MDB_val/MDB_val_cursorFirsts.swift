@@ -32,18 +32,17 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-<<<<<<< HEAD
-=======
 }
 
 extension MDB_cursor_dupsort {
->>>>>>> v3-dev
+}
+
+extension MDB_cursor_dupsort {
 	public borrowing func opFirstDup(returning:MDB_val.Type) throws -> MDB_val {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
-		let keyPtr = keyVal.mv_data
 		let valuePtr = valueVal.mv_data
 		#endif
 
@@ -79,18 +78,17 @@ extension MDB_cursor {
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
 	}
-<<<<<<< HEAD
-=======
 }
 
 extension MDB_cursor_dupsort {
->>>>>>> v3-dev
+}
+
+extension MDB_cursor_dupsort {
 	public borrowing func opFirstDup<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V) throws -> V {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
-		let keyPtr = keyVal.mv_data
 		let valuePtr = valueVal.mv_data
 		#endif
 

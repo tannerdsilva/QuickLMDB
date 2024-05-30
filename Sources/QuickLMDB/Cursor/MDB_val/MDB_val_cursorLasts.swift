@@ -2,12 +2,9 @@ extension MDB_cursor {
 	public borrowing func opLast() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try opLast(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
 	}
-<<<<<<< HEAD
-=======
 }
 
 extension MDB_cursor_dupsort {
->>>>>>> v3-dev
 	public borrowing func opLastDup() throws -> MDB_cursor_dbtype.MDB_db_val_type {
 		return try opLastDup(returning:MDB_cursor_dbtype.MDB_db_val_type.self)
 	}
@@ -43,7 +40,6 @@ extension MDB_cursor_dupsort {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
-		let keyPtr = keyVal.mv_data
 		let valuePtr = valueVal.mv_data
 		#endif
 
@@ -79,18 +75,17 @@ extension MDB_cursor {
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
 	}
-<<<<<<< HEAD
-=======
 }
 
 extension MDB_cursor_dupsort {
->>>>>>> v3-dev
+}
+
+extension MDB_cursor_dupsort {
 	public borrowing func opLastDup<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V) throws -> V {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
-		let keyPtr = keyVal.mv_data
 		let valuePtr = valueVal.mv_data
 		#endif
 
