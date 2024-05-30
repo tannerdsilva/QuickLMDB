@@ -1,3 +1,11 @@
+# 3.0.0
+
+- Revised the structure of various protocols and extensions to make it less easy to pass a type into a struct Database or Cursor.
+
+- Now requires ``rawdog`` version `10.1.0` or later.
+
+- Full documentation coming soon.
+
 # 2.0.0
 
 - Foundation-free implementation.
