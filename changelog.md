@@ -1,3 +1,11 @@
+# 4.0.0
+
+- This update does not change any code in the QuickLMDB project, however, it modifies the requirements of its sister project `rawdog`, moving from `10.1.0..<11.0.0` of QuickLMDB v3 to `11.0.0...` in this v4 release.
+
+	- `rawdog` v11 is in itself a negligibly small "major release", as it is identical to the outgoing v10, only adding Sendable conformance to a few key protocols to make the framework more friendly for concurrent applications.
+
+- In light of the above, QuickLMDB 4.0.0 can be seen as a "Sendable friendly" re-release of QuickLMDB v3. This version is only being tagged as a major release to keep in line with the SemVer semantics and the breaking changes that this new Sendable requirement in `rawdog` entails.
+
 # 3.0.0
 
 - Revised the structure of various protocols and extensions to make it less easy to pass a type into a struct Database or Cursor.
