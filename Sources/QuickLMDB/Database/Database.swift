@@ -70,9 +70,9 @@ public struct Database:Sendable, MDB_db_basic {
 	}
 	#endif
 
-	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx: borrowing Transaction) throws -> V where K:MDB_convertible, V:MDB_convertible {
+	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx: borrowing Transaction) throws -> V? where K:MDB_convertible, V:MDB_convertible {
 		return try key.MDB_access({ keyVal in 
-			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
+			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
 		})
 	}
 

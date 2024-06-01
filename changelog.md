@@ -1,3 +1,7 @@
+# 5.0.0
+
+- Another relatively small "breaking change". This update restores the correct return type on `Database.loadEntry` function. Since any type may be stored in a general (non-strcit) database, the decoding of any given type may fail, hence the need for a nullable return type.
+
 # 4.0.0
 
 - This update does not change any code in the QuickLMDB project, however, it modifies the requirements of its sister project `rawdog`, moving from `10.1.0..<11.0.0` of QuickLMDB v3 to `11.0.0...` in this v4 release.
