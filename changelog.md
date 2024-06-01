@@ -1,3 +1,7 @@
+### 5.0.1
+
+- Updated PackageDescription to include rawdog v12 within the sported scope.
+
 # 5.0.0
 
 - Another relatively small "breaking change". This update restores the correct return type on `Database.loadEntry` function. Since any type may be stored in a general (non-strcit) database, the decoding of any given type may fail, hence the need for a nullable return type.
