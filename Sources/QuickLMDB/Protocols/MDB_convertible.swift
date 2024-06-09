@@ -1,6 +1,5 @@
 import RAW
 
-
 public typealias MDB_convertible = RAW_accessible & RAW_decodable & RAW_encodable
 
 extension RAW_accessible {
