@@ -4,8 +4,6 @@ import RAW
 public typealias MDB_val = CLMDB.MDB_val
 extension MDB_val:@unchecked Sendable {}
 
-typealias MDB_crypto_impl_ftype = ((UnsafePointer<MDB_val>?, UnsafeMutablePointer<MDB_val>?, UnsafePointer<MDB_val>?, Int32) -> Int32)
-
 public struct MDB_db_flags:OptionSet {
 	
 	/// the raw integer value of the flags.

@@ -38,11 +38,11 @@ public struct Database:Sendable, MDB_db_basic {
 	/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 	/// 	- flags: the flags that will be used when opening the database.
 	///		- tx: a pointer to the transaction that will be used to open the database.
-    public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws {
+    public init(env:Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws {
 		var mutateLogger = env.logger()
 		mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:MDB_db_key_type.self)), \(String(describing:MDB_db_val_ptrtype.self))>"
 		self._logger = mutateLogger
-		self._db_env = copy env
+		self._db_env = env
 		self._db_name = name_in
 		var dbHandle = MDB_dbi()
 		let openResult = mdb_dbi_open(tx.txHandle(), name_in, flags.rawValue, &dbHandle)
@@ -58,8 +58,8 @@ public struct Database:Sendable, MDB_db_basic {
 	/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 	/// 	- flags: the flags that will be used when opening the database.
 	///		- tx: a pointer to the transaction that will be used to open the database.
-	public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws {
-		self._db_env = copy env
+	public init(env:Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws {
+		self._db_env = env
 		self._db_name = name_in
 		var dbHandle = MDB_dbi()
 		let openResult = mdb_dbi_open(tx.txHandle(), name_in, flags.rawValue, &dbHandle)

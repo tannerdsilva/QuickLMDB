@@ -7,30 +7,40 @@ fileprivate var testerEnv:Environment? = nil
 
 @RAW_staticbuff(bytes:4)
 @RAW_staticbuff_fixedwidthinteger_type<UInt32>(bigEndian:true)
-//@MDB_comparable()
-struct MySortableItem:Sendable {}
+@MDB_comparable()
+struct TestKey:Sendable, ExpressibleByIntegerLiteral {}
+
+@RAW_convertible_string_type<RAW_byte>(UTF8)
+@MDB_comparable()
+struct EncodedString:Sendable, ExpressibleByStringLiteral {}
 
 final class QuickLMDBTests:XCTestCase {
-	
-
-
-	// func testMDBConvertible() throws {
-		
-	// }
-
+	static let useMapSize = 5_000_000_000
 	override class func setUp() {
 		envPath = FileManager.default.temporaryDirectory.appendingPathComponent("QuickLMDB_tests", isDirectory:true)
 		try? FileManager.default.removeItem(at:envPath!)
 		try! FileManager.default.createDirectory(at:envPath!, withIntermediateDirectories:false)
-		// testerEnv = try! Environment(path:envPath!.path, flags:[.noSync])
+		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Environment.EncryptionConfiguration(ChaChaPoly.self, key:Array("foobarlookddddddfoobarlookdddddd".utf8)), checksum:Blake2.self)
 	}
 		
-	// func testDatabaseCreateDestroy() throws {
-	// 	try testerEnv!.transact(readOnly:false) { someTrans in
-	// 		let newDB = try testerEnv!.openDatabase(named:"test_destroy_db", flags:[.create], tx:someTrans)
-	// 		try testerEnv!.deleteDatabase(newDB, tx:someTrans)
-	// 	}
-	// }
+	func test1DatabaseCreateDestroy() throws {
+		let newTransaction = try! Transaction(env:testerEnv!, readOnly:false)
+		let newDatabase = try! Database.Strict<TestKey, EncodedString>(env:testerEnv!, name:"tester_write", flags:[.create], tx:newTransaction)
+		try newDatabase.setEntry(key:5, value:"fighters", flags:[], tx:newTransaction)
+		try newDatabase.setEntry(key:700, value:"lighters", flags:[], tx:newTransaction)
+		try! newTransaction.commit()
+		try testerEnv!.sync()
+	}
+
+	func test2CloseAndReEncryt() throws {
+		testerEnv = nil
+		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:Self.useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Environment.EncryptionConfiguration(ChaChaPoly.self, key:Array("foobarlookddddddfoobarlookdddddd".utf8)), checksum:Blake2.self)
+		let newTransaction = try Transaction(env:testerEnv!, readOnly:true)
+		let newDatabase = try Database.Strict<TestKey, EncodedString>(env:testerEnv!, name:"tester_write", flags:[], tx:newTransaction)
+
+		let foo = try newDatabase.loadEntry(key:5, tx:newTransaction)
+		let bar = try newDatabase.loadEntry(key:700, tx:newTransaction)
+	}
 	
 	// func testMDBConvertible() throws {
 	// 	let isEqual:Bool = try testerEnv!.transact(readOnly:false) { someTrans in
@@ -105,7 +115,8 @@ final class QuickLMDBTests:XCTestCase {
 	// 	}
 	// 	XCTAssertEqual(compareResult, 1)
 	// }
-	// override class func tearDown() {
-	// 	try! FileManager.default.removeItem(at:envPath!)
-	// }
+	override class func tearDown() {
+		testerEnv = nil
+		try! FileManager.default.removeItem(at:envPath!)
+	}
 }

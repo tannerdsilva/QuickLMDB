@@ -10,15 +10,6 @@
       }
     },
     {
-      "identity" : "rawdog",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tannerdsilva/rawdog.git",
-      "state" : {
-        "branch" : "hacklash",
-        "revision" : "a676d6ba25d0734f8195025900b4c6e202826b88"
-      }
-    },
-    {
       "identity" : "swift-log",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
