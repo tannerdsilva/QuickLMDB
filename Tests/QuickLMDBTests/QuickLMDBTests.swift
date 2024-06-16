@@ -37,7 +37,6 @@ final class QuickLMDBTests:XCTestCase {
 		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:Self.useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Environment.EncryptionConfiguration(ChaChaPoly.self, key:Array("foobarlookddddddfoobarlookdddddd".utf8)), checksum:Blake2.self)
 		let newTransaction = try Transaction(env:testerEnv!, readOnly:true)
 		let newDatabase = try Database.Strict<TestKey, EncodedString>(env:testerEnv!, name:"tester_write", flags:[], tx:newTransaction)
-
 		let foo = try newDatabase.loadEntry(key:5, tx:newTransaction)
 		let bar = try newDatabase.loadEntry(key:700, tx:newTransaction)
 	}

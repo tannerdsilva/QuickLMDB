@@ -14,33 +14,51 @@ public protocol MDB_crypto_impl {
 }
 
 public struct ChaChaPoly:MDB_crypto_impl {
-	public static let MDB_crypto_f:MDB_crypto_impl_ftype = { (a, b, c, d) -> Int32 in
+	public static let MDB_crypto_f:MDB_crypto_impl_ftype = { (a, b, c, e) -> Int32 in
 		let keyParts = c!
 		let ec = keyParts[0]
 		let nonce = keyParts[1]
 		let ad = keyParts[2]
+		guard a!.pointee.mv_size > MemoryLayout<Tag>.size else {
+			fatalError("chachapoly encryption impl cannot handle input data smaller than the tag size")
+		}
+
+		// gonna hash a bunch of inputs for better clarity
+		var dataInputHasher:Hasher<B, [UInt8]>
+
+		// figure out what is going on with the lengths of the pages and stuff
+		let dataLength = a!.pointee.mv_size - MemoryLayout<Tag>.size
+		
+		let fcallID = UInt16.random(in:0..<UInt16.max)
+		let shouldEncrypt = e == 1
+
+		// determine what was passed as input
+		let dataBufferInput = UnsafeMutableRawBufferPointer(start:a!.pointee.mv_data, count:(a!.pointee.mv_size - MemoryLayout<Tag>.size))
+		let tagBufferInput = UnsafeMutableRawBufferPointer(start:a!.pointee.mv_data + dataLength, count:a!.pointee.mv_size - dataLength)
+		// determine what was passed as output
+		let dataBufferOutput = UnsafeMutableRawBufferPointer(start:b!.pointee.mv_data, count:b!.pointee.mv_size - MemoryLayout<Tag>.size)
+		let tagBufferOutput = UnsafeMutableRawBufferPointer(start:b!.pointee.mv_data + dataLength, count:b!.pointee.mv_size - dataLength)
+		
 		var context = RAW_chachapoly.Context(key:UnsafeBufferPointer<UInt8>(start:ec.mv_data.assumingMemoryBound(to:UInt8.self), count:ec.mv_size))
-		switch d == 1 {
+		switch e == 1 {
 			case true:
+				// encode the data
 				let endingTag:Tag
 				do {
-					endingTag = try context.encrypt(nonce:nonce.mv_data.load(as:Nonce.self), associatedData:UnsafeRawBufferPointer(start:ad.mv_data, count:ad.mv_size), inputData:UnsafeMutableRawBufferPointer(start:a!.pointee.mv_data, count:a!.pointee.mv_size), output:b!.pointee.mv_data)
+					endingTag = try context.encrypt(nonce:nonce.mv_data.load(as:Nonce.self), associatedData:UnsafeRawBufferPointer(start:ad.mv_data, count:ad.mv_size), inputData:dataBufferInput, output:b!.pointee.mv_data)
 				} catch {
-					fatalError("NOT SUPPOSED TO HAPPEN")
+					return -1
 				}
-				endingTag.RAW_encode(dest:(b!.pointee.mv_data + a!.pointee.mv_size).assumingMemoryBound(to:UInt8.self))
-				b!.pointee.mv_size = a!.pointee.mv_size + 16
+				
+				// write the output
+				endingTag.RAW_encode(dest:tagBufferOutput.baseAddress!.assumingMemoryBound(to:UInt8.self))
 			case false:
-				guard a!.pointee.mv_size > 16 else {
-					fatalError("FOO")
-				}
-				let dataBuffer = UnsafeMutableRawBufferPointer(start:a!.pointee.mv_data, count:(a!.pointee.mv_size - 16))
-				let tagStart = a!.pointee.mv_data + (a!.pointee.mv_size - 16)
-				let loadedTag = Tag(RAW_staticbuff:tagStart.assumingMemoryBound(to:UInt8.self))
+				// load the existing tag and decrypt the data
+				let endingTag:Tag = tagBufferInput.baseAddress!.load(as:Tag.self)
 				do {
-					try context.decrypt(tag:loadedTag, nonce:nonce.mv_data.load(as:Nonce.self), associatedData:UnsafeRawBufferPointer(start:ad.mv_data, count:ad.mv_size), inputData:dataBuffer, output:b!.pointee.mv_data)
+					try context.decrypt(tag:endingTag, nonce:nonce.mv_data.load(as:Nonce.self), associatedData:UnsafeRawBufferPointer(start:ad.mv_data, count:ad.mv_size), inputData:dataBufferInput, output:b!.pointee.mv_data)
 				} catch {
-					fatalError("FUCK")
+					return -1
 				}
 		}
 		return 0
@@ -54,15 +72,16 @@ public protocol MDB_checksum_impl {
 
 public struct Blake2:MDB_checksum_impl {
 	public static let MDB_sum_f:MDB_checksum_ftype = { (a, b, c) in
+		// var blakeHasher = try! RAW_blake2.Hasher<B> 
 		var newHasher:RAW_blake2.Hasher<B, UnsafeMutableRawPointer>
 		switch c {
 			case .some(let hashKey):
-				let keyBuffer = c!.pointee.mv_data.assumingMemoryBound(to:UInt8.self)
-				newHasher = try! RAW_blake2.Hasher<B, UnsafeMutableRawPointer>(key:UnsafeBufferPointer(start:keyBuffer, count:c!.pointee.mv_size), outputLength:32)
+				newHasher = try! RAW_blake2.Hasher<B, UnsafeMutableRawPointer>(key:UnsafeBufferPointer(start:c!.pointee.mv_data.assumingMemoryBound(to:UInt8.self), count:c!.pointee.mv_size), outputLength:32)
 			default:
 				newHasher = try! RAW_blake2.Hasher<B, UnsafeMutableRawPointer>(outputLength:32)
 		}
 		try! newHasher.update(UnsafeBufferPointer(start:a!.pointee.mv_data.assumingMemoryBound(to:UInt8.self), count:a!.pointee.mv_size))
-		try! newHasher.finish(into:b!)
+		try! newHasher.finish(into:b!.pointee.mv_data)
+		b!.pointee.mv_size = 32
 	}
 }
