@@ -38,13 +38,13 @@ public struct ChaChaPoly:MDB_crypto_impl {
 		// determine what was passed as output
 		let dataBufferOutput = UnsafeMutableRawBufferPointer(start:b!.pointee.mv_data, count:b!.pointee.mv_size)
 		
-		var context = RAW_chachapoly.Context(key:UnsafeRawBufferPointer(start:keyDat.mv_data.assumingMemoryBound(to:UInt8.self), count:keyDat.mv_size))
+		var context = RAW_chachapoly.Context(key:UnsafeRawBufferPointer(start:keyDat.mv_data.assumingMemoryBound(to:UInt8.self), count:keyDat.mv_size))!
 		switch e == 1 {
 			case true:
 				// encode the data
 				let endingTag:Tag
 				do {
-					endingTag = try context.encrypt(nonce:nonce.mv_data.load(as:Nonce.self), associatedData:[], inputData:[UInt8](dataBufferInput), output:b!.pointee.mv_data)
+					endingTag = try context.encrypt(nonce:nonce.mv_data.load(as:Nonce.self), associatedData:UnsafeRawBufferPointer(start:tagDat.mv_data, count:0), inputData:dataBufferInput, output:b!.pointee.mv_data)
 				} catch {
 					return -1
 				}
@@ -56,7 +56,7 @@ public struct ChaChaPoly:MDB_crypto_impl {
 				// load the existing tag and decrypt the data
 				let endingTag:Tag = tagDat.mv_data.load(as:Tag.self)
 				do {
-					try context.decrypt(tag:endingTag, nonce:nonce.mv_data.load(as:Nonce.self), associatedData:[], inputData:[UInt8](dataBufferInput), output:b!.pointee.mv_data)
+					try context.decrypt(tag:endingTag, nonce:nonce.mv_data.load(as:Nonce.self), associatedData:UnsafeRawBufferPointer(start:tagDat.mv_data, count:0), inputData:dataBufferInput, output:b!.pointee.mv_data)
 				} catch {
 					return -1
 				}
