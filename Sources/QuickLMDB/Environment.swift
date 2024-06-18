@@ -107,7 +107,7 @@ public final class Environment:@unchecked Sendable {
 			}	
 		}
 		if let checksum = checksum {
-			mdb_env_set_checksum(environmentHandle, checksum.MDB_sum_f, 32)
+			mdb_env_set_checksum(environmentHandle, checksum.MDB_sum_f, UInt32(Blake2.outputLength))
 		}
 		
 		// open the environment with the specified flags and file modes specified

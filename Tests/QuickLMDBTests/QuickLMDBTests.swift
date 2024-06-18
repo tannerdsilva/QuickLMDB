@@ -15,12 +15,13 @@ struct TestKey:Sendable, ExpressibleByIntegerLiteral {}
 struct EncodedString:Sendable, ExpressibleByStringLiteral {}
 
 final class QuickLMDBTests:XCTestCase {
+	static let encryptConfig = Environment.EncryptionConfiguration(ChaChaPoly.self, key:Array("foobarlookddddddfoobarlookdddddd".utf8))
 	static let useMapSize = 5_000_000_000
 	override class func setUp() {
-		envPath = FileManager.default.temporaryDirectory.appendingPathComponent("QuickLMDB_tests", isDirectory:true)
+		envPath = FileManager.default.temporaryDirectory.appendingPathComponent("QuickLMDB_tests\(Int.random(in:0..<512))", isDirectory:true)
 		try? FileManager.default.removeItem(at:envPath!)
 		try! FileManager.default.createDirectory(at:envPath!, withIntermediateDirectories:false)
-		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Environment.EncryptionConfiguration(ChaChaPoly.self, key:Array("foobarlookddddddfoobarlookdddddd".utf8)), checksum:Blake2.self)
+		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Self.encryptConfig, checksum:nil)
 	}
 		
 	func test1DatabaseCreateDestroy() throws {
@@ -34,11 +35,13 @@ final class QuickLMDBTests:XCTestCase {
 
 	func test2CloseAndReEncryt() throws {
 		testerEnv = nil
-		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:Self.useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Environment.EncryptionConfiguration(ChaChaPoly.self, key:Array("foobarlookddddddfoobarlookdddddd".utf8)), checksum:Blake2.self)
+		testerEnv = try! Environment(path:envPath!.path, flags:[], mapSize:Self.useMapSize, maxReaders:10, maxDBs:10, mode:[.ownerReadWriteExecute], encrypt:Self.encryptConfig, checksum:nil)
 		let newTransaction = try Transaction(env:testerEnv!, readOnly:true)
 		let newDatabase = try Database.Strict<TestKey, EncodedString>(env:testerEnv!, name:"tester_write", flags:[], tx:newTransaction)
 		let foo = try newDatabase.loadEntry(key:5, tx:newTransaction)
 		let bar = try newDatabase.loadEntry(key:700, tx:newTransaction)
+		XCTAssertEqual(foo, "fighters")
+		XCTAssertEqual(bar, "lighters")
 	}
 	
 	// func testMDBConvertible() throws {
