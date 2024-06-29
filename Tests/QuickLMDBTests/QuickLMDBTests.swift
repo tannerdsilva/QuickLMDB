@@ -8,7 +8,7 @@ fileprivate var testerEnv:Environment? = nil
 @RAW_staticbuff(bytes:4)
 @RAW_staticbuff_fixedwidthinteger_type<UInt32>(bigEndian:true)
 //@MDB_comparable()
-struct MySortableItem {}
+struct MySortableItem:Sendable {}
 
 final class QuickLMDBTests:XCTestCase {
 	

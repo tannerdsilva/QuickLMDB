@@ -1,6 +1,10 @@
+# 6.0.0
+
+- Updated PackageDescription to require rawdog v13 or above. This is considered a breaking change because rawdog v13 requires sendable on RAW_staticbuff and this cannot be applied automatically by the macro.
+
 ### 5.0.1
 
-- Updated PackageDescription to include rawdog v12 within the sported scope.
+- Updated PackageDescription to include rawdog v12 within the supported scope.
 
 # 5.0.0
 
