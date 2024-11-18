@@ -1,3 +1,5 @@
+import struct CLMDB.MDB_val
+
 extension MDB_cursor {
 	public borrowing func opFirst() throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try opFirst(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
@@ -12,7 +14,7 @@ extension MDB_cursor_dupsort {
 
 extension MDB_cursor {
 	// first implementations
-	public borrowing func opFirst(returning:(key:MDB_val, value:MDB_val).Type) throws -> (key:MDB_val, value:MDB_val) {
+	public borrowing func opFirst(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).Type) throws -> (key:CLMDB.MDB_val, value:CLMDB.MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
 

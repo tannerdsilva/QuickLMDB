@@ -2,7 +2,7 @@ import CLMDB
 import RAW
 
 public typealias MDB_val = CLMDB.MDB_val
-extension MDB_val:@unchecked Sendable {}
+extension MDB_val:@retroactive @unchecked Sendable {}
 
 public struct MDB_db_flags:OptionSet {
 	

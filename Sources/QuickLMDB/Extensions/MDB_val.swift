@@ -36,7 +36,7 @@ extension MDB_val {
 	}
 }
 
-extension MDB_val:Sequence {
+extension MDB_val:@retroactive Sequence {
 	public typealias Element = UInt8
 	public typealias Iterator = UnsafeBufferPointer<UInt8>.Iterator
 	public func makeIterator() -> Iterator {
@@ -44,20 +44,20 @@ extension MDB_val:Sequence {
 	}
 }
 
-extension MDB_val:CustomDebugStringConvertible {
+extension MDB_val:@retroactive CustomDebugStringConvertible {
 	public var debugDescription:String {
 		return "[MDB_val](\(hashValue % Int(UInt16.max)){ \(mv_size)b }"
 	}
 }
 
-extension MDB_val:Hashable {
+extension MDB_val:@retroactive Hashable {
 	public func hash(into hasher:inout Hasher) {
 		hasher.combine(mv_size)
 		hasher.combine(mv_data)
 	}
 }
 
-extension MDB_val:Equatable {
+extension MDB_val:@retroactive Equatable {
 	public static func == (lhs:MDB_val, rhs:MDB_val) -> Bool {
 		return lhs.mv_size == rhs.mv_size && lhs.mv_data == rhs.mv_data
 	}

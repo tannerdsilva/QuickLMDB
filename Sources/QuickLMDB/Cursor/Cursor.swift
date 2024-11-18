@@ -7,7 +7,8 @@ import Logging
 
 @MDB_cursor_basics()
 /// a database cursor - allows for more complex navigation of entries.
-public final class Cursor:MDB_cursor_basic {
+public final class Cursor:MDB_cursor_basic, Sequence {
+
 	/// a basic cursor uses a basic database type
 	public typealias MDB_cursor_dbtype = Database
 
