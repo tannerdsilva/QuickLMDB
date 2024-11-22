@@ -30,7 +30,7 @@ internal func MDB_db_get_entry_static<D:MDB_db>(db database:borrowing D, key key
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace("<", metadata:["_":"MDB_db_get_entry_static(_:key:tx:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_out":"\(String(describing:valueVal))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
-	return copy valueVal
+	return valueVal
 }
 
 // set entry (key, value)

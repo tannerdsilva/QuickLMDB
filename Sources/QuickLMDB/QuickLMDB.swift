@@ -4,7 +4,7 @@ import RAW
 public typealias MDB_val = CLMDB.MDB_val
 extension MDB_val:@retroactive @unchecked Sendable {}
 
-public struct MDB_db_flags:OptionSet {
+public struct MDB_db_flags:OptionSet, Sendable{
 	
 	/// the raw integer value of the flags.
 	public let rawValue:UInt32
@@ -41,7 +41,7 @@ public struct MDB_db_flags:OptionSet {
 public enum Operation {
 	
 	/// operation flags modify the way that entries are stored in the database. In LMDB documentation, these are known as "write flags".
-	public struct Flags:OptionSet {
+	public struct Flags:OptionSet, Sendable {
 		
 		/// the raw integer value for this flag. can be passed directly into LMDB source functions.
 		public let rawValue:UInt32
