@@ -14,6 +14,7 @@ public struct Database:Sendable, MDB_db_basic {
 
 	/// the environment handle primitive that this database instance is based on
 	private let _db_env:Environment
+	
 	/// the LMDB database name of this instance
     private let _db_name:String?
     public borrowing func dbName() -> String? {
@@ -70,44 +71,44 @@ public struct Database:Sendable, MDB_db_basic {
 	}
 	#endif
 
-	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx:borrowing Transaction) throws -> V? where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access({ keyVal in 
+	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx:borrowing Transaction) throws(LMDBError) -> V? where K:MDB_convertible, V:MDB_convertible {
+		return try key.MDB_access({ (keyVal:MDB_val) throws(LMDBError) -> V? in 
 			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
 		})
 	}
 
-	public borrowing func containsEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws -> Bool where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { keyVal in
-			return try value.MDB_access { valueVal in
+	public borrowing func containsEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible, V:MDB_convertible {
+		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
+			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) -> Bool in
 				return try containsEntry(key:keyVal, value:valueVal, tx:tx)
 			}
 		}
 	}
-	public borrowing func containsEntry<K>(key:borrowing K, tx:borrowing Transaction) throws -> Bool where K:MDB_convertible {
-		return try key.MDB_access { keyVal in
+	public borrowing func containsEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible {
+		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
 			return try containsEntry(key:keyVal, tx:tx)
 		}
 	}
 
-	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws where K:MDB_convertible, V:MDB_convertible {
+	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
 		flags.subtract(.reserve)
-		return try key.MDB_access { (keyVal:consuming MDB_val) in
-			return try value.MDB_access { (valueVal:consuming MDB_val) in
+		return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
+			return try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
 				return try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
 			}
 		}
 	}
 
-	public borrowing func deleteEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { keyVal in
-			return try value.MDB_access { valueVal in
+	public borrowing func deleteEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
+		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
+			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) in
 				return try deleteEntry(key:keyVal, value:valueVal, tx:tx)
 			}
 		}
 	}
 
-	public borrowing func deleteEntry<K>(key:borrowing K, tx:borrowing Transaction) throws where K:MDB_convertible {
-		return try key.MDB_access { keyVal in
+	public borrowing func deleteEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible {
+		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
 			return try deleteEntry(key:keyVal, tx:tx)
 		}
 	}

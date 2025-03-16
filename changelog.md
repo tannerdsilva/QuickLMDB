@@ -1,3 +1,9 @@
+# 7.0.0
+
+- PackageDescription and encompassing source code is now strictly Swift 6.
+
+- No longer `throws` any type. Every function within the core API of QuickLMDB now throws a strict type.
+
 # 6.0.0
 
 - Updated PackageDescription to require rawdog v13 or above. This is considered a breaking change because rawdog v13 requires sendable on RAW_staticbuff and this cannot be applied automatically by the macro.

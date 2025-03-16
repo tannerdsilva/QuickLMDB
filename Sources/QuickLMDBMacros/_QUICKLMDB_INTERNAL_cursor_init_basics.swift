@@ -52,7 +52,7 @@ internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
 					return _logger
 				}
 				/// opens a new cursor instance from a given database and transaction pairing.
-				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
+				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws(LMDBError) {
 					var buildCursor:OpaquePointer? = nil
 					let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
 					guard openCursorResult == MDB_SUCCESS else {
@@ -64,7 +64,7 @@ internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
 					self._logger = db.logger()
 				}
 				#else
-				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws {
+				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws(LMDBError) {
 					var buildCursor:OpaquePointer? = nil
 					let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
 					guard openCursorResult == MDB_SUCCESS else {

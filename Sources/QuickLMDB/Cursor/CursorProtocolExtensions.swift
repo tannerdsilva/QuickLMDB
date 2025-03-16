@@ -1,3 +1,0 @@
-extension MDB_cursor {
-
-}

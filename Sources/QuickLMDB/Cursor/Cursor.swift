@@ -21,18 +21,17 @@ public final class Cursor:MDB_cursor_basic, Sequence {
 public struct DatabaseDupIterator<CursorType:MDB_cursor_dupsort>:IteratorProtocol, Sequence {
 	// the underlying cursor that we are using to iterate
 	private let cursor:CursorType
-	// will be true if the first entry has not been returned yet
 	private let focusKey:CursorType.MDB_cursor_dbtype.MDB_db_key_type
-	// does the cursor need to seek to the first key?
+	// does the cursor need to seek to the first key? this should change to false after the first iteration is complete.
 	private var needsSeek:Bool = true
 	
 	/// initialize a general purpose dupsort iterator based on the native key type for the database
 	/// - parameters:
 	/// 	- cursor: the cursor that this iterator will be representing
 	/// 	- key: the key that the cursor will read duplicate value entries from
-	internal init(_ cursor:consuming CursorType, key inputKey:consuming CursorType.MDB_cursor_dbtype.MDB_db_key_type) {
-		self.cursor = cursor
-		self.focusKey = inputKey
+	internal init(_ inputCursor:consuming CursorType, key inputKey:consuming CursorType.MDB_cursor_dbtype.MDB_db_key_type) {
+		cursor = inputCursor
+		focusKey = inputKey
 	}
 	
 	/// returns the next database entry to be consumed in the sequence.
@@ -59,14 +58,15 @@ public struct DatabaseDupIterator<CursorType:MDB_cursor_dupsort>:IteratorProtoco
 
 /// a general purpose entry iterator for databases using their native type.
 public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence {
-	// the underlying cursor that we are using to iterate the database contents
+	/// the underlying cursor that we are using to iterate the database contents
 	private let cursor:CursorType
 	private var first:Bool
 	internal init(_ cursor:consuming CursorType) {
 		self.cursor = cursor
 		self.first = true
 	}
-
+	
+	/// returns the next database entry to be consumed in the sequence.
 	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
 		switch first {
 			case true:

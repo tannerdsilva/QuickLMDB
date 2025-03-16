@@ -2,7 +2,7 @@ import RAW
 
 extension MDB_cursor_dupsort {
 	/// get the current key from the database
-	public borrowing func dupCount() throws -> RAW.size_t {
+	public borrowing func dupCount() throws(LMDBError) -> RAW.size_t {
 		return try MDB_cursor_get_dupcount_static(cursor:self)
 	}
 
@@ -14,22 +14,22 @@ extension MDB_cursor_dupsort {
 extension MDB_cursor {
 
 	/// get the current entry from the database
-	public borrowing func setEntry(key:consuming MDB_val, value:consuming MDB_val, flags:consuming Operation.Flags) throws {
+	public borrowing func setEntry(key:consuming MDB_val, value:consuming MDB_val, flags:consuming Operation.Flags) throws(LMDBError) {
 		return try MDB_cursor_set_entry_static(cursor:self, key:&key, value:&value, flags:flags)
 	}
 	
 	/// get the current entry from the database
-	public borrowing func containsEntry(key:consuming MDB_val, value:consuming MDB_val) throws -> Bool {
+	public borrowing func containsEntry(key:consuming MDB_val, value:consuming MDB_val) throws(LMDBError) -> Bool {
 		return try MDB_cursor_contains_entry_static(cursor:self, key:&key, value:&value)
 	}
 
 	/// check if the current entry is present in the database
-	public borrowing func containsEntry(key:consuming MDB_val) throws -> Bool {
+	public borrowing func containsEntry(key:consuming MDB_val) throws(LMDBError) -> Bool {
 		return try MDB_cursor_contains_entry_static(cursor:self, key:&key)
 	}
 
 	/// delete the current entry from the database
-	public borrowing func deleteCurrentEntry(flags:consuming Operation.Flags) throws {
+	public borrowing func deleteCurrentEntry(flags:consuming Operation.Flags) throws(LMDBError) {
 		return try MDB_cursor_delete_current_entry_static(cursor:self, flags:flags)
 	}
 
