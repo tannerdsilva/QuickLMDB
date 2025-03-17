@@ -1,18 +1,18 @@
 extension MDB_cursor {
-	public borrowing func opSet(key keyVal:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
+	public borrowing func opSet(key keyVal:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> MDB_cursor_dbtype.MDB_db_val_type {
 		return try opSet(returning:MDB_cursor_dbtype.MDB_db_val_type.self, key:keyVal)
 	}
-	public borrowing func opSetKey(key keyVal:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+	public borrowing func opSetKey(key keyVal:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self, key:keyVal)
 	}
-	public borrowing func opSetRange(key keyVal:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+	public borrowing func opSetRange(key keyVal:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self, key:keyVal)
 	}
 }
 extension MDB_cursor {
 	
 	// set variants
-	public borrowing func opSet(returning:MDB_val.Type, key keyVal:consuming MDB_val) throws -> MDB_val {
+	public borrowing func opSet(returning:MDB_val.Type, key keyVal:consuming MDB_val) throws(LMDBError) -> MDB_val {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
@@ -28,7 +28,7 @@ extension MDB_cursor {
 
 		return valueVal
 	}
-	public borrowing func opSetKey(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
+	public borrowing func opSetKey(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:MDB_val, value:MDB_val) {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
@@ -46,7 +46,7 @@ extension MDB_cursor {
 
 		return (key:keyVal, value:valueVal)
 	}
-	public borrowing func opSetRange(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws -> (key:MDB_val, value:MDB_val) {
+	public borrowing func opSetRange(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:MDB_val, value:MDB_val) {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
@@ -67,7 +67,7 @@ extension MDB_cursor {
 }
 
 extension MDB_cursor {
-	public borrowing func opSet<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws -> (key:K, value:V) {
+	public borrowing func opSet<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:K, value:V) {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
@@ -86,7 +86,7 @@ extension MDB_cursor {
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
 	}
-	public borrowing func opSetKey<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws -> (key:K, value:V) {
+	public borrowing func opSetKey<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:K, value:V) {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
@@ -104,7 +104,7 @@ extension MDB_cursor {
 
 		return (key:keyOutTransformer(keyVal), value:valueOutTransformer(valueVal))
 	}
-	public borrowing func opSetRange<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws -> (key:K, value:V) {
+	public borrowing func opSetRange<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:K, value:V) {
 		var valueVal = MDB_val.uninitialized()
 
 		#if DEBUG

@@ -51,51 +51,51 @@ internal struct _QUICKLMDB_INTERNAL_cursor_encodable_impl:MemberMacro {
 				/// - parameters:
 				/// 	- key: the key to check for. (borrowing memory ideal)
 				/// - returns: `true` if the key exists in the database, `false` otherwise.
-				public borrowing func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> Bool {
-					return try key.MDB_access { (keyVal:consuming MDB_val) in
+				public borrowing func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> Bool {
+					return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) -> Bool in
 						try containsEntry(key:keyVal)
 					}
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
-					return try key.MDB_access { (keyVal:consuming MDB_val) in
+				public borrowing func opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+					return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) in
 						return try opSetRange(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:keyVal)
 					}
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func opSet(returning:MDB_cursor_dbtype.MDB_db_val_type.Type, key: MDB_cursor_dbtype.MDB_db_key_type) throws -> MDB_cursor_dbtype.MDB_db_val_type {
-					return try key.MDB_access({ (mdbKey:consuming MDB_val) in
+				public borrowing func opSet(returning:MDB_cursor_dbtype.MDB_db_val_type.Type, key: MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> MDB_cursor_dbtype.MDB_db_val_type {
+					return try key.MDB_access({ (mdbKey:consuming MDB_val) throws(LMDBError) -> MDB_cursor_dbtype.MDB_db_val_type in
 						return MDB_cursor_dbtype.MDB_db_val_type(try opSet(returning:MDB_val.self, key:mdbKey))!
 					})
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func opGetCurrent(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
+				public borrowing func opGetCurrent(returning: (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type).Type) throws(LMDBError) -> (key: MDB_cursor_dbtype.MDB_db_key_type, value: MDB_cursor_dbtype.MDB_db_val_type) {
 					return try opGetCurrent(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! })
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
-					return try key.MDB_access({ (mdbKey:consuming MDB_val) in
+				public borrowing func opSetKey(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
+					return try key.MDB_access({ (mdbKey:consuming MDB_val) throws(LMDBError) in
 						return try opSetKey(transforming:(key:MDB_val, value:MDB_val).self, keyOutTransformer: { MDB_cursor_dbtype.MDB_db_key_type($0)! }, valueOutTransformer: { MDB_cursor_dbtype.MDB_db_val_type($0)! }, key:mdbKey)
 					})
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws {
-					return try key.MDB_access { (keyVal:consuming MDB_val) in
-						try value.MDB_access { (valueVal:consuming MDB_val) in
+				public borrowing func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws(LMDBError) {
+					return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
+						try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
 							try setEntry(key:keyVal, value:valueVal, flags:flags)
 						}
 					}
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws -> Bool {
-					return try key.MDB_access { (keyVal:consuming MDB_val) in
-						return try value.MDB_access { (valueVal:consuming MDB_val) in
+				public borrowing func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type) throws(LMDBError) -> Bool {
+					return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) -> Bool in
+						return try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) -> Bool in
 							try containsEntry(key:keyVal, value:valueVal)
 						}
 					}

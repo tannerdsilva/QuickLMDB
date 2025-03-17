@@ -7,7 +7,7 @@ import Logging
 #endif
 
 // delete entry
-internal func MDB_cursor_delete_current_entry_static<C:MDB_cursor>(cursor:borrowing C, flags:consuming Operation.Flags) throws {
+internal func MDB_cursor_delete_current_entry_static<C:MDB_cursor>(cursor:borrowing C, flags:consuming Operation.Flags) throws(LMDBError) {
 	#if QUICKLMDB_SHOULDLOG
 	let flagsCopy = flags
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_delete_current_entry_static(cursor:_:)", "mdb_flags":"\(flagsCopy)"])
@@ -28,7 +28,7 @@ internal func MDB_cursor_delete_current_entry_static<C:MDB_cursor>(cursor:borrow
 }
 
 // contains entry
-internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout CLMDB.MDB_val) throws -> Bool {
+internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout CLMDB.MDB_val) throws(LMDBError) -> Bool {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:)", "mdb_key_in":"\(String(describing:keyVal))"])
 	#endif
@@ -53,8 +53,8 @@ internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C,
 	}
 }
 
-/// check for the existence of an entry.
-internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout CLMDB.MDB_val, value valueVal:inout CLMDB.MDB_val) throws -> Bool {
+// check for the existence of an entry.
+internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout CLMDB.MDB_val, value valueVal:inout CLMDB.MDB_val) throws(LMDBError) -> Bool {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_contains_entry_static(cursor:_:key:value:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))"])
 	#endif
@@ -80,7 +80,7 @@ internal func MDB_cursor_contains_entry_static<C:MDB_cursor>(cursor:borrowing C,
 }
 
 // get entry (key, value)
-internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:consuming Operation, key keyVal:inout CLMDB.MDB_val, value valueVal:inout CLMDB.MDB_val) throws {
+internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ operation:consuming Operation, key keyVal:inout CLMDB.MDB_val, value valueVal:inout CLMDB.MDB_val) throws(LMDBError) {
 	
 	#if QUICKLMDB_SHOULDLOG
 	let copyOp = operation
@@ -104,7 +104,7 @@ internal func MDB_cursor_get_entry_static<C:MDB_cursor>(cursor:borrowing C, _ op
 }
 
 // set entries from a cursor
-public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout CLMDB.MDB_val, value valueVal:inout CLMDB.MDB_val, flags:consuming Operation.Flags) throws {
+internal func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key keyVal:inout CLMDB.MDB_val, value valueVal:inout CLMDB.MDB_val, flags:consuming Operation.Flags) throws(LMDBError) {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_set_entry_static(_:key:value:flags:)", "mdb_key_in":"\(String(describing:keyVal))", "mdb_val_in":"\(String(describing:valueVal))"])
 	#endif
@@ -121,7 +121,7 @@ public func MDB_cursor_set_entry_static<C:MDB_cursor>(cursor:borrowing C, key ke
 	#endif
 }
 
-public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout CLMDB.MDB_val, rhs dataR:inout CLMDB.MDB_val) -> Int32 {
+internal func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout CLMDB.MDB_val, rhs dataR:inout CLMDB.MDB_val) -> Int32 {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_compare_keys_static(_:lhs:rhs:)", "mdb_val_l":"\(String(describing:dataL))", "mdb_val_r":"\(String(describing:dataR))"])
 	#endif
@@ -135,7 +135,7 @@ public func MDB_cursor_compare_keys_static<C:MDB_cursor>(cursor:borrowing C, lhs
 	return result
 }
 
-public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout CLMDB.MDB_val, rhs dataR:inout CLMDB.MDB_val) -> Int32 {
+internal func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, lhs dataL:inout CLMDB.MDB_val, rhs dataR:inout CLMDB.MDB_val) -> Int32 {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_compare_values_static(_:lhs:rhs:)", "mdb_val_l":"\(String(describing:dataL))", "mdb_val_r":"\(String(describing:dataR))"])
 	#endif
@@ -149,7 +149,7 @@ public func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C, l
 	return result
 }
 
-public func MDB_cursor_get_dupcount_static<C:MDB_cursor>(cursor:borrowing C) throws -> size_t {
+internal func MDB_cursor_get_dupcount_static<C:MDB_cursor>(cursor:borrowing C) throws(LMDBError) -> size_t {
 	#if QUICKLMDB_SHOULDLOG
 	cursor.logger()?.trace(">", metadata:["_":"MDB_cursor_get_dupcount_static(cursor:_:)"])
 	#endif

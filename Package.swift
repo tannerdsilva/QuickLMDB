@@ -1,11 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version:6.0
 import PackageDescription
 import CompilerPluginSupport
 
 let package = Package(
     name:"QuickLMDB",
 	platforms:[
-		.macOS(.v10_15)
+		.macOS(.v15)
 	],
     products:[
         .library(
@@ -15,9 +15,9 @@ let package = Package(
     ],
     dependencies:[
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", "0.9.26"..<"0.9.31"),
-		.package(url:"https://github.com/tannerdsilva/rawdog.git", "13.0.0"..<"14.0.0"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", "15.0.0"..<"16.0.0"),
 		.package(url:"https://github.com/apple/swift-system.git", "1.0.0"..<"2.0.0"),
-		.package(url:"https://github.com/apple/swift-syntax.git", "509.0.1"..<"510.0.0"),
+		.package(url:"https://github.com/apple/swift-syntax.git", "600.0.1"..<"601.0.0"),
 		.package(url:"https://github.com/apple/swift-log.git", "1.0.0"..<"2.0.0")
     ],
 	targets: [

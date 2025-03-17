@@ -7,7 +7,7 @@ import Logging
 
 // get entries (by key, returns value)
 // - regardless of log mode, this function will assert that a valid database pointer is being returned when compiled in DEBUG mode.
-internal func MDB_db_get_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws -> MDB_val {
+internal func MDB_db_get_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws(LMDBError) -> MDB_val {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_get_entry_static(_:key:tx:)", "mdb_key_in":"\(String(describing:keyVal))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -34,7 +34,7 @@ internal func MDB_db_get_entry_static<D:MDB_db>(db database:borrowing D, key key
 }
 
 // set entry (key, value)
-internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws {
+internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_set_entry_static(_:key:value:flags:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "mdb_op_flags_in":"\(String(describing:copy flags))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -58,7 +58,7 @@ internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, key key
 	#endif
 }
 // set entry returns value pointer [RETURNS]
-internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returning:MDB_val.Type, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws -> MDB_val {
+internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returning:MDB_val.Type, key keyVal:inout MDB_val, value valueVal:inout MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) -> MDB_val {
 	
 	#if QUICKLMDB_SHOULDLOG
 	let consumeFlags = flags
@@ -92,7 +92,7 @@ internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returni
 
 
 // check for entry (key and optional value)
-internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws -> Bool {
+internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws(LMDBError) -> Bool {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_contains_entry_static(_:key:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -117,7 +117,7 @@ internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, ke
 	}
 }
 // contains entry (key, value) [logged]
-internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, tx:borrowing Transaction) throws -> Bool {
+internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, tx:borrowing Transaction) throws(LMDBError) -> Bool {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_contains_entry_static(_:key:value:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -143,7 +143,7 @@ internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, ke
 }
 
 // delete entry (key) [logged]
-internal func MDB_db_delete_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws {
+internal func MDB_db_delete_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws(LMDBError) {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_delete_entry_static(_:key:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "n/a", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -160,7 +160,7 @@ internal func MDB_db_delete_entry_static<D:MDB_db>(db database:borrowing D, key 
 	#endif
 }
 // delete entry (key, value) [logged]
-internal func MDB_db_delete_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, tx:borrowing Transaction) throws {
+internal func MDB_db_delete_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, value valueVal:inout MDB_val, tx:borrowing Transaction) throws(LMDBError) {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_delete_entry_static(_:key:value:tx:)", "mdb_key_in": "\(String(describing:keyVal))", "mdb_val_in": "\(String(describing:valueVal))", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -178,7 +178,7 @@ internal func MDB_db_delete_entry_static<D:MDB_db>(db database:borrowing D, key 
 }
 
 // delete all entries
-internal func MDB_db_delete_all_entries_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws {
+internal func MDB_db_delete_all_entries_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws(LMDBError) {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_delete_all_entries_static(_:tx:)", "tx_id":"\(tx.txHandle().hashValue)"])
 	#endif
@@ -196,7 +196,7 @@ internal func MDB_db_delete_all_entries_static<D:MDB_db>(db database:borrowing D
 }
 
 // statistics
-internal func MDB_db_get_statistics_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws -> MDB_stat {
+internal func MDB_db_get_statistics_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws(LMDBError) -> MDB_stat {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_get_statistics_static(_:tx:)"])
 	#endif
@@ -217,7 +217,7 @@ internal func MDB_db_get_statistics_static<D:MDB_db>(db database:borrowing D, tx
 }
 
 // flags
-internal func MDB_db_get_flags_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws -> UInt32 {
+internal func MDB_db_get_flags_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws(LMDBError) -> UInt32 {
 	#if QUICKLMDB_SHOULDLOG
 	database.logger()?.trace(">", metadata:["_":"MDB_db_get_flags_static(_:tx:)"])
 	#endif
