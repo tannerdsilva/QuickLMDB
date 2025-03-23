@@ -49,9 +49,9 @@ public protocol MDB_db {
 	/// - parameters:
 	///		- as: the cursor type that will be initialized to traverse the database.
 	///		- tx: a pointer to the transaction to use for the creation of the cursor.
-	/// - throws: a corresponding ``LMDBError.notFound`` if the entry could not be found.
+	/// - throws: throws a CursorAccessError that signifies either a rethrown user error from the handler block, or an LMDBError.
 	/// - returns: the newly initialized instance of the cursor type.
-	borrowing func cursor<R>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws -> R) rethrows -> R
+	borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(CursorAccessError<E>) -> R where E:Swift.Error
 
 	// reading entries in the database
 	/// retrieve an entry from the database. if ``Database/Flags/dupSort`` is set and multiple entries exist for the specified key, the first entry will be returned

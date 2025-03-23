@@ -1,3 +1,11 @@
+# 8.0.0
+
+- Revised `MDB_db` protocol.
+
+	- Improved clarity on thrown errors for `cursor` function.
+	
+- Revised `Transaction` to throw strict error types.
+
 # 7.0.0
 
 - PackageDescription and encompassing source code is now strictly Swift 6.

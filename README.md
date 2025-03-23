@@ -6,9 +6,9 @@ QuickLMDB is designed to be a easy, efficient, and uncompromising integration of
 
 - QuickLMDB allows direct access to the LMDB memorymap without overhead or copies. This is also a unique feature for Swift-based LMDB wrappers.
 
-## Full Documentation
+## Versioning
 
-QuickLMDB is fully documented. This documentation is available [HERE](https://quicklmdb.com/documentation). Documentation may be generated from source using `swift-docc`.
+This library uses SemVer 2.0 for version tags.
 
 ## Compatibility
 

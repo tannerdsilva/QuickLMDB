@@ -10,7 +10,7 @@ public struct Transaction:~Copyable {
 	
 	#if QUICKLMDB_SHOULDLOG
 	// init no parent [LOGGED]
-	public init(env:borrowing Environment, readOnly:Bool) throws {
+	public init(env:borrowing Environment, readOnly:Bool) throws(LMDBError) {
 		let logger = env.logger()
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
@@ -23,7 +23,7 @@ public struct Transaction:~Copyable {
 		self._tx_handle = startHandle!
 	}
 	// init with parent [LOGGED]
-	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws {
+	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws(LMDBError) {
 		var logger = env.logger()
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
@@ -37,7 +37,7 @@ public struct Transaction:~Copyable {
 	}
 	#else
 	// init no parent
-	public init(env:borrowing Environment, readOnly:Bool) throws {
+	public init(env:borrowing Environment, readOnly:Bool) throws(LMDBError) {
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
@@ -46,7 +46,7 @@ public struct Transaction:~Copyable {
 		self._tx_handle = startHandle!
 	}
 	// init with parent
-	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws {
+	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws(LMDBError) {
 		var startHandle:OpaquePointer? = nil
 		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
@@ -57,7 +57,7 @@ public struct Transaction:~Copyable {
 	#endif
 	
 	#if QUICKLMDB_SHOULDLOG
-	public consuming func commit(logger _logger:Logger? = nil) throws {
+	public consuming func commit(logger _logger:Logger? = nil) throws(LMDBError) {
 		_logger?.trace("committing...", metadata:["type":"tx", "id_tx":"\(_tx_handle.hashValue)"])
 		let commitResult = mdb_txn_commit(_tx_handle)
 		guard commitResult == 0 else {
@@ -69,7 +69,7 @@ public struct Transaction:~Copyable {
 		discard self
 	}
 	#else
-	public consuming func commit() throws {
+	public consuming func commit() throws(LMDBError) {
 		let commitResult = mdb_txn_commit(_tx_handle)
 		guard commitResult == 0 else {
 			discard self
@@ -104,7 +104,7 @@ public struct Transaction:~Copyable {
 	#endif
 	
 	#if QUICKLMDB_SHOULDLOG
-	public borrowing func renew(logger _logger:Logger? = nil) throws {
+	public borrowing func renew(logger _logger:Logger? = nil) throws(LMDBError) {
 		_logger?.trace("renewing...")
 		let renewResult = mdb_txn_renew(_tx_handle)
 		guard renewResult == 0 else {
@@ -114,7 +114,7 @@ public struct Transaction:~Copyable {
 		_logger?.debug("renewal successful")
     }
     #else
-	public borrowing func renew() throws {
+	public borrowing func renew() throws(LMDBError) {
 		let renewResult = mdb_txn_renew(_tx_handle)
 		guard renewResult == 0 else {
 			throw LMDBError(returnCode:renewResult)

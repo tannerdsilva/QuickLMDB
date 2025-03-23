@@ -7,8 +7,24 @@ import Logging
 
 // every MDB_db will have the ability to exchange consuming MDB_val with the database at any time.
 extension MDB_db {
-	public borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(E) -> R {
-		return try handler(try! MDB_db_cursor_type(db:self, tx:tx))
+	public borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(CursorAccessError<E>) -> R where E:Swift.Error {
+		// function to produce the cursor or throw a CursorAccessError if this could not be completed
+		func produceCursor() throws(CursorAccessError<E>) -> MDB_db_cursor_type {
+			do {
+				return try MDB_db_cursor_type(db:self, tx:tx)
+			} catch let error {
+				throw CursorAccessError.lmdbError(error)
+			}
+		}
+		// function to produce the result from the useres handler function
+		func produceHandlerResult(cursor:consuming MDB_db_cursor_type) throws(CursorAccessError<E>) -> R {
+			do {
+				return try handler(cursor)
+			} catch let error {
+				throw CursorAccessError.rethrownError(error)
+			}
+		} 
+		return try produceHandlerResult(cursor:try produceCursor())
 	}
 
 	// get entry implementations
