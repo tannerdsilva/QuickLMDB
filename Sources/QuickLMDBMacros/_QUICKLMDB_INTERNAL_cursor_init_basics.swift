@@ -4,16 +4,6 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import SwiftParser
 
-#if QUICKLMDB_MACRO_LOG
-import Logging
-fileprivate let logger = makeDefaultLogger(label:"RAW_function_add_transaction_macro")
-fileprivate func makeDefaultLogger(label:String) -> Logger {
-	var logger = Logger(label:label)
-	logger.logLevel = .debug
-	return logger
-}
-#endif
-
 /// this macro needs to exist beceause the implemented functions cannot be marked as borrowing when used as a member of a protocol
 internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
 	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {

@@ -4,16 +4,6 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import SwiftParser
 
-#if QUICKLMDB_MACRO_LOG
-import Logging
-fileprivate let logger = makeDefaultLogger(label:"MDB_comparable_macro")
-fileprivate func makeDefaultLogger(label:String) -> Logger {
-	var logger = Logger(label:label)
-	logger.logLevel = .debug
-	return logger
-}
-#endif
-
 internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
     static func expansion(of node: SwiftSyntax.AttributeSyntax, attachedTo declaration: some SwiftSyntax.DeclGroupSyntax, providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.ExtensionDeclSyntax] {
         return [try ExtensionDeclSyntax("""

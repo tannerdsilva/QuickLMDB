@@ -40,10 +40,7 @@ let package = Package(
 				.product(name:"SwiftParserDiagnostics", package:"swift-syntax"),
 				.product(name:"SwiftCompilerPlugin", package:"swift-syntax"),
 				.product(name:"Logging", package:"swift-log")
-			],
-			swiftSettings:[
-				.define("QUICKLMDB_MACRO_LOG")
-			]	
+			]
 		),
 		.testTarget(
 			name: "QuickLMDBTests",
