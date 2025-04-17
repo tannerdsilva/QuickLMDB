@@ -1,5 +1,5 @@
 {
-  "originHash" : "142801b9ddf64d84bdafb7167149d43942e8b66ea647ffc4c3af8c9e85cc0679",
+  "originHash" : "e20d7b2d8cc81816c415831e91795859d640c74b5815726a46ded87206dd4a22",
   "pins" : [
     {
       "identity" : "clmdb",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tannerdsilva/rawdog.git",
       "state" : {
-        "revision" : "a79d4fe1a4ee3d5b785e773123b47c8aa80364f6",
-        "version" : "15.0.0"
+        "revision" : "1df6b43a57979b3ad1b1bbbe73215ff232b2c5bb",
+        "version" : "16.0.0"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "96a2f8a0fa41e9e09af4585e2724c4e825410b91",
-        "version" : "1.6.2"
+        "revision" : "9cb486020ebf03bfa5b5df985387a14a98744537",
+        "version" : "1.6.1"
       }
     },
     {
