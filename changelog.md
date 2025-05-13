@@ -1,3 +1,7 @@
+# 8.0.1
+
+- Will also support `rawdog` v17 in addition to v16.
+
 # 8.0.0
 
 - Revised `MDB_db` protocol.
