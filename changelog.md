@@ -1,3 +1,11 @@
+### 9.0.1
+
+- Also supporting `rawdog` v17.
+
+# 9.0.0
+
+- `rawdog` requirement is now v16.
+
 # 8.0.1
 
 - Will also support `rawdog` v17 in addition to v16.
