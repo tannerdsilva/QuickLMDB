@@ -32,17 +32,22 @@ public struct Database:Sendable, MDB_db_basic {
 	public borrowing func logger() -> Logger? {
 		return _logger
 	}
-
+	#endif
+	
 	/// initialize a new database instance from the specified environment.
 	/// - parameters:
 	/// 	- env: a pointer to the environment that the database will be based on.
 	/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 	/// 	- flags: the flags that will be used when opening the database.
 	///		- tx: a pointer to the transaction that will be used to open the database.
+	@available(*, noasync)
     public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		#if QUICKLMDB_SHOULDLOG
 		var mutateLogger = env.logger()
-		mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:MDB_db_key_type.self)), \(String(describing:MDB_db_val_ptrtype.self))>"
+		mutateLogger?[metadataKey:"type"] = "\(String(describing:Self.self))"
 		self._logger = mutateLogger
+		#endif
+		
 		self._db_env = copy env
 		self._db_name = name_in
 		var dbHandle = MDB_dbi()
@@ -52,31 +57,13 @@ public struct Database:Sendable, MDB_db_basic {
 		}
 		self._db_handle = dbHandle
     }
-	#else
-	/// initialize a new database instance from the specified environment.
-	/// - parameters:
-	/// 	- env: a pointer to the environment that the database will be based on.
-	/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
-	/// 	- flags: the flags that will be used when opening the database.
-	///		- tx: a pointer to the transaction that will be used to open the database.
-	public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
-		self._db_env = copy env
-		self._db_name = name_in
-		var dbHandle = MDB_dbi()
-		let openResult = mdb_dbi_open(tx.txHandle(), name_in, flags.rawValue, &dbHandle)
-		guard openResult == MDB_SUCCESS else {
-			throw LMDBError(returnCode:openResult)
-		}
-		self._db_handle = dbHandle
-	}
-	#endif
-
+	@available(*, noasync)
 	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx:borrowing Transaction) throws(LMDBError) -> V? where K:MDB_convertible, V:MDB_convertible {
 		return try key.MDB_access({ (keyVal:MDB_val) throws(LMDBError) -> V? in 
 			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
 		})
 	}
-
+	@available(*, noasync)
 	public borrowing func containsEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible, V:MDB_convertible {
 		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
 			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) -> Bool in
@@ -84,12 +71,13 @@ public struct Database:Sendable, MDB_db_basic {
 			}
 		}
 	}
+	@available(*, noasync)
 	public borrowing func containsEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible {
 		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
 			return try containsEntry(key:keyVal, tx:tx)
 		}
 	}
-
+	@available(*, noasync)
 	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
 		flags.subtract(.reserve)
 		return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
@@ -98,7 +86,7 @@ public struct Database:Sendable, MDB_db_basic {
 			}
 		}
 	}
-
+	@available(*, noasync)
 	public borrowing func deleteEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
 		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
 			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) in
@@ -106,7 +94,7 @@ public struct Database:Sendable, MDB_db_basic {
 			}
 		}
 	}
-
+	@available(*, noasync)
 	public borrowing func deleteEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible {
 		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
 			return try deleteEntry(key:keyVal, tx:tx)
@@ -127,11 +115,13 @@ extension Database {
 		private let _db_env:Environment
 		/// the LMDB database name of this instance
 		private let _db_name:String?
+		@available(*, noasync)
 		public borrowing func dbName() -> String? {
 			return _db_name
 		}
 		/// the database handle primitive for this instance
 		private let _db_handle:MDB_dbi
+		@available(*, noasync)
 		public borrowing func dbHandle() -> MDB_dbi {
 			return _db_handle
 		}
@@ -139,20 +129,25 @@ extension Database {
 		#if QUICKLMDB_SHOULDLOG
 		/// the public logging facility that this database will use for debugging and auditing
 		private let _logger:Logger?
+		@available(*, noasync)
 		public borrowing func logger() -> Logger? {
 			return _logger
 		}
-		
+		#endif
 		/// initialize a new database instance from the specified environment.
 		/// - parameters:
 		/// 	- env: a pointer to the environment that the database will be based on.
 		/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
+		@available(*, noasync)
 		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
 			flags.update(with:.dupSort)
+			#if QUICKLMDB_SHOULDLOG
 			var mutateLogger = env.logger()
-			mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
+			mutateLogger?[metadataKey:"type"] = "\(String(describing:Self.self))"
+			self._logger = mutateLogger
+			#endif
 			self._db_env = copy env
 			self._db_name = name
 			var dbHandle = MDB_dbi()
@@ -161,25 +156,9 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			self._logger = mutateLogger
 			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
 			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
 		}
-		#else
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
-			flags.update(with:.dupSort)
-			self._db_env = copy env
-			self._db_name = name
-			var handle = MDB_dbi()
-			let openResult = mdb_dbi_open(tx.txHandle(), name, flags.rawValue, &handle)
-			guard openResult == MDB_SUCCESS else {
-				throw LMDBError(returnCode:openResult)
-			}
-			self._db_handle = handle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
-			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
-		}
-		#endif
 	}
 
 	@MDB_db_strict_impl()
@@ -232,7 +211,7 @@ extension Database {
 			
 			// copy the logger from the environment
 			var mutateLogger = env.logger()
-			mutateLogger?[metadataKey:"type"] = "Database.Strict<\(String(describing:K.self)), \(String(describing:V.self))>"
+			mutateLogger?[metadataKey:"type"] = "\(String(describing:Self.self))"
 			self._db_env = copy env
 			self._db_name = name
 			var dbHandle = MDB_dbi()
