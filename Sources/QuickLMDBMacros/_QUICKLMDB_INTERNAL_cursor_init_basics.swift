@@ -36,24 +36,8 @@ internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
 				}
 			"""),
 			DeclSyntax("""
-				#if QUICKLMDB_SHOULDLOG
-				private let _logger:Logger?
-				public borrowing func logger() -> Logger? {
-					return _logger
-				}
 				/// opens a new cursor instance from a given database and transaction pairing.
-				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws(LMDBError) {
-					var buildCursor:OpaquePointer? = nil
-					let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
-					guard openCursorResult == MDB_SUCCESS else {
-						throw LMDBError(returnCode:openCursorResult)
-					}
-					self._cursor_handle = buildCursor!
-					self._db_handle = db.dbHandle()
-					self._tx_handle = tx.txHandle()
-					self._logger = db.logger()
-				}
-				#else
+				@available(*, noasync)
 				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws(LMDBError) {
 					var buildCursor:OpaquePointer? = nil
 					let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
@@ -64,7 +48,6 @@ internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
 					self._db_handle = db.dbHandle()
 					self._tx_handle = tx.txHandle()
 				}
-				#endif
 			"""),
 			DeclSyntax("""
 				deinit {

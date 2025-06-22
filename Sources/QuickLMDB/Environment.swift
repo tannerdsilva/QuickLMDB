@@ -1,10 +1,6 @@
 import CLMDB
 import SystemPackage
 
-#if QUICKLMDB_SHOULDLOG
-import Logging
-#endif
-
 public final class Environment:@unchecked Sendable {
 	/// flags that can be used to open an environment
 	public struct Flags:OptionSet, Sendable {
@@ -57,60 +53,6 @@ public final class Environment:@unchecked Sendable {
 	/// the flags that were used to open the environment
 	public let flags:Flags
 
-	/// create a new environment given the specified path and flags.
-	#if QUICKLMDB_SHOULDLOG
-	private let _logger:Logger?
-	public borrowing func logger() -> Logger? {
-		return _logger
-	}
-	public init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, logger loggerIn:Logger? = nil) throws {
-		var loggerMutate = loggerIn
-		loggerMutate?[metadataKey:"type"] = "env"
-		
-		// create the environment variable
-		var environmentHandle:OpaquePointer? = nil;
-		let envStatus = mdb_env_create(&environmentHandle)
-		guard envStatus == 0 && environmentHandle != nil else {
-			loggerMutate?.critical("critical memory failure during init", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
-			throw LMDBError(returnCode:envStatus)
-		}
-		
-		// set the map size
-		if mapSize != nil {
-			let mdbSetResult = mdb_env_set_mapsize(environmentHandle, mapSize!)
-			guard mdbSetResult == 0 else {
-				loggerMutate?.critical("unable to set expected mapsize", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
-				throw LMDBError(returnCode:mdbSetResult)
-			}
-		}
-		
-		// set the maximum readers. this must be done between the `mdb_env_create` and `mdb_env_open` calls.
-		let setReadersResult = mdb_env_set_maxreaders(environmentHandle, maxReaders)
-		guard setReadersResult == 0 else {
-			loggerMutate?.critical("unable to set maximum number of readers", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
-			throw LMDBError(returnCode:setReadersResult)
-		}
-		
-		// set maximum db count
-		let mdbSetResult = mdb_env_set_maxdbs(environmentHandle, maxDBs)
-		guard mdbSetResult == 0 else {
-			loggerMutate?.critical("unable to set maximum db count", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
-			throw LMDBError(returnCode:mdbSetResult)
-		}
-		
-		// open the environment with the specified flags and file modes specified
-		let openStatus = mdb_env_open(environmentHandle, path, UInt32(flags.rawValue), mode.rawValue)
-		guard openStatus == 0 else {
-			loggerMutate?.critical("init failed", metadata:["env_path":"\(path)", "env_flags":"\(flags)", "mdb_return_code":"\(openStatus)"])
-			throw LMDBError(returnCode:openStatus)
-		}
-		
-		loggerMutate?.info("init successful", metadata:["env_path":"\(path)", "env_flags":"\(flags)"])
-		self._env_handle = environmentHandle!
-		self.flags = flags
-		self._logger = loggerMutate
-	}
-	#else
 	public init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws {
 
 		// create the environment variable
@@ -149,59 +91,28 @@ public final class Environment:@unchecked Sendable {
 		self._env_handle = environmentHandle!
 		self.flags = flags
 	}
-	#endif
 	
 	/// flush the data buffers to disk. needed for environments that are operating with ``QuickLMDB/Environment/Flags/writeMap`` or ``QuickLMDB/Environment/Flags/noSync`` enabled.
 	public func sync(force:Bool = true) throws {
-		#if QUICKLMDB_SHOULDLOG
-		logger()?.trace(">", metadata:["_func":"sync()", "type":"Environment", "sync_force":"'\(force)'"])
-		defer {
-			logger()?.trace("<", metadata:["_func":"sync()", "type":"Environment", "sync_force":"'\(force)'"])
-		}
-		#endif
 		let syncStatus = mdb_env_sync(envHandle(), (force == true ? 1 : 0))
 		guard syncStatus == 0 else {
-			#if QUICKLMDB_SHOULDLOG
-			logger()?.error("failed to sync LMDB environment", metadata:["mdb_return_code":"\(syncStatus)"])
-			#endif
 			throw LMDBError(returnCode:syncStatus)
 		}
-		#if QUICKLMDB_SHOULDLOG
-		logger()?.info("successfully synced LMDB environment with disk")
-		#endif
 	}
 	
 	@discardableResult public func readerCheck() throws -> Int32 {
-		#if QUICKLMDB_SHOULDLOG
-		logger?.trace(">", metadata:["_func":"readerCheck()"])
-		defer {
-			logger?.trace("<", metadata:["_func":"readerCheck()"])
-		}
-		#endif
 		var deadCheck:Int32 = 0
 		let clearCheck = mdb_reader_check(envHandle(), &deadCheck)
 		guard clearCheck == MDB_SUCCESS else {
-			#if QUICKLMDB_SHOULDLOG
-			logger?.error("failed to check for readers", metadata:["_func":"readerCheck()", "mdb_return_code":"\(syncStatus)"])
-			#endif
 			throw LMDBError(returnCode:clearCheck)
 		}
-		#if QUICKLMDB_SHOULDLOG
-		logger?.info("successfully checked LMDB environment for stale readers.", metadata:["_func":"readerCheck()", "dead_readers_found":"\(deadCheck)"])
-		#endif
 		return deadCheck
 	}
 
 
 	deinit {
 		// close the environment handle when all references to this instance are released
-		#if QUICKLMDB_SHOULDLOG
-		logger()?.trace("deinitializing LMDB environment instance")
-		#endif
 		mdb_env_close(envHandle())
-		#if QUICKLMDB_SHOULDLOG
-		logger()?.notice("deinitialized LMDB environment instance")
-		#endif
 	}
 
 }

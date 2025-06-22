@@ -1,8 +1,6 @@
 import struct CLMDB.MDB_val
 import RAW
 
-
-
 extension MDB_val {
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and a length specified as the encoded count of the given encodable type.

@@ -197,3 +197,64 @@ public enum LMDBError:Error {
 		}
 	}
 }
+
+extension LMDBError:CustomDebugStringConvertible {
+	public var debugDescription:String {
+		get {
+			switch self {
+			case .keyExists:
+				return "LMDBError.keyExists"
+			case .notFound:
+				return "LMDBError.notFound"
+			case .pageNotFound:
+				return "LMDBError.pageNotFound"
+			case .corrupted:
+				return "LMDBError.corrupted"
+			case .panic:
+				return "LMDBError.panic"
+			case .versionMismatch:
+				return "LMDBError.versionMismatch"
+			case .invalid:
+				return "LMDBError.invalid"
+			case .mapFull:
+				return "LMDBError.mapFull"
+			case .dbsFull:
+				return "LMDBError.dbsFull"
+			case .readersFull:
+				return "LMDBError.readersFull"
+			case .tlsFull:
+				return "LMDBError.tlsFull"
+			case .txFull:
+				return "LMDBError.txFull"
+			case .cursorFull:
+				return "LMDBError.cursorFull"
+			case .pageFull:
+				return "LMDBError.pageFull"
+			case .mapResized:
+				return "LMDBError.mapResized"
+			case .incompatible:
+				return "LMDBError.incompatible"
+			case .badReaderSlot:
+				return "LMDBError.badReaderSlot"
+			case .badTransaction:
+				return "LMDBError.badTransaction"
+			case .badValueSize:
+				return "LMDBError.badValueSize"
+			case .badDBI:
+				return "LMDBError.badDBI"
+			case .invalidParameter:
+				return "LMDBError.invalidParameter"
+			case .outOfDiskSpace:
+				return "LMDBError.outOfDiskSpace"
+			case .outOfMemory:
+				return "LMDBError.outOfMemory"
+			case .ioError:
+				return "LMDBError.ioError"
+			case .accessViolation:
+				return "LMDBError.accessViolation"
+			case let .other(returnCode:rc):
+				return "LMDBError.other(returnCode:\(rc))"
+			}
+		}
+	}
+}

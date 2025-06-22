@@ -1,10 +1,6 @@
 import CLMDB
 import RAW
 
-#if QUICKLMDB_SHOULDLOG
-import Logging
-#endif
-
 @MDB_cursor_basics()
 /// a database cursor - allows for more complex navigation of entries.
 public final class Cursor:MDB_cursor_basic, Sequence {
@@ -12,6 +8,7 @@ public final class Cursor:MDB_cursor_basic, Sequence {
 	/// a basic cursor uses a basic database type
 	public typealias MDB_cursor_dbtype = Database
 
+	@available(*, noasync)
 	public func makeIterator() -> DatabaseIterator<Cursor> {
 		return DatabaseIterator(self)
 	}
@@ -30,12 +27,14 @@ public struct DatabaseDupIterator<CursorType:MDB_cursor_dupsort>:IteratorProtoco
 	/// - parameters:
 	/// 	- cursor: the cursor that this iterator will be representing
 	/// 	- key: the key that the cursor will read duplicate value entries from
+	@available(*, noasync)
 	internal init(_ inputCursor:consuming CursorType, key inputKey:consuming CursorType.MDB_cursor_dbtype.MDB_db_key_type) {
 		cursor = inputCursor
 		focusKey = inputKey
 	}
 	
 	/// returns the next database entry to be consumed in the sequence.
+	@available(*, noasync)
 	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
 		switch needsSeek {
 			case false:
@@ -62,12 +61,14 @@ public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence
 	/// the underlying cursor that we are using to iterate the database contents
 	private let cursor:CursorType
 	private var first:Bool
+	@available(*, noasync)
 	internal init(_ cursor:consuming CursorType) {
 		self.cursor = cursor
 		self.first = true
 	}
 	
 	/// returns the next database entry to be consumed in the sequence.
+	@available(*, noasync)
 	public mutating func next() -> (key:CursorType.MDB_cursor_dbtype.MDB_db_key_type, value:CursorType.MDB_cursor_dbtype.MDB_db_val_type)? {
 		switch first {
 			case true:
@@ -80,7 +81,6 @@ public struct DatabaseIterator<CursorType:MDB_cursor>:IteratorProtocol, Sequence
 }
 
 extension Cursor {
-	
 	@MDB_cursor_basics()
 	@MDB_cursor_dupsort()
 	@MDB_cursor_dupfixed()
@@ -88,6 +88,7 @@ extension Cursor {
 	/// a dupfixed variant cursor for a dupfixed database
 	public final class DupFixed<D:MDB_db_dupfixed>:MDB_cursor_dupfixed {
 		public typealias MDB_cursor_dbtype = D
+		@available(*, noasync)
 		public func makeIterator() -> DatabaseIterator<DupFixed<D>> {
 			return DatabaseIterator(self)
 		}
@@ -98,6 +99,7 @@ extension Cursor {
 	@MDB_cursor_dupsort()
 	/// a dupsort variant cursor for a dupsort database
 	public final class DupSort<D:MDB_db_dupsort>:MDB_cursor_dupsort {
+		@available(*, noasync)
 		public func makeIterator() -> DatabaseIterator<DupSort<D>> {
 			return DatabaseIterator(self)
 		}
@@ -109,6 +111,7 @@ extension Cursor {
 	/// a type strict cursor variant for a type strict database
 	public final class Strict<D:MDB_db_strict>:MDB_cursor_strict {
 		public typealias MDB_cursor_dbtype = D
+		@available(*, noasync)
 		public func makeIterator() -> DatabaseIterator<Strict<D>> {
 			return DatabaseIterator(self)
 		}

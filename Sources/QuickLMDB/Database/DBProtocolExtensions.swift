@@ -1,10 +1,6 @@
 import CLMDB
 import RAW
 
-#if QUICKLMDB_SHOULDLOG
-import Logging
-#endif
-
 // every MDB_db will have the ability to exchange consuming MDB_val with the database at any time.
 extension MDB_db {
 	public borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(CursorAccessError<E>) -> R where E:Swift.Error {
