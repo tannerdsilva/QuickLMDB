@@ -1,3 +1,9 @@
+# 10.0.0
+
+- Any LMDB function that associates with an active `Transaction` has now been marked as `@available(*, noasync)` to guarantee safe thread-local usage. While LMDB offers a `.noTLS` flag, it only applies to read transactions. As such, LMDB is always using TLS to some extent or another, and as such, this `noasync` requirement is most optimal to ensure safe usage in all contexts.
+
+- Elimination of integrated logging functions. More effort to support this than it was worth. On the upside, one less dependency to rely on for building this project.
+
 ### 9.0.1
 
 - Also supporting `rawdog` v17.

@@ -27,8 +27,8 @@ let package = Package(
 				"CLMDB",
 				.product(name:"SystemPackage", package:"swift-system"),
 				.product(name:"RAW", package:"rawdog"),
-				"QuickLMDBMacros"
-			]
+				"QuickLMDBMacros",
+			],
 		),
 		.macro(
 			name:"QuickLMDBMacros",

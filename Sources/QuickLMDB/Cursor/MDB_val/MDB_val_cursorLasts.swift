@@ -1,17 +1,19 @@
 extension MDB_cursor {
+	@available(*, noasync)
 	public borrowing func opLast() throws(LMDBError) -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type) {
 		return try opLast(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).self)
 	}
 }
 
 extension MDB_cursor_dupsort {
+	@available(*, noasync)
 	public borrowing func opLastDup() throws(LMDBError) -> MDB_cursor_dbtype.MDB_db_val_type {
 		return try opLastDup(returning:MDB_cursor_dbtype.MDB_db_val_type.self)
 	}
 }
 
 extension MDB_cursor {
-	// last implementations
+	@available(*, noasync)
 	public borrowing func opLast(returning:(key:MDB_val, value:MDB_val).Type) throws(LMDBError) -> (key:MDB_val, value:MDB_val) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -35,6 +37,7 @@ extension MDB_cursor {
 }
 
 extension MDB_cursor_dupsort {
+	@available(*, noasync)
 	public borrowing func opLastDup(returning:MDB_val.Type) throws(LMDBError) -> MDB_val {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -55,6 +58,7 @@ extension MDB_cursor_dupsort {
 }
 
 extension MDB_cursor {
+	@available(*, noasync)
 	public borrowing func opLast<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V) throws(LMDBError) -> (key:K, value:V) {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
@@ -78,9 +82,7 @@ extension MDB_cursor {
 }
 
 extension MDB_cursor_dupsort {
-}
-
-extension MDB_cursor_dupsort {
+	@available(*, noasync)
 	public borrowing func opLastDup<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V) throws(LMDBError) -> V {
 		var keyVal = MDB_val.uninitialized()
 		var valueVal = MDB_val.uninitialized()
