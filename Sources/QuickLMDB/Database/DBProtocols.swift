@@ -33,12 +33,13 @@ public protocol MDB_db {
 	// create a cursor 
 	/// creates a cursor of a specified type that can traverse the contents of the database instance.
 	/// - parameters:
-	///		- as: the cursor type that will be initialized to traverse the database.
 	///		- tx: a pointer to the transaction to use for the creation of the cursor.
-	/// - throws: throws a CursorAccessError that signifies either a rethrown user error from the handler block, or an LMDBError.
-	/// - returns: the newly initialized instance of the cursor type.
+	///		- handler: the handler block that takes the cursor as an argument and does any desired work with the cursor before returning. the cursor must not be passed out of this handler.
+	/// - throws: transparently throws any error that was thrown within the handler block.
+	/// - NOTE: this function will throw a fatal error if the cursor could not be opened before calling the handler block.
+	/// - returns: the return value of the handler block
 	@available(*, noasync)
-	borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(CursorAccessError<E>) -> R where E:Swift.Error
+	borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(E) -> R where E:Swift.Error
 
 	// reading entries in the database
 	/// retrieve an entry from the database. if ``Database/Flags/dupSort`` is set and multiple entries exist for the specified key, the first entry will be returned

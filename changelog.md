@@ -1,3 +1,7 @@
+# 11.0.0
+
+- Dropped `QuickLMDB.CursorAccessError` error type from the cursor access function. Now in v11, errors thrown within the cursor handler block will be transparently thrown (aka rethrows, but type strict). Any errors encountered in creating the cursor before the handler is called will result in a fatal error.
+
 # 10.0.0
 
 - Any LMDB function that associates with an active `Transaction` has now been marked as `@available(*, noasync)` to guarantee safe thread-local usage. While LMDB offers a `.noTLS` flag, it only applies to read transactions. As such, LMDB is always using TLS to some extent or another, and as such, this `noasync` requirement is most optimal to ensure safe usage in all contexts.

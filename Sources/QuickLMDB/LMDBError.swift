@@ -4,24 +4,6 @@ import CLMDB
 import Glibc // needed on linux for error values
 #endif
 
-/*
-thrown when there was a problem with cursor access. this can be either:
-
--	during the creation of a cursor
-
-or
-
-- 	an error that is thrown while accessing a cursor. 
-
-this error is specifically designed to help distinguish between the two circumstances, while still throwing only a single type.
-*/
-public enum CursorAccessError<E>:Swift.Error where E:Swift.Error {
-	/// used to convey an error that was thrown by the users handler block and rethrown by the root function.
-	case rethrownError(E)
-	/// an LMDBError that was thrown while trying to handle the internal mechanics of the cursor before or after the handler function was called.
-	case lmdbError(LMDBError)
-}
-
 /// a structure used to convey 
 public enum LMDBError:Error {
 
