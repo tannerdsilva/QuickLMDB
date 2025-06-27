@@ -43,6 +43,9 @@ extension MDB_db {
 	public borrowing func deleteAllEntries(tx:borrowing Transaction) throws(LMDBError) {
 		try MDB_db_delete_all_entries_static(db:self, tx:tx)
 	}
+	public consuming func deleteDatabase(tx:borrowing Transaction) throws(LMDBError) {
+		try MDB_db_delete_database_static(db:self, tx:tx)
+	}
 
 	// metadata implementations
 	public borrowing func dbStatistics(tx:borrowing Transaction) throws(LMDBError) -> MDB_stat {

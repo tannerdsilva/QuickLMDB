@@ -1,3 +1,7 @@
+## 11.1.0
+
+- Restored function to delete databases from an environment.
+
 # 11.0.0
 
 - Dropped `QuickLMDB.CursorAccessError` error type from the cursor access function. Now in v11, errors thrown within the cursor handler block will be transparently thrown (aka rethrows, but type strict). Any errors encountered in creating the cursor before the handler is called will result in a fatal error.

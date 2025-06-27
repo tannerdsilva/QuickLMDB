@@ -106,6 +106,13 @@ public protocol MDB_db {
 	/// - throws: a corresponding ``LMDBError`` if the entries could not be removed.
 	@available(*, noasync)
 	borrowing func deleteAllEntries(tx:borrowing Transaction) throws
+	
+	/// deletes the database (and all of its contents) from the environment
+	/// - parameters:
+	/// 	- tx: the transaction to use for the database removal
+	/// - throws: a corresponding ``LMDBError`` if the database could not be deleted.
+	@available(*, noasync)
+	consuming func deleteDatabase(tx:borrowing Transaction) throws
 
 	// metadata
 	/// returns the statistics for the database

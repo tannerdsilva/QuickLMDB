@@ -98,6 +98,14 @@ internal func MDB_db_delete_all_entries_static<D:MDB_db>(db database:borrowing D
 	}
 }
 
+// delete the database 
+internal func MDB_db_delete_database_static<D:MDB_db>(db database:consuming D, tx:borrowing Transaction) throws(LMDBError) {
+	let deleteResult = mdb_drop(tx.txHandle(), database.dbHandle(), 1)
+	guard deleteResult == MDB_SUCCESS else {
+		throw LMDBError(returnCode:deleteResult)
+	}
+}
+
 // statistics
 internal func MDB_db_get_statistics_static<D:MDB_db>(db database:borrowing D, tx:borrowing Transaction) throws(LMDBError) -> MDB_stat {
 	var statObj = MDB_stat()
