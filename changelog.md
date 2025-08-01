@@ -1,3 +1,7 @@
+### 11.1.1
+
+- Now supporting `rawdog` v18 in addition to existing v17 and v16 support.
+
 ## 11.1.0
 
 - Restored function to delete databases from an environment.
