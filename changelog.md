@@ -1,3 +1,7 @@
+# 12.0.0
+
+- Fixed critical internal error with `Cursor.getBoth` and `Cursor.getBothRange` functions, where `key` was expected to be returned from MDB functions but was not. The API of these protocol functions have been updated to reflect corrections in this mistake.
+
 ### 11.1.1
 
 - Now supporting `rawdog` v18 in addition to existing v17 and v16 support.
