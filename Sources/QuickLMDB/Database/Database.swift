@@ -10,6 +10,9 @@ public struct Database:Sendable, MDB_db_basic {
 
 	/// the environment handle primitive that this database instance is based on
 	private let _db_env:Environment
+	public borrowing func dbEnvironment() -> Environment {
+		return _db_env
+	}
 	
 	/// the LMDB database name of this instance
     private let _db_name:String?
@@ -95,6 +98,9 @@ extension Database {
 
 		/// the environment handle primitive that this database instance is based on
 		private let _db_env:Environment
+		public borrowing func dbEnvironment() -> Environment {
+			return _db_env
+		}
 		/// the LMDB database name of this instance
 		private let _db_name:String?
 		@available(*, noasync)
@@ -148,6 +154,9 @@ extension Database {
 
 		// the environment handle primitive that this database instance is based on
 		private let _db_env:Environment
+		public borrowing func dbEnvironment() -> Environment {
+			return _db_env
+		}
 		// the LMDB database name of this instance
 		private let _db_name:String?
 		public borrowing func dbName() -> String? {
@@ -193,6 +202,9 @@ extension Database {
 
 		// storage for the environment handle primitive that this database instance is based on
 		private let _db_env:Environment
+		public borrowing func dbEnvironment() -> Environment {
+			return _db_env
+		}
 		
 		// storage for the LMDB database name of this instance
 		private let _db_name:String?

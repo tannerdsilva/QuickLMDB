@@ -23,6 +23,9 @@ public protocol MDB_db {
 	/// create a new database from the specified environment
 	init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws
 	
+	/// returns the lmdb environment of the database instance.
+	borrowing func dbEnvironment() -> Environment
+	
 	/// returns the primitive type that LMDB uses to represent this instance.
 	borrowing func dbHandle() -> MDB_dbi
 	
