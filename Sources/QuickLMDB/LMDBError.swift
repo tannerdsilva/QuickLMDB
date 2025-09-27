@@ -2,8 +2,9 @@ import CLMDB
 
 #if os(Linux)
 import Glibc // needed on linux for error values
-#elseif os(Darwin)
+#elseif os(macOS)
 import System
+import Darwin
 #endif
 
 /// a structure used to convey 
