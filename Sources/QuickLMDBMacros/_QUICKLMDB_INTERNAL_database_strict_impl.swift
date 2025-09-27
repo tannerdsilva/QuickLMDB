@@ -6,7 +6,7 @@ import SwiftParser
 
 /// this macro needs to exist beceause the implemented functions cannot be marked as borrowing when used as a member of a protocol
 internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
-	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
+	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
 		return [
 			DeclSyntax("""
 				public borrowing func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) {

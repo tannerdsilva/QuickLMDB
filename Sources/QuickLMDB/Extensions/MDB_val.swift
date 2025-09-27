@@ -17,7 +17,7 @@ extension MDB_val {
 	}
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and specified length.
-	internal static func reserved(capacity:size_t) -> MDB_val {
+	internal static func reserved(capacity:Int) -> MDB_val {
 		var makeVal = MDB_val()
 		makeVal.mv_size = capacity
 		return makeVal

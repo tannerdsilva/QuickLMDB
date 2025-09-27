@@ -32,7 +32,7 @@ internal struct MDB_comparable_macro:MemberMacro, ExtensionMacro {
 			return .skipChildren
 		}
 	}
-	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
+	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
 		let seracher = StructClassEnumModifiersFinder(viewMode:.sourceAccurate)
 		seracher.walk(declaration)
 		let foundModList = seracher.modifierList ?? []

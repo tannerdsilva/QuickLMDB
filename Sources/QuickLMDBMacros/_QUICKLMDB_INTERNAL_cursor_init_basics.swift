@@ -6,7 +6,7 @@ import SwiftParser
 
 /// this macro needs to exist beceause the implemented functions cannot be marked as borrowing when used as a member of a protocol
 internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
-	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
+	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
 		return [
 			DeclSyntax("""
 				/// this is the pointer to the `MDB_cursor` struct associated with a given instance.

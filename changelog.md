@@ -1,3 +1,7 @@
+# 14.0.0
+
+- Now requires Swift v6.2.
+
 # 13.0.0
 
 - Added ability to access the `Environment` instance of a `MDB_db` compliant database.

@@ -1,7 +1,10 @@
 import CLMDB
+import System
 
 #if os(Linux)
 import Glibc // needed on linux for error values
+#elseif os(Darwin)
+import Darwin
 #endif
 
 /// a structure used to convey 
@@ -103,11 +106,11 @@ public enum LMDBError:Error {
 			case MDB_BAD_TXN: self = .badTransaction
 			case MDB_BAD_VALSIZE: self = .badValueSize
 			case MDB_BAD_DBI: self = .badDBI
-			case EINVAL: self = .invalidParameter
-			case ENOSPC: self = .outOfDiskSpace
-			case ENOMEM: self = .outOfMemory
-			case EIO: self = .ioError
-			case EACCES: self = .accessViolation
+			case Errno.invalidArgument.rawValue: self = .invalidParameter
+			case Errno.noSpace.rawValue: self = .outOfDiskSpace
+			case Errno.noMemory.rawValue: self = .outOfMemory
+			case Errno.ioError.rawValue: self = .ioError
+			case Errno.permissionDenied.rawValue: self = .accessViolation
 			
 			default: self = .other(returnCode:returnCode)
 		}
@@ -157,15 +160,15 @@ public enum LMDBError:Error {
 			case .badDBI:
 				return MDB_BAD_DBI
 			case .invalidParameter:
-				return EINVAL
+				return Errno.invalidArgument.rawValue
 			case .outOfDiskSpace:
-				return ENOSPC
+				return Errno.noSpace.rawValue
 			case .outOfMemory:
-				return ENOMEM
+				return Errno.noMemory.rawValue
 			case .ioError:
-				return EIO
+				return Errno.ioError.rawValue
 			case .accessViolation:
-				return EACCES
+				return Errno.permissionDenied.rawValue
 			case let .other(returnCode:rc):
 				return rc
 			}

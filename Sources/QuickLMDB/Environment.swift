@@ -53,7 +53,7 @@ public final class Environment:@unchecked Sendable {
 	/// the flags that were used to open the environment
 	public let flags:Flags
 
-	public init(path:String, flags:Environment.Flags, mapSize:size_t?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws {
+	public init(path:String, flags:Environment.Flags, mapSize:Int?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws {
 
 		// create the environment variable
 		var environmentHandle:OpaquePointer? = nil;
