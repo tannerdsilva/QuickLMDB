@@ -1,10 +1,9 @@
 import CLMDB
-import System
 
 #if os(Linux)
 import Glibc // needed on linux for error values
 #elseif os(Darwin)
-import Darwin
+import System
 #endif
 
 /// a structure used to convey 
@@ -106,11 +105,20 @@ public enum LMDBError:Error {
 			case MDB_BAD_TXN: self = .badTransaction
 			case MDB_BAD_VALSIZE: self = .badValueSize
 			case MDB_BAD_DBI: self = .badDBI
+
+			#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case Errno.invalidArgument.rawValue: self = .invalidParameter
 			case Errno.noSpace.rawValue: self = .outOfDiskSpace
 			case Errno.noMemory.rawValue: self = .outOfMemory
 			case Errno.ioError.rawValue: self = .ioError
 			case Errno.permissionDenied.rawValue: self = .accessViolation
+			#elseif os(Linux)
+			case Glibc.EINVAL: self = .invalidParameter
+			case Glibc.ENOSPC: self = .outOfDiskSpace
+			case Glibc.ENOMEM: self = .outOfMemory
+			case Glibc.EIO: self = .ioError
+			case Glibc.EACCES: self = .accessViolation
+			#endif
 			
 			default: self = .other(returnCode:returnCode)
 		}
@@ -159,6 +167,7 @@ public enum LMDBError:Error {
 				return MDB_BAD_VALSIZE
 			case .badDBI:
 				return MDB_BAD_DBI
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case .invalidParameter:
 				return Errno.invalidArgument.rawValue
 			case .outOfDiskSpace:
@@ -169,6 +178,18 @@ public enum LMDBError:Error {
 				return Errno.ioError.rawValue
 			case .accessViolation:
 				return Errno.permissionDenied.rawValue
+#elseif os(Linux)
+			case .invalidParameter:
+				return Glibc.EINVAL
+			case .outOfDiskSpace:
+				return Glibc.ENOSPC
+			case .outOfMemory:
+				return Glibc.ENOMEM
+			case .ioError:
+				return Glibc.EIO
+			case .accessViolation:
+				return Glibc.EACCES
+#endif
 			case let .other(returnCode:rc):
 				return rc
 			}
