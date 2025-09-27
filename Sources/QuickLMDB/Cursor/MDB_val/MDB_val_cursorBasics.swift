@@ -3,7 +3,7 @@ import RAW
 extension MDB_cursor_dupsort {
 	/// get the current key from the database
 	@available(*, noasync)
-	public borrowing func dupCount() throws(LMDBError) -> RAW.size_t {
+	public borrowing func dupCount() throws(LMDBError) -> Int {
 		return try MDB_cursor_get_dupcount_static(cursor:self)
 	}
 

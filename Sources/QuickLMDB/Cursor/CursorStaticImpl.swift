@@ -61,8 +61,8 @@ internal func MDB_cursor_compare_values_static<C:MDB_cursor>(cursor:borrowing C,
 	return result
 }
 
-internal func MDB_cursor_get_dupcount_static<C:MDB_cursor>(cursor:borrowing C) throws(LMDBError) -> size_t {
-	var count:size_t = 0
+internal func MDB_cursor_get_dupcount_static<C:MDB_cursor>(cursor:borrowing C) throws(LMDBError) -> Int {
+	var count:Int = 0
 	let result = mdb_cursor_count(cursor.cursorHandle(), &count)
 	guard result == MDB_SUCCESS else {
 		throw LMDBError(returnCode:result)

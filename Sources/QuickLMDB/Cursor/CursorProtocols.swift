@@ -19,7 +19,7 @@ public protocol MDB_cursor_dupsort:MDB_cursor where MDB_cursor_dbtype:MDB_db_dup
 
 	/// returns the number of duplicate entries in the database for this key.
 	@available(*, noasync)
-	borrowing func dupCount() throws(LMDBError) -> size_t
+	borrowing func dupCount() throws(LMDBError) -> Int
 	
 	@available(*, noasync)
 	borrowing func opFirstDup(returning:MDB_cursor_dbtype.MDB_db_val_type.Type) throws(LMDBError) -> MDB_cursor_dbtype.MDB_db_val_type
