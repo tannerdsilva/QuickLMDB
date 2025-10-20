@@ -15,7 +15,7 @@ public protocol MDB_cursor_dupfixed:MDB_cursor_dupsort where MDB_cursor_dbtype:M
 }
 
 /// the primary protocol for dupsort cursors
-public protocol MDB_cursor_dupsort:MDB_cursor where MDB_cursor_dbtype:MDB_db_dupsort {
+public protocol MDB_cursor_dupsort:MDB_cursor_strict where MDB_cursor_dbtype:MDB_db_dupsort {
 
 	/// returns the number of duplicate entries in the database for this key.
 	@available(*, noasync)

@@ -1,3 +1,7 @@
+# 15.0.0
+
+- Changed relationships of various database and cursor protocols such that the most restrictive of these types are now based on their `XXX_strict` counterparts.
+
 # 14.0.0
 
 - Now requires Swift v6.2.
