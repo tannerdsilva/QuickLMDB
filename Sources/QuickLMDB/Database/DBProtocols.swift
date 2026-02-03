@@ -10,7 +10,7 @@ public protocol MDB_db_dupsort:MDB_db_strict where MDB_db_val_type:MDB_comparabl
 // defines a database where the key and value type are fixed size
 public protocol MDB_db_dupfixed:MDB_db_dupsort where MDB_db_key_type:RAW_staticbuff, MDB_db_val_type:RAW_staticbuff, MDB_db_cursor_type:MDB_cursor_dupfixed {}
 
-public protocol MDB_db {
+public protocol MDB_db:Sendable {
 	
 	/// the type that the database is exchanging as the key value
 	associatedtype MDB_db_key_type
