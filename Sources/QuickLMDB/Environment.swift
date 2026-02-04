@@ -42,7 +42,7 @@ public final class Environment:@unchecked Sendable {
 		/// do not initialize malloc'd memory before writing to the datafile.
 		public static let noMemoryInit = Flags(rawValue:UInt32(MDB_NOMEMINIT))
 	}
-
+	
 	private let _env_handle:OpaquePointer
 	
 	/// returns the primitive that LMDB uses to convey this instance
@@ -53,13 +53,18 @@ public final class Environment:@unchecked Sendable {
 	/// the flags that were used to open the environment
 	public let flags:Flags
 
-	public init(path:String, flags:Environment.Flags, mapSize:Int?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions) throws {
+	public init<H>(path:String, flags:Environment.Flags, mapSize:Int?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, checksum:H.Type) throws where H:MDB_checksum_impl {
 
 		// create the environment variable
 		var environmentHandle:OpaquePointer? = nil;
 		let envStatus = mdb_env_create(&environmentHandle)
 		guard envStatus == 0 && environmentHandle != nil else {
 			throw LMDBError(returnCode:envStatus)
+		}
+		
+		let mdbChecksumResult = mdb_env_set_checksum(environmentHandle, checksum.MDB_sum_f, UInt32(MemoryLayout<H.MDB_checksum_outputtype.RAW_staticbuff_storetype>.size))
+		guard mdbChecksumResult == 0 else {
+			throw LMDBError(returnCode:mdbChecksumResult)
 		}
 		
 		// set the map size

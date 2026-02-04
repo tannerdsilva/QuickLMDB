@@ -1,13 +1,13 @@
 {
-  "originHash" : "a561436a5353403750e09ba2e5634efba630b6a7ea884e8a00bbc293704b7d41",
+  "originHash" : "6976d2f4573da83aeac880493748bb105ed85a46de091c385c90570cf157629d",
   "pins" : [
     {
       "identity" : "clmdb",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tannerdsilva/CLMDB.git",
       "state" : {
-        "revision" : "4ce5826424f8e65f395efc5b4c611479384722b1",
-        "version" : "0.9.30"
+        "branch" : "master3",
+        "revision" : "b34dee08344ab54263da282fb55e0b4b1d9ee1a1"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tannerdsilva/rawdog.git",
       "state" : {
-        "revision" : "6115f31ffcc9612bd2b9c5c950c3b413241c5ece",
-        "version" : "20.0.0"
+        "revision" : "378e87e49d2cf95c92882b1bcbe21252c5c1d0a6",
+        "version" : "21.0.0"
       }
     },
     {
