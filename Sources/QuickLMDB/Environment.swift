@@ -1,4 +1,5 @@
 import CLMDB
+import RAW
 import SystemPackage
 
 public final class Environment:@unchecked Sendable {
@@ -53,7 +54,7 @@ public final class Environment:@unchecked Sendable {
 	/// the flags that were used to open the environment
 	public let flags:Flags
 
-	public init<H>(path:String, flags:Environment.Flags, mapSize:Int?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, checksum:H.Type) throws where H:MDB_checksum_impl {
+	public init<H, E>(path:String, flags:Environment.Flags, mapSize:Int?, maxReaders:MDB_dbi, maxDBs:MDB_dbi, mode:FilePermissions, checksum:H.Type, encryption:(E.Type, MemoryGuarded<E.MDB_crypto_impl_keytype>)) throws where H:MDB_checksum_impl, E:MDB_crypto_impl {
 
 		// create the environment variable
 		var environmentHandle:OpaquePointer? = nil;
@@ -65,6 +66,14 @@ public final class Environment:@unchecked Sendable {
 		let mdbChecksumResult = mdb_env_set_checksum(environmentHandle, checksum.MDB_sum_f, UInt32(MemoryLayout<H.MDB_checksum_outputtype.RAW_staticbuff_storetype>.size))
 		guard mdbChecksumResult == 0 else {
 			throw LMDBError(returnCode:mdbChecksumResult)
+		}
+		
+		try encryption.1.RAW_access { encryptionKeyPointer in
+			var keyContainerVal = MDB_val(mv_size:encryptionKeyPointer.count, mv_data:UnsafeMutableRawPointer(mutating:encryptionKeyPointer.baseAddress!))
+			let setEncryptionResult = mdb_env_set_encrypt(environmentHandle, E.MDB_crypto_f, &keyContainerVal, UInt32(MemoryLayout<E.MDB_crypto_impl_authtype.RAW_staticbuff_storetype>.size))
+			guard setEncryptionResult == 0 else {
+				throw LMDBError(returnCode:setEncryptionResult)
+			}
 		}
 		
 		// set the map size
