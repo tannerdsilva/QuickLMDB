@@ -43,7 +43,9 @@ public struct OpenEndedIterator<C>:IteratorProtocol where C:MDB_cursor {
 public struct DiscreteRangeIterator<C>:IteratorProtocol where C:MDB_cursor {
 	/// the internal stage of stepping that the iterator is operating with
 	internal enum Stage {
+		/// used to express the stage where the first item needs to be seek'd. the upper boundary is also stored on this stage
 		case seekToFirst(MDB_val, MDB_val)
+		/// used to express the stage where any n number of items are being stepped through until the upper boundary is crossed
 		case seekUntilEnd(MDB_val)
 	}
 	
@@ -58,21 +60,21 @@ public struct DiscreteRangeIterator<C>:IteratorProtocol where C:MDB_cursor {
 	
 	public mutating func next() -> MDB_val? {
 		do {
+			let returnValue:MDB_val
+			let upperBoundary:MDB_val
 			switch stage {
-				case .seekToFirst(let mdbValToSeek, let upperBoundary):
-					stage = .seekUntilEnd(upperBoundary)
-					let returnValue = try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek).key
-					guard cursor.compareEntryKeys(returnValue, upperBoundary) < 0 else {
-						return nil
-					}
-					return returnValue
-				case .seekUntilEnd(let upperBoundary):
-					let returnValue = try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self).key
-					guard cursor.compareEntryKeys(returnValue, upperBoundary) < 0 else {
-						return nil
-					}
-					return returnValue
+				case .seekToFirst(let mdbValToSeek, let ub):
+					stage = .seekUntilEnd(ub)
+					upperBoundary = ub
+					returnValue = try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek).key
+				case .seekUntilEnd(let ub):
+					upperBoundary = ub
+					returnValue = try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self).key
 			}
+			guard cursor.compareEntryKeys(returnValue, upperBoundary) < 0 else {
+				return nil
+			}
+			return returnValue
 		} catch {
 			return nil
 		}
