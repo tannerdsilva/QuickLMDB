@@ -128,5 +128,10 @@ public final class Environment:@unchecked Sendable {
 		// close the environment handle when all references to this instance are released
 		mdb_env_close(envHandle())
 	}
+}
 
+extension Environment:CustomDebugStringConvertible {
+	public var debugDescription:String {
+		return "QuickLMDB.Environment(env:\(String(describing:_env_handle)))"
+	}
 }

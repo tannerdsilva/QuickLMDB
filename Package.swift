@@ -12,6 +12,10 @@ let package = Package(
             name: "QuickLMDB",
             targets: ["QuickLMDB"]
         ),
+        .library(
+        	name: "concord",
+        	targets: ["concord"]
+        )
     ],
     dependencies:[
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", branch:"master3"),
@@ -29,6 +33,12 @@ let package = Package(
 				.product(name:"RAW", package:"rawdog"),
 				"QuickLMDBMacros",
 			],
+		),
+		.target(
+			name:"concord",
+			dependencies:[
+				"QuickLMDB"
+			]
 		),
 		.macro(
 			name:"QuickLMDBMacros",
