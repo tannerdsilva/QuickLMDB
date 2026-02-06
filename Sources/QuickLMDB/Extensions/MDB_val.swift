@@ -44,7 +44,7 @@ extension MDB_val:@retroactive Sequence {
 
 extension MDB_val:@retroactive CustomDebugStringConvertible {
 	public var debugDescription:String {
-		return "[MDB_val](\(hashValue % Int(UInt16.max)){ \(mv_size)b }"
+		return "CLMDB.MDB_val(mv_size:\(mv_size), mv_data:\(String(describing:mv_data)))"
 	}
 }
 
