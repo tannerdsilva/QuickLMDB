@@ -1,15 +1,21 @@
 import RAW
 import QuickLMDB
 
+extension MDB_cursor {
+	public consuming func view(begin:consuming BeginStrategy) -> OpenEndedView<Self> {
+		return OpenEndedView(cursor:self, begin:begin)
+	}
+}
+
 public struct OpenEndedView<C>:Sequence where C:MDB_cursor {
 	/// the type of cursor that will be used to step through the represented view.
 	internal let cursor:C
 	
 	/// the beginning value that the view will start with.
-	internal let begin:MDB_val
+	internal let begin:BeginStrategy
 	
 	/// initialize an open ended cursor iterator with the specified cursor and beginning key
-	internal init(cursor:consuming C, begin:consuming MDB_val) {
+	internal init(cursor:consuming C, begin:consuming BeginStrategy) {
 		self.cursor = cursor
 		self.begin = begin
 	}
@@ -23,7 +29,7 @@ public struct OpenEndedView<C>:Sequence where C:MDB_cursor {
 	public struct Iterator:IteratorProtocol {
 		/// the internal stage of stepping that the iterator is operating with
 		internal enum Stage {
-			case seekToFirst(MDB_val)
+			case seekToFirst(BeginStrategy)
 			case continueToEOF
 			case eof
 		}
@@ -34,7 +40,7 @@ public struct OpenEndedView<C>:Sequence where C:MDB_cursor {
 		internal var stage:Stage
 	
 		/// initialize an open ended cursor iterator with the specified cursor and beginning key
-		internal init(cursor:consuming C, begin:consuming MDB_val) {
+		internal init(cursor:consuming C, begin:consuming BeginStrategy) {
 			self.cursor = cursor
 			self.stage = .seekToFirst(begin)
 		}
@@ -43,9 +49,16 @@ public struct OpenEndedView<C>:Sequence where C:MDB_cursor {
 		public mutating func next() -> (key:MDB_val, value:MDB_val)? {
 			do {
 				switch stage {
-					case .seekToFirst(let mdbValToSeek):
+					case .seekToFirst(let seekStrategy):
 						stage = .continueToEOF
-						return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek)
+						switch seekStrategy {
+							case let .opSetRange(mdbValToSeek):
+								return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek)
+							case .opGetCurrent:
+								return try cursor.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
+							case .opFirst:
+								return try cursor.opFirst(returning:(key:MDB_val, value:MDB_val).self)
+						}
 					case .continueToEOF:
 						return try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self)
 					case .eof:
