@@ -13,19 +13,20 @@ import QuickLMDB
 ////	init(bound:Boundary<UIDLengthValueType, UID>)
 //}
 
-internal protocol CONCORD_payload_mode_type:RAW_encoded_fixedwidthinteger {
+internal protocol CONCORD_mode_type:RAW_encoded_fixedwidthinteger, ExpressibleByIntegerLiteral {
 	static var CONCORD_payload_mode_skip:Self { get }
 	static var CONCORD_payload_mode_fingerprint:Self { get }
-	static var CONCORD_payload_mode_idlist:Self { get }
+	static var CONCORD_payload_mode_list:Self { get }
 }
 
 internal protocol CONCORD_reconciliation_setup {
-	associatedtype CONCORD_identifier_length_type:CONCORD_payload_mode_type
+	associatedtype CONCORD_identifier_length_type:RAW_encoded_fixedwidthinteger
 	associatedtype CONCORD_identifier_type:RAW_staticbuff
 	associatedtype CONCORD_fingerprint_hashing_impl:RAW_hasher
+	associatedtype CONCORD_reconciliation_mode_type:CONCORD_mode_type
 }
 
-internal struct BoundedPayload<IdentifierLengthType:CONCORD_payload_mode_type, IdentifierType:RAW_staticbuff, ModeType:CONCORD_payload_mode_type>:~Copyable {
+internal struct BoundedPayload<IdentifierLengthType:CONCORD_mode_type, IdentifierType:RAW_staticbuff, ModeType:CONCORD_mode_type>:~Copyable {
 	internal let boundary:Boundary<IdentifierLengthType, IdentifierType>
 	internal let payloadMode:IdentifierType
 	internal let payloadContent:UnsafeRawBufferPointer
@@ -52,6 +53,9 @@ internal struct BoundedPayload<IdentifierLengthType:CONCORD_payload_mode_type, I
 //
 //
 extension MDB_cursor {
+	internal func splitRangeList<ReconciliationSetup>(elementCount:Int, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
+	
+	}
 	internal func splitRangeBuckets<ReconciliationSetup>(elementCount:Int, nonzeroBucketCount buckets:Int, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
 		#if DEBUG
 		guard buckets > 0 else {
@@ -80,6 +84,11 @@ extension MDB_cursor {
 				let startNextBucket = try opNext(returning:(key:MDB_val, value:MDB_val).self).key
 				curUpperBoundary = Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>.minimal(previous:UnsafeRawBufferPointer(endCurBucket), current:UnsafeRawBufferPointer(startNextBucket))
 			} catch LMDBError.notFound {
+				#if DEBUG
+				guard i == (buckets - 1) else {
+					fatalError("\(#file):\(#line)")
+				}
+				#endif
 				let uidLength = ReconciliationSetup.CONCORD_identifier_length_type(RAW_native:ReconciliationSetup.CONCORD_identifier_length_type.RAW_native_type(MemoryLayout<ReconciliationSetup.CONCORD_identifier_type.RAW_staticbuff_storetype>.size))
 				curUpperBoundary = Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>(length:uidLength, identifier:ReconciliationSetup.CONCORD_identifier_type.RAW_comparable_fixed_theoretical_max())
 			}
