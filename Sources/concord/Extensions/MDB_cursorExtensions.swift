@@ -13,10 +13,27 @@ import QuickLMDB
 ////	init(bound:Boundary<UIDLengthValueType, UID>)
 //}
 
-internal struct BoundedPayload<IdentifierLengthType:RAW_encoded_fixedwidthinteger, IdentifierType:RAW_staticbuff, ModeType:RAW_encoded_fixedwidthinteger> {
+internal protocol CONCORD_payload_mode_type:RAW_encoded_fixedwidthinteger {
+	static var CONCORD_payload_mode_skip:Self { get }
+	static var CONCORD_payload_mode_fingerprint:Self { get }
+	static var CONCORD_payload_mode_idlist:Self { get }
+}
+
+internal protocol CONCORD_reconciliation_setup {
+	associatedtype CONCORD_identifier_length_type:CONCORD_payload_mode_type
+	associatedtype CONCORD_identifier_type:RAW_staticbuff
+	associatedtype CONCORD_fingerprint_hashing_impl:RAW_hasher
+}
+
+internal struct BoundedPayload<IdentifierLengthType:CONCORD_payload_mode_type, IdentifierType:RAW_staticbuff, ModeType:CONCORD_payload_mode_type>:~Copyable {
 	internal let boundary:Boundary<IdentifierLengthType, IdentifierType>
 	internal let payloadMode:IdentifierType
 	internal let payloadContent:UnsafeRawBufferPointer
+	internal init(boundary:consuming Boundary<IdentifierLengthType, IdentifierType>, payloadMode:consuming IdentifierType, payloadContent:UnsafeRawBufferPointer) {
+		self.boundary = boundary
+		self.payloadMode = payloadMode
+		self.payloadContent = payloadContent
+	}
 }
 
 //// fingerprint, idlist, skip should be expressed with this protocol
@@ -34,43 +51,42 @@ internal struct BoundedPayload<IdentifierLengthType:RAW_encoded_fixedwidthintege
 //}
 //
 //
-//extension MDB_cursor {
-//	internal func splitRangeBuckets<UIDLengthValueType, UID, F>(elementCount:Int, nonzeroBucketCount buckets:Int, hasher:F.Type) throws where F:CONCORD_payload_fingerprint {
-//		#if DEBUG
-//		guard buckets > 0 else {
-//			fatalError("\(#file):\(#line) buckets <= 0 is not allowed")
-//		}
-//		#endif
-//		let idsPerBucket = elementCount / buckets
-//		let bucketsWithExtra = elementCount % buckets
-//			var curStrategy = BeginStrategy.opFirst
-//			var i = 0
-//			repeat {
-//				let bucketSize = idsPerBucket + ((i < bucketsWithExtra) ? 1 : 0)
-//				let ourFingerprint = try view(begin:curStrategy, steps:bucketSize).fingerprint(hasher:F.CONCORD_payload_fingerprint_hasher_impl.self)
-//				let endCurBucket = try opGetCurrent(returning:(key:MDB_val, value:MDB_val).self).key
-//				defer { 
-//					switch i {
-//						case 0:
-//							curStrategy = .opGetCurrent
-//							fallthrough
-//						default:
-//							i += 1
-//					}
-//				}
-//				let curUpperBoundary:Boundary<UIDLengthValueType, UID>
-//				do {
-//					let startNextBucket = try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self).key
-//					curUpperBoundary = Boundary<UIDLengthValueType, UID>.minimalBound(prev:endCurrBucket, cur:startNextBucket)
-//				} catch LMDBError.notFound {
-//					curUpperBoundary = upperBound
-//				}
-//				write fingerprint flag
-//				write fingerprint content
-//			}
-//		}
-//	}
-//}
+extension MDB_cursor {
+	internal func splitRangeBuckets<ReconciliationSetup>(elementCount:Int, nonzeroBucketCount buckets:Int, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
+		#if DEBUG
+		guard buckets > 0 else {
+			fatalError("\(#file):\(#line) buckets <= 0 is not allowed")
+		}
+		#endif
+		let idsPerBucket = elementCount / buckets
+		let bucketsWithExtra = elementCount % buckets
+		var curStrategy = BeginStrategy.opFirst
+		var i = 0
+		repeat {
+			let bucketSize = idsPerBucket + ((i < bucketsWithExtra) ? 1 : 0)
+			let ourFingerprint = try view(begin:curStrategy, steps:bucketSize).fingerprint(hasher:ReconciliationSetup.CONCORD_fingerprint_hashing_impl.self)
+			let endCurBucket = try opGetCurrent(returning:(key:MDB_val, value:MDB_val).self).key
+			defer { 
+				switch i {
+					case 0:
+						curStrategy = .opGetCurrent
+						fallthrough
+					default:
+						i += 1
+				}
+			}
+			let curUpperBoundary:Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>
+			do {
+				let startNextBucket = try opNext(returning:(key:MDB_val, value:MDB_val).self).key
+				curUpperBoundary = Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>.minimal(previous:UnsafeRawBufferPointer(endCurBucket), current:UnsafeRawBufferPointer(startNextBucket))
+			} catch LMDBError.notFound {
+				let uidLength = ReconciliationSetup.CONCORD_identifier_length_type(RAW_native:ReconciliationSetup.CONCORD_identifier_length_type.RAW_native_type(MemoryLayout<ReconciliationSetup.CONCORD_identifier_type.RAW_staticbuff_storetype>.size))
+				curUpperBoundary = Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>(length:uidLength, identifier:ReconciliationSetup.CONCORD_identifier_type.RAW_comparable_fixed_theoretical_max())
+			}
+
+		} while true
+	}
+}
 //
 //// MARK: Fingerprint Extensions
 //extension MDB_cursor {
