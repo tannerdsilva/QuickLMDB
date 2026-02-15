@@ -24,4 +24,8 @@ public struct Boundary<IdentifierLengthType:RAW_encoded_fixedwidthinteger, Ident
 		}
 		return Self(length:IdentifierLengthType(RAW_native:sharedPrefixBytes), identifier:returnKey)
 	}
+	
+	internal static func fullSizeMaximumValue() -> Self {
+		return Self(length:IdentifierLengthType(RAW_native:IdentifierLengthType.RAW_native_type(MemoryLayout<IdentifierType.RAW_staticbuff_storetype>.size)), identifier:IdentifierType.RAW_comparable_fixed_theoretical_max())
+	}
 }

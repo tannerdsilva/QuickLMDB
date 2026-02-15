@@ -13,20 +13,28 @@ import QuickLMDB
 ////	init(bound:Boundary<UIDLengthValueType, UID>)
 //}
 
-internal protocol CONCORD_mode_type:RAW_encoded_fixedwidthinteger, ExpressibleByIntegerLiteral {
-	static var CONCORD_payload_mode_skip:Self { get }
+internal protocol CONCORD_payload_mode_type:RAW_encoded_fixedwidthinteger, ExpressibleByIntegerLiteral {
 	static var CONCORD_payload_mode_fingerprint:Self { get }
 	static var CONCORD_payload_mode_list:Self { get }
+	static var CONCORD_payload_mode_skip:Self { get }
 }
 
 internal protocol CONCORD_reconciliation_setup {
-	associatedtype CONCORD_identifier_length_type:RAW_encoded_fixedwidthinteger
-	associatedtype CONCORD_identifier_type:RAW_staticbuff
+	associatedtype CONCORD_rs_identifier_length_type:RAW_encoded_fixedwidthinteger
+	associatedtype CONCORD_rs_identifier_type:RAW_staticbuff
 	associatedtype CONCORD_fingerprint_hashing_impl:RAW_hasher
-	associatedtype CONCORD_reconciliation_mode_type:CONCORD_mode_type
+	associatedtype CONCORD_reconciliation_mode_type:CONCORD_payload_mode_type
 }
 
-internal struct BoundedPayload<IdentifierLengthType:CONCORD_mode_type, IdentifierType:RAW_staticbuff, ModeType:CONCORD_mode_type>:~Copyable {
+internal struct BoundedPayloadV2<ReconciliationSetup:CONCORD_reconciliation_setup>:~Copyable {
+	internal enum PayloadContent {
+		case fingerprint(ReconciliationSetup.CONCORD_fingerprint_hashing_impl.RAW_hasher_outputtype)
+		case idList([ReconciliationSetup.CONCORD_rs_identifier_type])
+	}
+	
+}
+
+internal struct BoundedPayload<IdentifierLengthType:CONCORD_payload_mode_type, IdentifierType:RAW_staticbuff, ModeType:CONCORD_payload_mode_type>:~Copyable {
 	internal let boundary:Boundary<IdentifierLengthType, IdentifierType>
 	internal let payloadMode:IdentifierType
 	internal let payloadContent:UnsafeRawBufferPointer
@@ -37,7 +45,7 @@ internal struct BoundedPayload<IdentifierLengthType:CONCORD_mode_type, Identifie
 	}
 }
 
-//// fingerprint, idlist, skip should be expressed with this protocol
+// fingerprint, idlist, skip should be expressed with this protocol
 //public protocol CONCORD_payload_type:~Copyable, RAW_encodable {
 //	associatedtype CONCORD_payload_kind_type:RAW_encoded_fixedwidthinteger
 //	associatedtype CONCORD_payload_content_type:RAW_encodable
@@ -79,25 +87,19 @@ extension MDB_cursor {
 						i += 1
 				}
 			}
-			let curUpperBoundary:Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>
+			let curUpperBoundary:Boundary<ReconciliationSetup.CONCORD_rs_identifier_length_type, ReconciliationSetup.CONCORD_rs_identifier_type>
 			do {
 				let startNextBucket = try opNext(returning:(key:MDB_val, value:MDB_val).self).key
-				curUpperBoundary = Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>.minimal(previous:UnsafeRawBufferPointer(endCurBucket), current:UnsafeRawBufferPointer(startNextBucket))
+				curUpperBoundary = .minimal(previous:UnsafeRawBufferPointer(endCurBucket), current:UnsafeRawBufferPointer(startNextBucket))
 			} catch LMDBError.notFound {
 				#if DEBUG
 				guard i == (buckets - 1) else {
 					fatalError("\(#file):\(#line)")
 				}
 				#endif
-				let uidLength = ReconciliationSetup.CONCORD_identifier_length_type(RAW_native:ReconciliationSetup.CONCORD_identifier_length_type.RAW_native_type(MemoryLayout<ReconciliationSetup.CONCORD_identifier_type.RAW_staticbuff_storetype>.size))
-				curUpperBoundary = Boundary<ReconciliationSetup.CONCORD_identifier_length_type, ReconciliationSetup.CONCORD_identifier_type>(length:uidLength, identifier:ReconciliationSetup.CONCORD_identifier_type.RAW_comparable_fixed_theoretical_max())
+				curUpperBoundary = .fullSizeMaximumValue()
 			}
-
+			
 		} while true
 	}
 }
-//
-//// MARK: Fingerprint Extensions
-//extension MDB_cursor {
-//
-//}
