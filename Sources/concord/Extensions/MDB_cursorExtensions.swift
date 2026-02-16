@@ -14,52 +14,44 @@ import QuickLMDB
 //}
 
 internal protocol CONCORD_payload_mode_type:RAW_encoded_fixedwidthinteger, ExpressibleByIntegerLiteral {
+	/// the mode value that is used to signal a fingerprint payload
 	static var CONCORD_payload_mode_fingerprint:Self { get }
+	/// the mode value that is used to signal a id list payload
 	static var CONCORD_payload_mode_list:Self { get }
+	/// the mode value that is used to signal a skip payload
 	static var CONCORD_payload_mode_skip:Self { get }
 }
 
 internal protocol CONCORD_reconciliation_setup {
+	/// the type that shall be used to express the length of a bounded UID
 	associatedtype CONCORD_rs_identifier_length_type:RAW_encoded_fixedwidthinteger
 	associatedtype CONCORD_rs_identifier_type:RAW_staticbuff
 	associatedtype CONCORD_fingerprint_hashing_impl:RAW_hasher
 	associatedtype CONCORD_reconciliation_mode_type:CONCORD_payload_mode_type
 }
 
-internal struct BoundedPayloadV2<ReconciliationSetup:CONCORD_reconciliation_setup>:~Copyable {
-	internal enum PayloadContent {
-		case fingerprint(ReconciliationSetup.CONCORD_fingerprint_hashing_impl.RAW_hasher_outputtype)
-		case idList([ReconciliationSetup.CONCORD_rs_identifier_type])
+internal struct BoundedPayload<ReconciliationSetup:CONCORD_reconciliation_setup, PayloadContent:RAW_encodable>:RAW_encodable {
+	internal let boundary:Boundary<ReconciliationSetup.CONCORD_rs_identifier_length_type, ReconciliationSetup.CONCORD_rs_identifier_type>
+	internal let mode:ReconciliationSetup.CONCORD_reconciliation_mode_type
+	internal let content:PayloadContent
+	
+	internal borrowing func RAW_encode(count:inout Int) {
+		boundary.RAW_encode(count:&count)
+		mode.RAW_encode(count:&count)
+		content.RAW_encode(count:&count)
 	}
 	
-}
-
-internal struct BoundedPayload<IdentifierLengthType:CONCORD_payload_mode_type, IdentifierType:RAW_staticbuff, ModeType:CONCORD_payload_mode_type>:~Copyable {
-	internal let boundary:Boundary<IdentifierLengthType, IdentifierType>
-	internal let payloadMode:IdentifierType
-	internal let payloadContent:UnsafeRawBufferPointer
-	internal init(boundary:consuming Boundary<IdentifierLengthType, IdentifierType>, payloadMode:consuming IdentifierType, payloadContent:UnsafeRawBufferPointer) {
-		self.boundary = boundary
-		self.payloadMode = payloadMode
-		self.payloadContent = payloadContent
+	internal borrowing func RAW_encode(dest:UnsafeMutablePointer<UInt8>) -> UnsafeMutablePointer<UInt8> {
+		var seeker = boundary.RAW_encode(dest:dest)
+		seeker = mode.RAW_encode(dest:seeker)
+		return content.RAW_encode(dest:seeker)
 	}
 }
 
-// fingerprint, idlist, skip should be expressed with this protocol
-//public protocol CONCORD_payload_type:~Copyable, RAW_encodable {
-//	associatedtype CONCORD_payload_kind_type:RAW_encoded_fixedwidthinteger
-//	associatedtype CONCORD_payload_content_type:RAW_encodable
-//	
-//	static var CONCORD_payload_kind_value:CONCORD_payload_kind_type { get }
-//	var CONCORD_payload_content:CONCORD_payload_content_type
-//	init(CONCORD_payload_content:consuming CONCORD_payload_content)
-//}
-//
-//public protocol CONCORD_payload_fingerprint_type:CONCORD_payload_type where CONCORD_payload_content_type == CONCORD_payload_fingerprint_hasher_impl.RAW_hasher_outputtype {
-//	associatedtype CONCORD_payload_fingerprint_hasher_impl:RAW_hasher
-//}
-//
-//
+public protocol CONCORD_encoding_transmitter {
+	borrowing func transmit<E>(payload:consuming E) where E:RAW_encodable
+}
+
 extension MDB_cursor {
 	internal func splitRangeList<ReconciliationSetup>(elementCount:Int, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
 	

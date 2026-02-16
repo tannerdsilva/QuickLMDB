@@ -2,6 +2,7 @@ import RAW
 import QuickLMDB
 
 extension Sequence where Element == (key:MDB_val, value:MDB_val) {
+	/// generates a fingerprint over using the specified hashing implementation.
 	internal func fingerprint<H>(hasher _:H.Type) throws -> H.RAW_hasher_outputtype where H:RAW_hasher {
 		var hasher = try H()
 		for (key, _) in self {
