@@ -88,7 +88,7 @@ public protocol CONCORD_encoding_transmitter {
 }
 
 extension MDB_cursor {
-	internal func splitRangeListRoot<ReconciliationSetup>(elementCount:Int, transmitter:inout CONCORD_encoding_transmitter, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
+	internal func splitRangeListRoot<ReconciliationSetup>(transmitter:inout CONCORD_encoding_transmitter, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
 		var incrementalIDList = IncrementalIDListPayload<ReconciliationSetup>()
 		for (id, _) in view(begin:.opFirst) {
 			incrementalIDList.storeIdentifier(id)
