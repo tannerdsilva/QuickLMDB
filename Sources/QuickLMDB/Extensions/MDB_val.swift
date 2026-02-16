@@ -35,9 +35,9 @@ extension MDB_val {
 
 extension MDB_val:@retroactive Sequence {
 	public typealias Element = UInt8
-	public typealias Iterator = UnsafeBufferPointer<UInt8>.Iterator
+	public typealias Iterator = UnsafeRawBufferPointer.Iterator
 	public func makeIterator() -> Iterator {
-		return UnsafeBufferPointer(start:mv_data.assumingMemoryBound(to:UInt8.self), count:mv_size).makeIterator()
+		return UnsafeRawBufferPointer(start:mv_data, count:mv_size).makeIterator()
 	}
 }
 

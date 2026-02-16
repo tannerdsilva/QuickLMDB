@@ -1,6 +1,6 @@
 import RAW
 
-public struct Boundary<IdentifierLengthType:RAW_encoded_fixedwidthinteger, IdentifierType:RAW_staticbuff>:Sendable {
+internal struct Boundary<IdentifierLengthType:RAW_encoded_fixedwidthinteger, IdentifierType:RAW_staticbuff>:Sendable {
 	
 	internal let length:IdentifierLengthType
 	internal let identifier:IdentifierType
@@ -30,9 +30,6 @@ public struct Boundary<IdentifierLengthType:RAW_encoded_fixedwidthinteger, Ident
 	}
 }
 
-public struct BoundaryV2<IdentifierLengthType:RAW_encoded_fixedwidthinteger, IdentifierType:RAW_staticbuff>:~Copyable {
-
-}
 extension Boundary:RAW_encodable {
 	public borrowing func RAW_encode(count:inout Int) {
 		length.RAW_encode(count:&count)

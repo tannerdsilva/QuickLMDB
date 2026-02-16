@@ -28,12 +28,19 @@ internal protocol CONCORD_reconciliation_setup {
 	associatedtype CONCORD_rs_identifier_type:RAW_staticbuff
 	associatedtype CONCORD_fingerprint_hashing_impl:RAW_hasher
 	associatedtype CONCORD_reconciliation_mode_type:CONCORD_payload_mode_type
+	associatedtype CONCORD_rs_idlist_count_type:RAW_encoded_fixedwidthinteger
 }
 
 internal struct BoundedPayload<ReconciliationSetup:CONCORD_reconciliation_setup, PayloadContent:RAW_encodable>:RAW_encodable {
 	internal let boundary:Boundary<ReconciliationSetup.CONCORD_rs_identifier_length_type, ReconciliationSetup.CONCORD_rs_identifier_type>
 	internal let mode:ReconciliationSetup.CONCORD_reconciliation_mode_type
 	internal let content:PayloadContent
+	
+	internal init(boundary:Boundary<ReconciliationSetup.CONCORD_rs_identifier_length_type, ReconciliationSetup.CONCORD_rs_identifier_type>, mode:ReconciliationSetup.CONCORD_reconciliation_mode_type, content:PayloadContent) {
+		self.boundary = boundary
+		self.mode = mode
+		self.content = content
+	}
 	
 	internal borrowing func RAW_encode(count:inout Int) {
 		boundary.RAW_encode(count:&count)
@@ -48,15 +55,50 @@ internal struct BoundedPayload<ReconciliationSetup:CONCORD_reconciliation_setup,
 	}
 }
 
+internal struct IncrementalIDListPayload<ReconciliationSetup:CONCORD_reconciliation_setup>:RAW_encodable {
+	/// the identifiers that are being listed
+	private var identifiers:Array<MDB_val> = []
+	/// stores an identifier to be encoded
+	fileprivate mutating func storeIdentifier(_ idValue:MDB_val) {
+		identifiers.append(idValue)
+	}
+	
+	internal borrowing func RAW_encode(count:inout Int) {
+		count += MemoryLayout<ReconciliationSetup.CONCORD_rs_idlist_count_type.RAW_staticbuff_storetype>.size
+		for curID in identifiers {
+			count += curID.mv_size
+		}
+	}
+	internal borrowing func RAW_encode(dest:UnsafeMutablePointer<UInt8>) -> UnsafeMutablePointer<UInt8> {
+		// encode the count as the `ReconciliationSetup.CONCORD_rs_idlist_count_type`
+		var seeker = ReconciliationSetup.CONCORD_rs_idlist_count_type(RAW_native:ReconciliationSetup.CONCORD_rs_idlist_count_type.RAW_native_type(identifiers.count)).RAW_encode(dest:dest)
+		for curVal in identifiers {
+			guard RAW_memcpy(seeker, curVal.mv_data, curVal.mv_size)! == seeker else {
+				fatalError("\(#file):\(#line)")
+			}
+			seeker += curVal.mv_size
+		}
+		return seeker
+	}
+}
+
+
 public protocol CONCORD_encoding_transmitter {
-	borrowing func transmit<E>(payload:consuming E) where E:RAW_encodable
+	mutating func transmit<E>(payload:UnsafePointer<E>) throws where E:RAW_encodable
 }
 
 extension MDB_cursor {
-	internal func splitRangeList<ReconciliationSetup>(elementCount:Int, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
-	
+	internal func splitRangeListRoot<ReconciliationSetup>(elementCount:Int, transmitter:inout CONCORD_encoding_transmitter, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
+		var incrementalIDList = IncrementalIDListPayload<ReconciliationSetup>()
+		for (id, _) in view(begin:.opFirst) {
+			incrementalIDList.storeIdentifier(id)
+		}
+		try withUnsafePointer(to:BoundedPayload<ReconciliationSetup, IncrementalIDListPayload<ReconciliationSetup>>(boundary:.fullSizeMaximumValue(), mode:ReconciliationSetup.CONCORD_reconciliation_mode_type.CONCORD_payload_mode_list, content:incrementalIDList)) { payloadPtr in
+			try transmitter.transmit(payload:payloadPtr)
+		}
 	}
-	internal func splitRangeBuckets<ReconciliationSetup>(elementCount:Int, nonzeroBucketCount buckets:Int, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
+
+	internal func splitRangeBucketsRoot<ReconciliationSetup>(elementCount:Int, nonzeroBucketCount buckets:Int, transmitter:inout CONCORD_encoding_transmitter, setup:ReconciliationSetup.Type) throws where ReconciliationSetup:CONCORD_reconciliation_setup {
 		#if DEBUG
 		guard buckets > 0 else {
 			fatalError("\(#file):\(#line) buckets <= 0 is not allowed")
@@ -91,7 +133,9 @@ extension MDB_cursor {
 				#endif
 				curUpperBoundary = .fullSizeMaximumValue()
 			}
-			
+			try withUnsafePointer(to:BoundedPayload<ReconciliationSetup, ReconciliationSetup.CONCORD_fingerprint_hashing_impl.RAW_hasher_outputtype>(boundary:curUpperBoundary, mode:ReconciliationSetup.CONCORD_reconciliation_mode_type.CONCORD_payload_mode_fingerprint, content:ourFingerprint)) { payloadPtr in
+				try transmitter.transmit(payload:payloadPtr)
+			}
 		} while true
 	}
 }
