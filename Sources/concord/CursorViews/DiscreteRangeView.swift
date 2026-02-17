@@ -1,8 +1,9 @@
 import RAW
 import QuickLMDB
+import struct CLMDB.MDB_val
 
 extension MDB_cursor {
-	public consuming func view(begin:consuming BeginStrategy, end:consuming MDB_val) -> DiscreteRangeView<Self> {
+	public consuming func view(begin:consuming BeginStrategy, end:consuming UnsafeRawBufferPointer) -> DiscreteRangeView<Self> {
 		return DiscreteRangeView(cursor:self, begin:begin, end:end)
 	}
 }
@@ -15,9 +16,9 @@ public struct DiscreteRangeView<C>:Sequence where C:MDB_cursor {
 	internal let begin:BeginStrategy
 	
 	/// the end value that the view will terminate with.
-	internal let end:MDB_val
+	internal let end:UnsafeRawBufferPointer
 	
-	internal init(cursor:consuming C, begin:consuming BeginStrategy, end:consuming MDB_val) {
+	internal init(cursor:consuming C, begin:consuming BeginStrategy, end:consuming UnsafeRawBufferPointer) {
 		self.cursor = cursor
 		self.begin = begin
 		self.end = end
@@ -31,9 +32,9 @@ public struct DiscreteRangeView<C>:Sequence where C:MDB_cursor {
 		/// the internal stage of stepping that the iterator is operating with
 		internal enum Stage {
 			/// used to express the stage where the first item needs to be seek'd. the upper boundary is also stored on this stage
-			case seekToFirst(BeginStrategy, MDB_val)
+			case seekToFirst(BeginStrategy, UnsafeRawBufferPointer)
 			/// used to express the stage where any n number of items are being stepped through until the upper boundary is crossed
-			case seekUntilEnd(MDB_val)
+			case seekUntilEnd(UnsafeRawBufferPointer)
 			/// end of feed. nothing will ever be returned after this stage is set.
 			case eof
 		}
@@ -42,7 +43,7 @@ public struct DiscreteRangeView<C>:Sequence where C:MDB_cursor {
 		
 		internal var stage:Stage
 		
-		internal init(cursor:consuming C, begin:consuming BeginStrategy, end:consuming MDB_val) {
+		internal init(cursor:consuming C, begin:consuming BeginStrategy, end:consuming UnsafeRawBufferPointer) {
 			self.cursor = cursor
 			self.stage = .seekToFirst(begin, end)
 		}
@@ -54,18 +55,18 @@ public struct DiscreteRangeView<C>:Sequence where C:MDB_cursor {
 				switch stage {
 					case let .seekToFirst(seekStrategy, ub):
 						stage = .seekUntilEnd(ub)
-						upperBoundary = ub
+						upperBoundary = ub.MDB_val()
 						switch seekStrategy {
 							case let .opSetRange(mdbValToSeek):
-								returnValue = try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek)
+								returnValue = try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:mdbValToSeek.MDB_val())
 							case .opGetCurrent:
-								returnValue = try cursor.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
+								returnValue = try cursor.opGetCurrent(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 							case .opFirst:
-								returnValue = try cursor.opFirst(returning:(key:MDB_val, value:MDB_val).self)
+								returnValue = try cursor.opFirst(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 						}
 					case .seekUntilEnd(let ub):
-						upperBoundary = ub
-						returnValue = try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self)
+						upperBoundary = ub.MDB_val()
+						returnValue = try cursor.opNext(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 					case .eof:
 						return nil
 				}

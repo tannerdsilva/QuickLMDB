@@ -59,7 +59,7 @@ internal struct IncrementalIDListPayload<ReconciliationSetup:CONCORD_reconciliat
 	/// the identifiers that are being listed
 	private var identifiers:Array<MDB_val> = []
 	/// stores an identifier to be encoded
-	fileprivate mutating func storeIdentifier(_ idValue:MDB_val) {
+	fileprivate mutating func storeIdentifier(_ idValue:consuming MDB_val) {
 		identifiers.append(idValue)
 	}
 	
@@ -83,7 +83,7 @@ internal struct IncrementalIDListPayload<ReconciliationSetup:CONCORD_reconciliat
 }
 
 
-public protocol CONCORD_encoding_transmitter {
+public protocol CONCORD_encoding_transmitter:~Copyable {
 	mutating func transmit<E>(payload:UnsafePointer<E>) throws where E:RAW_encodable
 }
 
@@ -138,4 +138,13 @@ extension MDB_cursor {
 			}
 		} while true
 	}
+}
+
+
+extension MDB_cursor {
+	// return first key such that:
+	// begin ≤ k < end   &&   k ≥ value
+//	internal borrowing func findLowerBound<ReconciliationSetup>(begin:CONCORD_reconciliation_setup.CONCORD_rs_identifier_type, end:MDB_val, value:MDB_val, setup:ReconciliationSetup.Type) throws -> Void where ReconciliationSetup:CONCORD_reconciliation_setup {
+//		
+//	}
 }

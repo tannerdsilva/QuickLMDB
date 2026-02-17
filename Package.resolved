@@ -1,5 +1,5 @@
 {
-  "originHash" : "6976d2f4573da83aeac880493748bb105ed85a46de091c385c90570cf157629d",
+  "originHash" : "09b37f387e961be7c80d4907f272765623429193ae598d6db5e879d5e567ba68",
   "pins" : [
     {
       "identity" : "clmdb",
@@ -8,15 +8,6 @@
       "state" : {
         "branch" : "master3",
         "revision" : "b34dee08344ab54263da282fb55e0b4b1d9ee1a1"
-      }
-    },
-    {
-      "identity" : "rawdog",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tannerdsilva/rawdog.git",
-      "state" : {
-        "revision" : "378e87e49d2cf95c92882b1bcbe21252c5c1d0a6",
-        "version" : "21.0.0"
       }
     },
     {

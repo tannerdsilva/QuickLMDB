@@ -1,5 +1,5 @@
-import struct CLMDB.MDB_val
 import RAW
+import CLMDB
 
 extension MDB_val {
 	/// returns a new MDB_val with an unspecified (garbage) pointer and a length specified as the encoded count of the given encodable type.
@@ -9,6 +9,7 @@ extension MDB_val {
 		return newEncodable
 	}
 	
+	/// returns a new MDB_val with an unspecified (garbage) pointer and a length specified as the encoded count of the given encodable type.
 	internal static func uninitialized() -> MDB_val {
 		var makeVal = MDB_val()
 		makeVal.mv_size = -1
@@ -23,12 +24,22 @@ extension MDB_val {
 	}
 
 	/// initializes a new MDB_val that overlaps with the contents of an UnsafeMutableBufferPointer.
-	internal init(_ buffer:UnsafeMutableBufferPointer<UInt8>) {
+	public init(mutating buffer:UnsafeMutableBufferPointer<UInt8>) {
 		self = MDB_val(mv_size:buffer.count, mv_data:buffer.baseAddress)
 	}
 	
 	/// initializes a new MDB_val that overlaps with the contents of the UnsafeBufferPointer.
-	internal init(_ buffer:UnsafeBufferPointer<UInt8>) {
+	public init(mutating buffer:UnsafeBufferPointer<UInt8>) {
+		self = MDB_val(mv_size:buffer.count, mv_data:UnsafeMutableRawPointer(mutating:buffer.baseAddress))
+	}
+
+	/// initializes a new MDB_val that overlaps with the contents of an UnsafeMutableRawBufferPointer.
+	public init(mutating buffer:UnsafeMutableRawBufferPointer) {
+		self = MDB_val(mv_size:buffer.count, mv_data:buffer.baseAddress)
+	}
+
+	/// initializes a new MDB_val that overlaps with the contents of the UnsafeRawBufferPointer.
+	public init(_ buffer:UnsafeBufferPointer<UInt8>) {
 		self = MDB_val(mv_size:buffer.count, mv_data:UnsafeMutableRawPointer(mutating:buffer.baseAddress))
 	}
 }

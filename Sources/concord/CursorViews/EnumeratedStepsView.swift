@@ -1,5 +1,6 @@
-import QuickLMDB
 import RAW
+import QuickLMDB
+import struct CLMDB.MDB_val
 
 extension MDB_cursor {
 	public consuming func view(begin:consuming BeginStrategy, steps:Int) -> EnumeratedStepView<Self> {
@@ -72,22 +73,22 @@ public struct EnumeratedStepView<C>:Sequence where C:MDB_cursor {
 								stage = .eof
 								switch seekStrategy {
 									case let .opSetRange(mdbValToSeek):
-										return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek)
+										return try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:mdbValToSeek.MDB_val())
 									case .opGetCurrent:
-										return try cursor.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
+										return try cursor.opGetCurrent(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 									case .opFirst:
-										return try cursor.opFirst(returning:(key:MDB_val, value:MDB_val).self)
+										return try cursor.opFirst(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 								}
 							case 2...Int.max:
 								// step ahead as usual
 								stage = .stepsRemaining(totalSteps - 1)
 								switch seekStrategy {
 									case let .opSetRange(mdbValToSeek):
-										return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek)
+										return try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:mdbValToSeek.MDB_val())
 									case .opGetCurrent:
-										return try cursor.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
+										return try cursor.opGetCurrent(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 									case .opFirst:
-										return try cursor.opFirst(returning:(key:MDB_val, value:MDB_val).self)
+										return try cursor.opFirst(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 								}
 							default:
 								fatalError("\(#file):\(#line)")
@@ -98,10 +99,10 @@ public struct EnumeratedStepView<C>:Sequence where C:MDB_cursor {
 								fatalError("\(#file):\(#line)")
 							case 1:
 								stage = .eof
-								return try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self)
+								return try cursor.opNext(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 							case 2...Int.max:
 								stage = .stepsRemaining(remainingStepCount - 1)
-								return try cursor.opNext(returning:(key:MDB_val, value:MDB_val).self)
+								return try cursor.opNext(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 							default:
 								fatalError("\(#file):\(#line)")
 						}

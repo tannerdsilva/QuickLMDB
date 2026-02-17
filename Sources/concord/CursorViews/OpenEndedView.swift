@@ -1,5 +1,6 @@
 import RAW
 import QuickLMDB
+import struct CLMDB.MDB_val
 
 extension MDB_cursor {
 	public consuming func view(begin:consuming BeginStrategy) -> OpenEndedView<Self> {
@@ -53,7 +54,7 @@ public struct OpenEndedView<C>:Sequence where C:MDB_cursor {
 						stage = .continueToEOF
 						switch seekStrategy {
 							case let .opSetRange(mdbValToSeek):
-								return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek)
+								return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek.MDB_val())
 							case .opGetCurrent:
 								return try cursor.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
 							case .opFirst:
