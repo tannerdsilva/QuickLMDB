@@ -54,7 +54,7 @@ public struct OpenEndedView<C>:Sequence where C:MDB_cursor {
 						stage = .continueToEOF
 						switch seekStrategy {
 							case let .opSetRange(mdbValToSeek):
-								return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:mdbValToSeek.MDB_val())
+								return try cursor.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:CLMDB.MDB_val(mutating:mdbValToSeek))
 							case .opGetCurrent:
 								return try cursor.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
 							case .opFirst:

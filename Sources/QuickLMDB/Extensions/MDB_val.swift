@@ -17,9 +17,16 @@ extension MDB_val {
 	}
 
 	/// returns a new MDB_val with an unspecified (garbage) pointer and specified length.
+	@available(*, deprecated, message:"please use `newWithGarbagePointer(length:)`")
 	internal static func reserved(capacity:Int) -> MDB_val {
 		var makeVal = MDB_val()
 		makeVal.mv_size = capacity
+		return makeVal
+	}
+
+	internal static func newWithGarbagePointer(length:Int) -> MDB_val {
+		var makeVal = MDB_val()
+		makeVal.mv_size = length
 		return makeVal
 	}
 
@@ -39,7 +46,7 @@ extension MDB_val {
 	}
 
 	/// initializes a new MDB_val that overlaps with the contents of the UnsafeRawBufferPointer.
-	public init(_ buffer:UnsafeBufferPointer<UInt8>) {
+	public init(mutating buffer:UnsafeRawBufferPointer) {
 		self = MDB_val(mv_size:buffer.count, mv_data:UnsafeMutableRawPointer(mutating:buffer.baseAddress))
 	}
 }

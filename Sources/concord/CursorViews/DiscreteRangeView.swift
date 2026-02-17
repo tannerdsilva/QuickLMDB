@@ -55,17 +55,17 @@ public struct DiscreteRangeView<C>:Sequence where C:MDB_cursor {
 				switch stage {
 					case let .seekToFirst(seekStrategy, ub):
 						stage = .seekUntilEnd(ub)
-						upperBoundary = ub.MDB_val()
+						upperBoundary = CLMDB.MDB_val(mutating:ub)
 						switch seekStrategy {
 							case let .opSetRange(mdbValToSeek):
-								returnValue = try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:mdbValToSeek.MDB_val())
+								returnValue = try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:CLMDB.MDB_val(mutating:mdbValToSeek))
 							case .opGetCurrent:
 								returnValue = try cursor.opGetCurrent(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 							case .opFirst:
 								returnValue = try cursor.opFirst(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 						}
 					case .seekUntilEnd(let ub):
-						upperBoundary = ub.MDB_val()
+						upperBoundary = CLMDB.MDB_val(mutating:ub)
 						returnValue = try cursor.opNext(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 					case .eof:
 						return nil

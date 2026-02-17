@@ -5,7 +5,7 @@ public typealias MDB_convertible = RAW_accessible & RAW_decodable & RAW_encodabl
 extension RAW_accessible {
 	public borrowing func MDB_access<R, E>(_ aHandler:(consuming MDB_val) throws(E) -> R) throws(E) -> R where E:Swift.Error {
 		try RAW_access { (byteBuffer:UnsafeBufferPointer<UInt8>) throws(E) -> R in
-			try aHandler(MDB_val(byteBuffer))
+			try aHandler(MDB_val(mutating:byteBuffer))
 		}
 	}
 }

@@ -73,7 +73,7 @@ public struct EnumeratedStepView<C>:Sequence where C:MDB_cursor {
 								stage = .eof
 								switch seekStrategy {
 									case let .opSetRange(mdbValToSeek):
-										return try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:mdbValToSeek.MDB_val())
+										return try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:CLMDB.MDB_val(mutating:mdbValToSeek))
 									case .opGetCurrent:
 										return try cursor.opGetCurrent(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 									case .opFirst:
@@ -84,7 +84,7 @@ public struct EnumeratedStepView<C>:Sequence where C:MDB_cursor {
 								stage = .stepsRemaining(totalSteps - 1)
 								switch seekStrategy {
 									case let .opSetRange(mdbValToSeek):
-										return try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:mdbValToSeek.MDB_val())
+										return try cursor.opSetRange(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self, key:CLMDB.MDB_val(mutating:mdbValToSeek))
 									case .opGetCurrent:
 										return try cursor.opGetCurrent(returning:(key:CLMDB.MDB_val, value:CLMDB.MDB_val).self)
 									case .opFirst:
