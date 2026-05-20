@@ -51,7 +51,8 @@ internal func MDB_db_set_entry_static<D:MDB_db>(db database:borrowing D, returni
 
 // check for entry (key and optional value)
 internal func MDB_db_contains_entry_static<D:MDB_db>(db database:borrowing D, key keyVal:inout MDB_val, tx:borrowing Transaction) throws(LMDBError) -> Bool {
-	let searchKey = mdb_get(tx.txHandle(), database.dbHandle(), &keyVal, nil)
+	var valueVal = MDB_val.uninitialized()
+	let searchKey = mdb_get(tx.txHandle(), database.dbHandle(), &keyVal, &valueVal)
 	switch searchKey {
 		case MDB_SUCCESS:
 			return true
