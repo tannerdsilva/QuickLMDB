@@ -12,7 +12,7 @@ internal struct _QUICKLMDB_INTERNAL_cursor_dupfixed_impl:MemberMacro {
 				@available(*, noasync)
 				public borrowing func opGetMultiple(returning:[MDB_cursor_dbtype.MDB_db_val_type].Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> [MDB_cursor_dbtype.MDB_db_val_type] {
 					try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) -> [MDB_cursor_dbtype.MDB_db_val_type] in
-						var valueVal = MDB_val.uninitialized()
+						let valueVal = MDB_val.uninitialized()
 
 						#if DEBUG
 						let keyPtr = keyVal.mv_data
@@ -44,7 +44,7 @@ internal struct _QUICKLMDB_INTERNAL_cursor_dupfixed_impl:MemberMacro {
 				@available(*, noasync)
 				public borrowing func opNextMultiple(returning:[MDB_cursor_dbtype.MDB_db_val_type].Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> [MDB_cursor_dbtype.MDB_db_val_type] {
 					try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) -> [MDB_cursor_dbtype.MDB_db_val_type] in
-						var valueVal = MDB_val.uninitialized()
+						let valueVal = MDB_val.uninitialized()
 
 						#if DEBUG
 						let keyPtr = keyVal.mv_data

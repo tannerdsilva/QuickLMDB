@@ -49,14 +49,6 @@ public struct Database:Sendable, MDB_db_basic {
 		})
 	}
 	@available(*, noasync)
-	public borrowing func containsEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
-			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) -> Bool in
-				return try containsEntry(key:keyVal, value:valueVal, tx:tx)
-			}
-		}
-	}
-	@available(*, noasync)
 	public borrowing func containsEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible {
 		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
 			return try containsEntry(key:keyVal, tx:tx)

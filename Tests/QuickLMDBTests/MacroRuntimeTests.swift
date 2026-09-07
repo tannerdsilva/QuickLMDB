@@ -108,7 +108,7 @@ extension TestCore {
 	@MDB_transact(.readOnly)
 	public func scanAll() throws -> [(key: TestKey, value: TestValue)] {
 		var result: [(key: TestKey, value: TestValue)] = []
-		try primary.cursor { cursor in
+		primary.cursor { cursor in
 			for (k, v) in cursor {
 				result.append((key: k, value: v))
 			}
@@ -119,7 +119,7 @@ extension TestCore {
 	@MDB_transact(.readOnly)
 	public func scanCount() throws -> UInt64 {
 		var result: UInt64 = 0
-		try primary.cursor { cursor in
+		primary.cursor { cursor in
 			for _ in cursor {
 				result += 1
 			}

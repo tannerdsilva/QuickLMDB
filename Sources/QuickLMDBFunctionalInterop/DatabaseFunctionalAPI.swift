@@ -53,20 +53,6 @@ internal func MDB_db_contains_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, 
 	}
 }
 
-// check for entry (key and value)
-@available(*, noasync)
-internal func MDB_db_contains_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
-	let searchKey = mdb_get(tx, db, &key, &value)
-	switch searchKey {
-		case MDB_SUCCESS:
-			return true
-		case MDB_NOTFOUND:
-			return false
-		default:
-			throw LMDBError(returnCode:searchKey)
-	}
-}
-
 // delete entry (key)
 @available(*, noasync)
 internal func MDB_db_delete_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) {
@@ -161,12 +147,6 @@ public func MDB_db_set_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:cons
 @available(*, noasync)
 public func MDB_db_contains_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
 	return try MDB_db_contains_entry_static(db:db, key:&key, tx:tx)
-}
-
-// check whether the key exists. matching is by key only (mdb_get semantics).
-@available(*, noasync)
-public func MDB_db_contains_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
-	return try MDB_db_contains_entry_static(db:db, key:&key, value:&value, tx:tx)
 }
 
 // delete all entries matching the key.

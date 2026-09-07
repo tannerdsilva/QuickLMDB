@@ -14,9 +14,6 @@ extension MDB_db {
 	public borrowing func containsEntry(key keyVal:consuming MDB_val, tx:borrowing Transaction) throws(LMDBError) -> Bool {
 		return try MDB_db_contains_entry(db:self.dbHandle(), key:keyVal, tx:tx.txHandle())
 	}
-	public borrowing func containsEntry(key keyVal:consuming MDB_val, value valueVal:consuming MDB_val, tx:borrowing Transaction) throws(LMDBError) -> Bool {
-		return try MDB_db_contains_entry(db:self.dbHandle(), key:keyVal, value:valueVal, tx:tx.txHandle())
-	}
 	
 	// set entry implementation
 	public borrowing func setEntry(key keyVal:consuming MDB_val, value valueVal:consuming MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) {

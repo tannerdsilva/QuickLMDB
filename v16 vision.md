@@ -160,11 +160,11 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
   Planned section) is the agreed principled replacement for new code.
 - **Write-inside-`readOnly` is a runtime `EACCES`** from LMDB (asserted in
   tests), not a compile-time error. A body-scan lint later could diagnose it.
-- **DB-level `containsEntry(key:value:)` resolves by key only**: the contains
-  static forwards to `mdb_get`, which treats the value argument as an output,
-  not a match term — on a dupsort db it reports "key exists", not "pair
-  exists". true key+value matching is the cursor's `MDB_GET_BOTH` path
-  (covered in the interop tests). pinned as shipped behavior.
+- **DB-level `containsEntry(key:value:)` was REMOVED, not pinned**: the value
+  parameter was a silent no-op (mdb_get resolves by key only, so the pair form
+  answered false-TRUE for any existing key). the pair check is now CURSOR-ONLY
+  (`cursor.containsEntry(key:value:)`, which is real MDB_GET_BOTH); the DB
+  level exposes key-only containment and nothing else.
 - **Implicit nesting of WRITE boundaries is forbidden, by engine necessity**: a
   `.readWrite` nested inside another `.readWrite` without an explicit `parent:`
   deadlocks on LMDB's non-recursive writer mutex (source-verified; see
@@ -240,7 +240,7 @@ The full inner-transaction vocabulary (one verb per tx-requiring entry point):
 | `setEntry(key:value:flags:tx:)`   | `#store(db, key:, value:, flags: = [])` | 1    |
 | `loadEntry(key:as:tx:)`           | `#load(db, key:)` · raw: `#load(db, key:, as: V.self)` | 1 |
 | `containsEntry(key:tx:)`          | `#contains(db, key:)`                   | 1    |
-| `containsEntry(key:value:tx:)`    | `#contains(db, key:, value:)` (dupsort) | 1  |
+| `cursor` pair check               | `#contains(db, key:, value:)` lowers to the CURSOR's GET_BOTH path | 1 |
 | `deleteEntry(key:tx:)`            | `#delete(db, key:)`                     | 1    |
 | `deleteEntry(key:value:tx:)`      | `#delete(db, key:, value:)` (dupsort)   | 1  |
 | `cursor(tx:_:)`                   | `#cursor(db) { cursor in … }`           | 1    |

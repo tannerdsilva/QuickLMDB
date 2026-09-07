@@ -19,8 +19,8 @@ extension MDB_cursor_dupsort {
 extension MDB_cursor {
 	@available(*, noasync)
 	public borrowing func opGetCurrent(returning:(key:MDB_val, value:MDB_val).Type) throws(LMDBError) -> (key:MDB_val, value:MDB_val) {
-		var keyVal = MDB_val.uninitialized()
-		var valueVal = MDB_val.uninitialized()
+let keyVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -87,8 +87,8 @@ extension MDB_cursor_dupsort {
 extension MDB_cursor {
 	@available(*, noasync)
 	public borrowing func opGetCurrent<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V) throws(LMDBError) -> (key:K, value:V) {
-		var keyVal = MDB_val.uninitialized()
-		var valueVal = MDB_val.uninitialized()
+let keyVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data

@@ -41,15 +41,6 @@ internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func containsEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx: borrowing Transaction) throws(LMDBError) -> Bool {
-					return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
-						return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) -> Bool in
-							return try containsEntry(key:keyVal, value:valueVal, tx:tx)
-						}
-					}
-				}
-			"""),
-			DeclSyntax("""
 				public borrowing func containsEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws(LMDBError) -> Bool {
 					return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
 						return try containsEntry(key:keyVal, tx:tx)

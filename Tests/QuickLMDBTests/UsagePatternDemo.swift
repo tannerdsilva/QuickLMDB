@@ -117,7 +117,7 @@ extension DemoCore {
 	@MDB_transact(.readOnly)
 	public func scan() throws -> [(key: TestKey, value: TestValue)] {
 		var result: [(key: TestKey, value: TestValue)] = []
-		try primary.cursor { cursor in
+		primary.cursor { cursor in
 			for (k, v) in cursor {
 				result.append((key: k, value: v))
 			}

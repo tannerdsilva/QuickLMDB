@@ -94,17 +94,17 @@ struct CursorFunctionalAPITests {
 		}
 		try withCursorTxn(env, db:db) { cursor in
 			try withVal([15]) { seek in
-				var value = MDB_val()
+				let value = MDB_val()
 				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_RANGE, key:seek, value:value)
 				#expect(bytes(from:entry.key) == [20])
 			}
 			try withVal([30]) { seek in
-				var value = MDB_val()
+				let value = MDB_val()
 				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_RANGE, key:seek, value:value)
 				#expect(bytes(from:entry.key) == [30])
 			}
 			withVal([99]) { seek in
-				var value = MDB_val()
+				let value = MDB_val()
 				do {
 					let _ = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_RANGE, key:seek, value:value)
 					Issue.record("expected notFound when seeking beyond the last key")
@@ -128,12 +128,12 @@ struct CursorFunctionalAPITests {
 		}
 		try withCursorTxn(env, db:db) { cursor in
 			try withVal([0x55]) { key in
-				var value = MDB_val()
+				let value = MDB_val()
 				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET, key:key, value:value)
 				#expect(bytes(from:entry.value) == [0xAA])
 			}
 			withVal([0x56]) { key in
-				var value = MDB_val()
+				let value = MDB_val()
 				do {
 					let _ = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET, key:key, value:value)
 					Issue.record("expected notFound for an exact-set on a missing key")
@@ -192,8 +192,8 @@ struct CursorFunctionalAPITests {
 		}
 		try withCursorTxn(env, db:db) { cursor in
 			// zeroed input buffers — the returned pointers must come from the memory map
-			var keyIn = MDB_val()
-			var valueIn = MDB_val()
+			let keyIn = MDB_val()
+			let valueIn = MDB_val()
 			let keyInPtr = keyIn.mv_data
 			let valueInPtr = valueIn.mv_data
 			let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_FIRST, key:keyIn, value:valueIn)
@@ -221,7 +221,7 @@ struct CursorFunctionalAPITests {
 			// SET_RANGE rewrites the caller's seek key with the map entry's own pointer
 			try withVal([15]) { seek in
 				let seekPtr = seek.mv_data
-				var valueIn = MDB_val()
+				let valueIn = MDB_val()
 				let valueInPtr = valueIn.mv_data
 				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_RANGE, key:seek, value:valueIn)
 				#expect(bytes(from:entry.key) == [20])
@@ -249,7 +249,7 @@ struct CursorFunctionalAPITests {
 		// the write committed with the cursor's transaction — verified through a fresh read
 		try withCursorTxn(env, db:db) { cursor in
 			try withVal([0x70]) { key in
-				var value = MDB_val()
+				let value = MDB_val()
 				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET, key:key, value:value)
 				#expect(bytes(from:entry.value) == [0x71])
 			}
@@ -270,8 +270,8 @@ struct CursorFunctionalAPITests {
 			}
 		}
 		try withCursorTxn(env, db:db) { cursor in
-			var key = MDB_val()
-			var value = MDB_val()
+			let key = MDB_val()
+			let value = MDB_val()
 			let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_FIRST, key:key, value:value)
 			#expect(bytes(from:entry.key) == [1])
 			try MDB_cursor_delete_current_entry(cursor:cursor, flags:0)
@@ -279,7 +279,7 @@ struct CursorFunctionalAPITests {
 		// key [1] is gone, key [2] remains
 		try withCursorTxn(env, db:db) { cursor in
 			withVal([1]) { key in
-				var value = MDB_val()
+				let value = MDB_val()
 				do {
 					let _ = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET, key:key, value:value)
 					Issue.record("expected the deleted key to be gone")
@@ -288,7 +288,7 @@ struct CursorFunctionalAPITests {
 				}
 			}
 			try withVal([2]) { key in
-				var value = MDB_val()
+				let value = MDB_val()
 				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET, key:key, value:value)
 				#expect(bytes(from:entry.value) == [2])
 			}
@@ -351,7 +351,7 @@ struct CursorFunctionalAPITests {
 		}
 		try withCursorTxn(env, db:db) { cursor in
 			try withVal([0x01]) { key in
-				var value = MDB_val()
+				let value = MDB_val()
 				let _ = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_KEY, key:key, value:value)
 			}
 			let count = try MDB_cursor_get_dupcount(cursor:cursor)
@@ -360,8 +360,8 @@ struct CursorFunctionalAPITests {
 			var seen:[UInt8] = []
 			var op = MDB_FIRST_DUP
 			while true {
-				var dupKey = MDB_val()
-				var dupValue = MDB_val()
+				let dupKey = MDB_val()
+				let dupValue = MDB_val()
 				do {
 					let entry = try MDB_cursor_get_entry(cursor:cursor, op:op, key:dupKey, value:dupValue)
 					seen.append(bytes(from:entry.value)[0])
@@ -413,33 +413,33 @@ struct CursorFunctionalAPITests {
 		let tx = try env.txn()
 		defer { mdb_txn_abort(tx) }
 
-		try withVal([3]) { lhs in
-			try withVal([5]) { rhs in
+		withVal([3]) { lhs in
+			withVal([5]) { rhs in
 				#expect(MDB_cursor_compare_keys(tx:tx, db:db, lhs:lhs, rhs:rhs) < 0)
 			}
 		}
-		try withVal([3]) { lhs in
-			try withVal([5]) { rhs in
+		withVal([3]) { lhs in
+			withVal([5]) { rhs in
 				#expect(MDB_cursor_compare_values(tx:tx, db:db, lhs:lhs, rhs:rhs) < 0)
 			}
 		}
-		try withVal([3]) { lhs in
-			try withVal([3]) { equal in
+		withVal([3]) { lhs in
+			withVal([3]) { equal in
 				#expect(MDB_cursor_compare_keys(tx:tx, db:db, lhs:lhs, rhs:equal) == 0)
 			}
 		}
-		try withVal([3]) { lhs in
-			try withVal([3]) { equal in
+		withVal([3]) { lhs in
+			withVal([3]) { equal in
 				#expect(MDB_cursor_compare_values(tx:tx, db:db, lhs:lhs, rhs:equal) == 0)
 			}
 		}
-		try withVal([3]) { lhs in
-			try withVal([9]) { rhs in
+		withVal([3]) { lhs in
+			withVal([9]) { rhs in
 				#expect(MDB_cursor_compare_keys(tx:tx, db:db, lhs:lhs, rhs:rhs) < 0)
 			}
 		}
-		try withVal([9]) { lhs in
-			try withVal([3]) { rhs in
+		withVal([9]) { lhs in
+			withVal([3]) { rhs in
 				#expect(MDB_cursor_compare_keys(tx:tx, db:db, lhs:lhs, rhs:rhs) > 0)
 			}
 		}

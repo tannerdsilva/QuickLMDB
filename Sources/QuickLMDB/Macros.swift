@@ -64,12 +64,11 @@ public macro MDB_transact(_ mode:MDB_transact_mode) = #externalMacro(module:"Qui
 @attached(member, names: arbitrary)
 public macro MDB_environment(file: Swift.String, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
 
-@attached(member, names:				named(setEntry(key:value:flags:tx:)),
-										named(deleteEntry(key:value:tx:)),
-										named(deleteEntry(key:tx:)),
-										named(loadEntry(key:as:tx:)),
-										named(containsEntry(key:value:tx:)),
-										named(containsEntry(key:tx:)))
+@attached(member, names:			named(setEntry(key:value:flags:tx:)),
+									named(deleteEntry(key:value:tx:)),
+									named(deleteEntry(key:tx:)),
+									named(loadEntry(key:as:tx:)),
+									named(containsEntry(key:tx:)))
 internal macro MDB_db_strict_impl() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_database_strict_impl")
 
 /// applies member implementations for the dupsort-based cursor functions.

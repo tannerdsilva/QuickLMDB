@@ -85,7 +85,7 @@ struct DatabaseFunctionalAPITests {
 						try MDB_db_set_entry(db:dbi, key:key, value:value, flags:0, tx:tx)
 					}
 				}
-				try withVal([0x08]) { key in
+				withVal([0x08]) { key in
 					withVal([2]) { value in
 						do {
 							try MDB_db_set_entry(db:dbi, key:key, value:value, flags:UInt32(MDB_NOOVERWRITE), tx:tx)
@@ -145,47 +145,6 @@ struct DatabaseFunctionalAPITests {
 		}
 	}
 
-	@Test func containsEntryKeyValueMatchesByKeyOnly() throws {
-		try withEnv { env in
-			try withTxn(env) { tx in
-				// a NAMED database — the main unnamed db was already created plain by the harness
-				let dbi = try env.db("dupkv", flags:UInt32(MDB_CREATE) | UInt32(MDB_DUPSORT), tx:tx)
-				try withVal([0x20]) { key in
-					try withVal([1]) { value in
-						try MDB_db_set_entry(db:dbi, key:key, value:value, flags:0, tx:tx)
-					}
-				}
-				try withVal([0x20]) { key in
-					try withVal([2]) { value in
-						try MDB_db_set_entry(db:dbi, key:key, value:value, flags:0, tx:tx)
-					}
-				}
-				// pinned DOCUMENTED behavior: the DB-level contains surface forwards to
-				// mdb_get, which resolves by key only (the value argument is an output,
-				// not a match term). TRUE key+value matching belongs to the cursor's
-				// MDB_GET_BOTH path (covered in the cursor suite).
-				try withVal([0x20]) { key in
-					try withVal([99]) { spare in
-						let presentResult = try MDB_db_contains_entry(db:dbi, key:key, value:spare, tx:tx)
-						#expect(presentResult == true)
-					}
-				}
-				try withVal([0x20]) { key in
-					try withVal([99]) { spare in
-						let valueIgnored = try MDB_db_contains_entry(db:dbi, key:key, value:spare, tx:tx)
-						#expect(valueIgnored == true)
-					}
-				}
-				try withVal([0x21]) { missing in
-					try withVal([99]) { spare in
-						let missingResult = try MDB_db_contains_entry(db:dbi, key:missing, value:spare, tx:tx)
-						#expect(missingResult == false)
-					}
-				}
-			}
-		}
-	}
-
 	// - MARK: delete
 
 	@Test func deleteByKeyRemovesEntry() throws {
@@ -200,7 +159,7 @@ struct DatabaseFunctionalAPITests {
 				try withVal([0x30]) { key in
 					try MDB_db_delete_entry(db:dbi, key:key, tx:tx)
 				}
-				try withVal([0x30]) { key in
+				withVal([0x30]) { key in
 					do {
 						_ = try MDB_db_get_entry(db:dbi, key:key, tx:tx)
 						Issue.record("expected notFound after delete")
@@ -259,7 +218,7 @@ struct DatabaseFunctionalAPITests {
 						try MDB_db_delete_entry(db:dbi, key:key, value:value, tx:tx)
 					}
 				}
-				try withVal([0x32]) { key in
+				withVal([0x32]) { key in
 					do {
 						_ = try MDB_db_get_entry(db:dbi, key:key, tx:tx)
 						Issue.record("expected notFound after deleting the last duplicate")
@@ -423,7 +382,7 @@ struct DatabaseFunctionalAPITests {
 				let cursor = try env.cursor(in:tx, db:dbi)
 				defer { mdb_cursor_close(cursor) }
 				// FIRST_DUP requires a positioned cursor — position at the key first
-				var positionValue = MDB_val()
+				let positionValue = MDB_val()
 				try withVal([0x50]) { key in
 					let positioned = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_KEY, key:key, value:positionValue)
 					_ = positioned

@@ -64,16 +64,6 @@ public protocol MDB_db {
 	@available(*, noasync)
 	borrowing func containsEntry(key:MDB_db_key_type, tx:borrowing Transaction) throws -> Bool
 	
-	/// check if an entry key and value exists in the database
-	/// - parameters:
-	/// 	- key: a pointer to the type that conveys the key to search for. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
-	/// 	- value: a pointer to the type that conveys the value to search for. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
-	/// 	- tx: a pointer to the lmdb transaction that will be used to check for the entry.
-	/// - throws: a corresponding ``LMDBError`` if the entry could not be found.
-	/// - returns: true if the entry exists, false if it does not.
-	@available(*, noasync)
-	borrowing func containsEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws -> Bool
-	
 	// writing entries to the database
 	/// assign an entry to the database. flags can be used to modify the behavior of the entry assignment as needed
 	/// - parameters:

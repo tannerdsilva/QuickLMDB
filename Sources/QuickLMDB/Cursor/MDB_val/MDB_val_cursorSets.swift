@@ -16,7 +16,7 @@ extension MDB_cursor {
 	
 	@available(*, noasync)
 	public borrowing func opSet(returning:MDB_val.Type, key keyVal:consuming MDB_val) throws(LMDBError) -> MDB_val {
-		var valueVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let valuePtr = valueVal.mv_data
@@ -33,7 +33,7 @@ extension MDB_cursor {
 	}
 	@available(*, noasync)
 	public borrowing func opSetKey(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:MDB_val, value:MDB_val) {
-		var valueVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -52,7 +52,7 @@ extension MDB_cursor {
 	}
 	@available(*, noasync)
 	public borrowing func opSetRange(returning:(key:MDB_val, value:MDB_val).Type, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:MDB_val, value:MDB_val) {
-		var valueVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -74,7 +74,7 @@ extension MDB_cursor {
 extension MDB_cursor {
 	@available(*, noasync)
 	public borrowing func opSet<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:K, value:V) {
-		var valueVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -94,7 +94,7 @@ extension MDB_cursor {
 	}
 	@available(*, noasync)
 	public borrowing func opSetKey<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:K, value:V) {
-		var valueVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
@@ -113,7 +113,7 @@ extension MDB_cursor {
 	}
 	@available(*, noasync)
 	public borrowing func opSetRange<K, V>(transforming:(key:MDB_val, value:MDB_val).Type, keyOutTransformer:(consuming MDB_val) -> K, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val) throws(LMDBError) -> (key:K, value:V) {
-		var valueVal = MDB_val.uninitialized()
+let valueVal = MDB_val.uninitialized()
 
 		#if DEBUG
 		let keyPtr = keyVal.mv_data
