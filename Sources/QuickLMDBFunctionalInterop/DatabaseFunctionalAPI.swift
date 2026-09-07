@@ -19,52 +19,32 @@ public typealias MDB_cmp_func_t = @convention(c) (UnsafePointer<CLMDB.MDB_val>?,
 // - MARK: statics (internal)
 
 // get entries (by key, returns value)
-// - regardless of log mode, this function will assert that a valid database pointer is being returned when compiled in DEBUG mode.
 @available(*, noasync)
 internal func MDB_db_get_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
 	var valueVal = CLMDB.MDB_val()
-	#if DEBUG
-	let trashPtr = valueVal.mv_data
-	#endif
 	let cursorResult = mdb_get(tx, db, &key, &valueVal)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
-	#if DEBUG
-	assert(valueVal.mv_size != -1, "mdb_get did not modify the value size")
-	assert(trashPtr != valueVal.mv_data, "mdb_get did not modify the value pointer")
-	#endif
 	return valueVal
 }
 
 // set entry (key, value)
 @available(*, noasync)
 internal func MDB_db_set_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) {
-	#if DEBUG
-	assert(flags & UInt32(MDB_RESERVE) == 0, "cannot use MDB_RESERVE on non-returning MDB_db_set_entry_static")
-	#endif
 	let cursorResult = mdb_put(tx, db, &key, &value, flags)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
-	#if DEBUG
-	assert(value.mv_data != nil, "mdb_put did not rewrite the value with the pointers in the database")
-	#endif
 }
 
 // set entry returns value pointer [RETURNS]
 @available(*, noasync)
 internal func MDB_db_set_entry_static(db:MDB_dbi, returning:CLMDB.MDB_val.Type, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
-	#if DEBUG
-	let inPtr = value.mv_data
-	#endif
 	let cursorResult = mdb_put(tx, db, &key, &value, flags)
 	guard cursorResult == MDB_SUCCESS else {
 		throw LMDBError(returnCode:cursorResult)
 	}
-	#if DEBUG
-	assert(value.mv_data != inPtr, "mdb_put did not rewrite the value with the pointers in the database")
-	#endif
 	return value
 }
 

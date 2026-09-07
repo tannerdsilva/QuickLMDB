@@ -175,6 +175,64 @@ struct CursorFunctionalAPITests {
 		}
 	}
 
+	// - MARK: pointer provenance
+
+	@Test func getEntryReturnsMapPointersDistinctFromInputs() throws {
+		let env = try RawEnv()
+		defer { env.close() }
+		let db = try openDB(env, "prov")
+		try withTxn(env) { tx in
+			for i in [UInt8(1), 2] {
+				try withVal([i]) { key in
+					try withVal([UInt8(i * 10)]) { value in
+						try MDB_db_set_entry(db:db, key:key, value:value, flags:0, tx:tx)
+					}
+				}
+			}
+		}
+		try withCursorTxn(env, db:db) { cursor in
+			// zeroed input buffers — the returned pointers must come from the memory map
+			var keyIn = MDB_val()
+			var valueIn = MDB_val()
+			let keyInPtr = keyIn.mv_data
+			let valueInPtr = valueIn.mv_data
+			let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_FIRST, key:keyIn, value:valueIn)
+			#expect(entry.key.mv_data != nil, "cursor key must be a live map pointer")
+			#expect(entry.value.mv_data != nil, "cursor value must be a live map pointer")
+			#expect(entry.key.mv_data != keyInPtr, "cursor key must not be the passed-in key pointer")
+			#expect(entry.value.mv_data != valueInPtr, "cursor value must not be the passed-in value pointer")
+		}
+	}
+
+	@Test func setRangeReturnsMapPointersDistinctFromSeekInput() throws {
+		let env = try RawEnv()
+		defer { env.close() }
+		let db = try openDB(env, "provrange")
+		try withTxn(env) { tx in
+			for i in [UInt8(10), 20] {
+				try withVal([i]) { key in
+					try withVal([i]) { value in
+						try MDB_db_set_entry(db:db, key:key, value:value, flags:0, tx:tx)
+					}
+				}
+			}
+		}
+		try withCursorTxn(env, db:db) { cursor in
+			// SET_RANGE rewrites the caller's seek key with the map entry's own pointer
+			try withVal([15]) { seek in
+				let seekPtr = seek.mv_data
+				var valueIn = MDB_val()
+				let valueInPtr = valueIn.mv_data
+				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET_RANGE, key:seek, value:valueIn)
+				#expect(bytes(from:entry.key) == [20])
+				#expect(entry.key.mv_data != nil, "seek result key must be a live map pointer")
+				#expect(entry.key.mv_data != seekPtr, "seek result key must not be the caller-provided seek pointer")
+				#expect(entry.value.mv_data != nil, "seek result value must be a live map pointer")
+				#expect(entry.value.mv_data != valueInPtr, "seek result value must not be the passed-in value pointer")
+			}
+		}
+	}
+
 	// - MARK: cursor writes
 
 	@Test func setEntryThroughCursorPersists() throws {

@@ -131,6 +131,47 @@ struct DatabaseFunctionalAPITests {
 		}
 	}
 
+	// - MARK: pointer provenance
+
+	@Test func getReturnsMapPointerDistinctFromInput() throws {
+		try withEnv { env in
+			try withTxn(env) { tx in
+				let dbi = try env.db(nil, tx:tx)
+				try withVal([0xAA, 0xBB]) { key in
+					try withVal([1, 2, 3, 4]) { value in
+						try MDB_db_set_entry(db:dbi, key:key, value:value, flags:0, tx:tx)
+					}
+				}
+				// the returned value must point into the memory map, never at the caller's key buffer
+				try withVal([0xAA, 0xBB]) { key in
+					let keyPtr = key.mv_data
+					let out = try MDB_db_get_entry(db:dbi, key:key, tx:tx)
+					#expect(out.mv_data != nil, "get must return a live value pointer")
+					#expect(out.mv_data != keyPtr, "get must not return the caller-provided key pointer")
+					#expect(bytes(from:out) == [1, 2, 3, 4])
+				}
+			}
+		}
+	}
+
+	@Test func reserveReturnsMapPointerDistinctFromInput() throws {
+		let env = try RawEnv()
+		defer { env.close() }
+		try withTxn(env) { tx in
+			let dbi = try env.db(nil, tx:tx)
+			try withVal([0x09]) { key in
+				let keyPtr = key.mv_data
+				var sizeVal = MDB_val()
+				sizeVal.mv_size = 8
+				sizeVal.mv_data = nil
+				let reserved = try MDB_db_set_entry(db:dbi, returning:MDB_val.self, key:key, value:sizeVal, flags:UInt32(MDB_RESERVE), tx:tx)
+				#expect(reserved.mv_size == 8)
+				#expect(reserved.mv_data != nil, "reserve must return a live map pointer")
+				#expect(reserved.mv_data != keyPtr, "reserve must not return the caller-provided key pointer")
+			}
+		}
+	}
+
 	// - MARK: contains
 
 	@Test func containsEntryReportsPresence() throws {
