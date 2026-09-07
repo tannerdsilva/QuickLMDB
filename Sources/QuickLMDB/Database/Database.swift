@@ -132,13 +132,13 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
-			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
+			MDB_db_assign_compare_key_f(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_val_f(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
 		}
 	}
 
 	@MDB_db_strict_impl()
-	public struct DupFixed<KeyType:RAW_staticbuff & MDB_comparable, ValueType:RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
+	public struct DupFixed<KeyType:MDB_convertible & RAW_staticbuff & MDB_comparable, ValueType:MDB_convertible & RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
 		/// the key type that the database uses.
 		/// 	- must be MDB_comparable
 		/// 	- must be static length
@@ -188,8 +188,8 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
-			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
+			MDB_db_assign_compare_key_f(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_val_f(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
 		}
 	}
 
@@ -239,7 +239,7 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
+			MDB_db_assign_compare_key_f(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
 		}
 	}
 }

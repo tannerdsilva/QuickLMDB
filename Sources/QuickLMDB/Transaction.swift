@@ -3,7 +3,18 @@ import CLMDB
 public struct Transaction:~Copyable {
 	// the underlying pointer handle that LMDB uses to represent this transaction
 	private let _tx_handle:OpaquePointer
-	
+	// whether this instance owns the underlying transaction (always true for values created via the public initializers; kept for the deinit guard)
+	private let _isConsumerOwned:Bool
+	// set to true once the transaction has been committed or aborted. prevents deinit from aborting a closed transaction.
+	private var _didClose:Bool
+
+	// designated initializer shared by all owning creation paths
+	private init(_tx_handle:OpaquePointer, _isConsumerOwned:Bool, _didClose:Bool) {
+		self._tx_handle = _tx_handle
+		self._isConsumerOwned = _isConsumerOwned
+		self._didClose = _didClose
+	}
+
 	// init no parent
 	@available(*, noasync)
 	public init(env:Environment, readOnly:Bool) throws(LMDBError) {
@@ -13,7 +24,7 @@ public struct Transaction:~Copyable {
 			let errThrown = LMDBError(returnCode:createResult)
 			throw errThrown
 		}
-		self._tx_handle = startHandle!
+		self.init(_tx_handle:startHandle!, _isConsumerOwned:true, _didClose:false)
 	}
 	
 	// init with parent [LOGGED]
@@ -25,7 +36,7 @@ public struct Transaction:~Copyable {
 			let errThrown = LMDBError(returnCode:createResult)
 			throw errThrown
 		}
-		self._tx_handle = startHandle!
+		self.init(_tx_handle:startHandle!, _isConsumerOwned:true, _didClose:false)
 	}
 	
 	@available(*, noasync)
@@ -35,12 +46,15 @@ public struct Transaction:~Copyable {
 			discard self
 			throw LMDBError(returnCode:commitResult)
 		}
+		// mark closed so deinit does not abort an already-committed transaction
+		self._didClose = true
 		discard self
 	}
 
 	@available(*, noasync)
 	public consuming func abort() {
 		mdb_txn_abort(_tx_handle)
+		self._didClose = true
 		discard self
 	}
 
@@ -65,6 +79,9 @@ public struct Transaction:~Copyable {
     }
 
 	deinit {
-		mdb_txn_abort(_tx_handle)
+		// only abort the underlying transaction if this instance owns it and it has not already been closed
+		if _isConsumerOwned && !_didClose {
+			mdb_txn_abort(_tx_handle)
+		}
 	}
 }

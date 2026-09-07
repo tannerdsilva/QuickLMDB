@@ -1,5 +1,6 @@
 import CLMDB
 import RAW
+@_exported import QuickLMDBFunctionalInterop
 
 public typealias MDB_val = CLMDB.MDB_val
 extension MDB_val:@retroactive @unchecked Sendable {}

@@ -27,7 +27,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .getCurrent, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getCurrent.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")
@@ -47,7 +47,7 @@ extension MDB_cursor_dupsort {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .getBoth, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getBoth.mdbValue, key:&keyVal, value:&valueVal)
 		
 		#if DEBUG
 		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
@@ -61,7 +61,7 @@ extension MDB_cursor_dupsort {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .getBothRange, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getBothRange.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
@@ -74,12 +74,12 @@ extension MDB_cursor_dupsort {
 extension MDB_cursor_dupsort {
 	@available(*, noasync)
 	public borrowing func opGetBoth<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val, value valueVal:consuming MDB_val) throws(LMDBError) -> V {
-		try MDB_cursor_get_entry_static(cursor:self, .getBoth, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getBoth.mdbValue, key:&keyVal, value:&valueVal)
 		return valueOutTransformer(valueVal)
 	}
 	@available(*, noasync)
 	public borrowing func opGetBothRange<V>(transforming:MDB_val.Type, valueOutTransformer:(consuming MDB_val) -> V, key keyVal:consuming MDB_val, value valueVal:consuming MDB_val) throws(LMDBError) -> V {
-		try MDB_cursor_get_entry_static(cursor:self, .getBothRange, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getBothRange.mdbValue, key:&keyVal, value:&valueVal)
 		return valueOutTransformer(valueVal)
 	}
 }
@@ -95,7 +95,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .getCurrent, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getCurrent.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")

@@ -71,3 +71,54 @@ QuickLMDB has reasonable default behavior when managing the lifecycle of ``Quick
 - Transaction blocks that throw an error will cause the transaction to abort.
 
 - At any time within a transaction block, a developer may call ``QuickLMDB/Transaction/commit()``, ``QuickLMDB/Transaction/abort()``, ``QuickLMDB/Transaction/reset()``, or ``QuickLMDB/Transaction/renew()`` to force their own behavior on a transaction.
+
+## Transaction boundaries with macros
+
+QuickLMDB ships two macros that organize transactions into method boundaries with no ambient state of any kind.
+
+### ``QuickLMDB/MDB_transact(_:)`` — attached body macro
+
+`@MDB_transact(.readWrite)` (or `.readOnly`, or `.readWriteChild`) makes the annotated method a transaction boundary. the expansion:
+
+1. opens the boundary transaction (`Transaction(env: self.env, ...)`) as a `let tx`,
+2. wraps the original body in a local function that receives `tx` as an explicit `borrowing` parameter,
+3. appends `tx: tx` to every QuickLMDB operation call in the body that omits the `tx:` argument,
+4. commits once on success and aborts exactly once if the body throws.
+
+```swift
+@MDB_environment(file: "booking.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
+public struct BookingCore: Sendable {
+    public let env: Environment
+    public let sheets: Database.Strict<SlotKey, SlotRecord>
+}
+
+extension BookingCore {
+    @MDB_transact(.readWrite)
+    public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
+        try sheets.setEntry(key: key, value: record, flags: [])   // tx: omitted
+    }
+
+    @MDB_transact(.readOnly)
+    public func nearestSlot(to date: SlotKey) throws -> SlotRecord? {
+        var found: SlotRecord? = nil
+        try sheets.cursor { cursor in                              // tx: omitted
+            if let first = try? cursor.opSetRange(key: date).value {
+                found = first
+            }
+        }
+        return found
+    }
+}
+```
+
+The injected name `tx` is also the documented way to hand a boundary transaction to a shared helper that takes `tx: borrowing Transaction` (e.g. `try applyDeltas(item, tx: tx)`). composable helpers that take an existing transaction keep their explicit `tx:` parameter and can be called from inside a boundary using the injected name. `.readWriteChild` requires a parent transaction parameter: `func commitBatch(_ items: [Item], parent: borrowing Transaction) throws`.
+
+The annotated method must be `throws` (the boundary can fail to open or commit) and must not be `async`; operation calls that already carry an explicit `tx:` argument are left untouched.
+
+### ``QuickLMDB/MDB_environment(file:flags:maxReaders:maxDBs:mode:)`` — schema assembly
+
+Generates a `static func open(at:mapHeadroom:)` that sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported).
+
+Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `loadEntry(key:as:tx:)`, `setEntry(key:value:flags:tx:)`, `cursor(tx:_:)`. the C wrapper layer is untouched.
+
+**Planned evolution (agreed direction, not yet shipped):** DB statements inside boundaries are slated to become freestanding verb macros — `#store`, `#load`, `#delete`, `#contains` — lowered by `@MDB_transact` into the same tx-bearing calls shown above, with a compile-time diagnostic when a verb appears outside a boundary. The typed `Database.Strict<K,V>` handle already carries both key and value types statically, so the verbs need no `as:` and no `flags: []`. The relationship matrix, `.readWriteChild(parent:)`, forced `.noTLS`, and the zero-ambient contract are all unaffected by this evolution.

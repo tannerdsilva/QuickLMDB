@@ -2,8 +2,8 @@ import XCTest
 @testable import QuickLMDB
 import RAW
 
-fileprivate var envPath:URL? = nil
-fileprivate var testerEnv:Environment? = nil
+fileprivate nonisolated(unsafe) var envPath:URL? = nil
+fileprivate nonisolated(unsafe) var testerEnv:Environment? = nil
 
 @RAW_staticbuff(bytes:4)
 @RAW_staticbuff_fixedwidthinteger_type<UInt32>(bigEndian:true)

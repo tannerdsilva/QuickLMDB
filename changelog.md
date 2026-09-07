@@ -1,3 +1,14 @@
+# 16.0.0
+
+- Added the `@MDB_transact` and `@MDB_environment` macros.
+  - `@MDB_transact(.readWrite | .readOnly | .readWriteChild)` is an attached **body macro**: it rewrites the annotated method's body in place so the method itself owns its transaction scope. There is no ambient storage of any kind (no task-local, no thread-local, no registry). Operation call sites inside the body may omit the `tx:` argument — the expansion appends `tx: tx`, where `tx` is the boundary transaction, and commits once on success / aborts exactly once on error.
+  - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` is schema assembly only: it generates a `static func open(at:mapHeadroom:)` that sizes the memory map, opens the environment, and opens every `Database.X` table in one setup write-transaction.
+  - `@MDB_environment` forces `.noTLS` onto the environment unconditionally: reader slots are bound to the transaction object instead of the thread, which is what makes Swift's task-based concurrency safe and what permits sibling read transactions inside boundaries.
+- Transaction relationship management: boundaries open TOP-LEVEL transactions of their mode, and every parent/child + sibling relationship is the engine's own default, pinned by regression tests (sibling writes under reads, sibling reads under writes/reads, write-child merges, EINVAL/badReaderSlot engine errors). Composition inside a write boundary is explicitly `.readWriteChild(parent:)`; a raw `.readWrite` nested inside another without `parent:` deadlocks on LMDB's non-recursive writer mutex and is a documented forbidden pattern.
+- Removed the internal `_MDBTransactionScope` transaction registry (superseded by the body macro architecture).
+- Fixed `Transaction` so its deinit no longer aborts an already-committed transaction.
+- The transaction-bearing protocol API (`Transaction`, `MDB_db`, `MDB_cursor`, the `Database.X` handles, and the `MDB_*_static` wrapper layer) is unchanged.
+
 # 15.0.0
 
 - Changed relationships of various database and cursor protocols such that the most restrictive of these types are now based on their `XXX_strict` counterparts.

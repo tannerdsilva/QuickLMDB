@@ -13,7 +13,7 @@ internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
 					flags.subtract(.reserve)
 					try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
 						try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
-							try MDB_db_set_entry_static(db:self, key:&keyVal, value:&valueVal, flags:flags, tx:tx)
+							try MDB_db_set_entry_static(db:self.dbHandle(), key:&keyVal, value:&valueVal, flags:flags.rawValue, tx:tx.txHandle())
 						}
 					}
 				}

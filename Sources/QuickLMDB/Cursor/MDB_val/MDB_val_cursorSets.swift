@@ -22,7 +22,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .set, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.set.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
@@ -40,7 +40,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .setKey, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.setKey.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
@@ -59,7 +59,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .setRange, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.setRange.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
@@ -81,7 +81,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .set, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.set.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")
@@ -101,7 +101,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .setKey, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.setKey.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
@@ -120,7 +120,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .setRange, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.setRange.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")

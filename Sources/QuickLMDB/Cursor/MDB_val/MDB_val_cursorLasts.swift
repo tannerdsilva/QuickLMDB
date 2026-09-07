@@ -23,7 +23,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .last, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.last.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")
@@ -46,7 +46,7 @@ extension MDB_cursor_dupsort {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .lastDup, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.lastDup.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
@@ -68,7 +68,7 @@ extension MDB_cursor {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .last, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.last.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(keyVal.mv_size != -1, "key buffer was not modified so it cannot be returned")
@@ -91,7 +91,7 @@ extension MDB_cursor_dupsort {
 		let valuePtr = valueVal.mv_data
 		#endif
 
-		try MDB_cursor_get_entry_static(cursor:self, .lastDup, key:&keyVal, value:&valueVal)
+		try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.lastDup.mdbValue, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
