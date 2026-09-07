@@ -7,7 +7,8 @@
 - Transaction relationship management: boundaries open TOP-LEVEL transactions of their mode, and every parent/child + sibling relationship is the engine's own default, pinned by regression tests (sibling writes under reads, sibling reads under writes/reads, write-child merges, EINVAL/badReaderSlot engine errors). Composition inside a write boundary is explicitly `.readWriteChild(parent:)`; a raw `.readWrite` nested inside another without `parent:` deadlocks on LMDB's non-recursive writer mutex and is a documented forbidden pattern.
 - Removed the internal `_MDBTransactionScope` transaction registry (superseded by the body macro architecture).
 - Fixed `Transaction` so its deinit no longer aborts an already-committed transaction.
-- The transaction-bearing protocol API (`Transaction`, `MDB_db`, `MDB_cursor`, the `Database.X` handles, and the `MDB_*_static` wrapper layer) is unchanged.
+- The transaction-bearing protocol API (`Transaction`, `MDB_db`, `MDB_cursor`, the `Database.X` handles) is unchanged.
+- The database + cursor `MDB_*_static` functions and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop` — a handle-level C bridge (`MDB_dbi` / `OpaquePointer` / `MDB_cursor_op`, no QuickLMDB types) — re-exported by QuickLMDB via `@_exported import`; public behavior is unchanged. covered by a new `QuickLMDBFunctionalInteropTests` target (27 tests driven by raw CLMDB).
 
 # 15.0.0
 

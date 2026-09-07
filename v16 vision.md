@@ -14,9 +14,12 @@ method's body in place so the method itself owns its transaction scope.
 `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` is schema assembly only:
 it generates `open(at:mapHeadroom:)` which sizes the memory map, opens the
 environment, and opens every `Database.X` table in one setup write-transaction.
-Everything underneath — `Transaction`, `MDB_db`/`MDB_cursor`, the `Database.X`
-handles, and the `MDB_*_static` C wrapper layer — is the inherited tagged-release
-API, unchanged.
+Everything underneath — `Transaction`, `MDB_db`/`MDB_cursor`, and the
+`Database.X` handles — is the inherited tagged-release API, unchanged. the
+`MDB_*_static` database/cursor functions and `LMDBError` were split out into
+the standalone `QuickLMDBFunctionalInterop` target (a handle-level C bridge
+below QuickLMDB, re-exported via `@_exported import`); see
+"Functional-interop split" under What is settled.
 
 ## The mechanism (the one trick that makes it work)
 
@@ -50,12 +53,14 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 20 tests across 3
+- **Verification**: clean build at 0 warnings / 0 errors; 48 tests across 6
   suites green — runtime tests against real LMDB environments (atomicity,
   rollback, read-only enforcement, child commit-into-parent, child abort leaves
   parent usable, helper composition, cursor injection, bare dispatch threads),
-  4 strict expansion fixtures freezing the body-macro output, and a 6-test
-  transaction-relationship suite pinning engine defaults.
+  4 strict expansion fixtures freezing the body-macro output, a 6-test
+  transaction-relationship suite pinning engine defaults, a usage-pattern demo
+  suite, and 27 functional-interop tests driven by raw CLMDB (no QuickLMDB
+  types involved).
 - **Modes**: `.readWrite` (commit once, abort exactly once on error),
   `.readOnly` (never commits, aborts on exit), `.readWriteChild` (requires a
   `parent: borrowing Transaction` parameter; child merges on commit, aborts
@@ -101,6 +106,15 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 - **Zero-copy / raw control intact**: `loadEntry(key:as:MDB_val.self, tx:)` and
   manual `Transaction(env:)` remain exactly as before — the macro layer is a
   convenience on top, never a removal.
+- **Functional-interop split**: the database + cursor `MDB_*_static` functions
+  and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop`
+  — a handle-level bridge (`MDB_dbi`, `OpaquePointer` tx/cursor handles,
+  `MDB_cursor_op`, `UInt32` flags, `MDB_cmp_func_t`) that imports only CLMDB and
+  sits BELOW QuickLMDB. QuickLMDB depends on it and re-exports it via
+  `@_exported import`, so `LMDBError` stays visible to consumers and macro
+  expansions unchanged. the ~55 call sites and the two internal macro templates
+  were adapted to pass raw handles; behavior is preserved and pinned by 27
+  raw-CLMDB-driven tests (see `Tests/QuickLMDBFunctionalInteropTests/`).
 
 ## The journey (why this shape)
 
@@ -142,6 +156,11 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
   Planned section) is the agreed principled replacement for new code.
 - **Write-inside-`readOnly` is a runtime `EACCES`** from LMDB (asserted in
   tests), not a compile-time error. A body-scan lint later could diagnose it.
+- **DB-level `containsEntry(key:value:)` resolves by key only**: the contains
+  static forwards to `mdb_get`, which treats the value argument as an output,
+  not a match term — on a dupsort db it reports "key exists", not "pair
+  exists". true key+value matching is the cursor's `MDB_GET_BOTH` path
+  (covered in the interop tests). pinned as shipped behavior.
 - **Implicit nesting of WRITE boundaries is forbidden, by engine necessity**: a
   `.readWrite` nested inside another `.readWrite` without an explicit `parent:`
   deadlocks on LMDB's non-recursive writer mutex (source-verified; see

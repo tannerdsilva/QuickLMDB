@@ -66,11 +66,11 @@ QuickLMDB's ``QuickLMDB/Cursor`` class also follows the spirit of the underlying
 
 QuickLMDB has reasonable default behavior when managing the lifecycle of ``QuickLMDB/Transaction``s and ``QuickLMDB/Cursor``s.
 
-- Transaction blocks that return normally will be committed.
+- A transaction created directly (``QuickLMDB/Transaction/init(env:readOnly:)``) is closed explicitly by calling ``QuickLMDB/Transaction/commit()`` or ``QuickLMDB/Transaction/abort()``. as a safety net, the deinit of a transaction that was never closed aborts it.
 
-- Transaction blocks that throw an error will cause the transaction to abort.
+- An ``QuickLMDB/MDB_transact(_:)`` boundary commits its transaction exactly once when the body returns normally, and aborts exactly once when the body throws.
 
-- At any time within a transaction block, a developer may call ``QuickLMDB/Transaction/commit()``, ``QuickLMDB/Transaction/abort()``, ``QuickLMDB/Transaction/reset()``, or ``QuickLMDB/Transaction/renew()`` to force their own behavior on a transaction.
+- At any time, a developer may call ``QuickLMDB/Transaction/commit()``, ``QuickLMDB/Transaction/abort()``, ``QuickLMDB/Transaction/reset()``, or ``QuickLMDB/Transaction/renew()`` to force their own behavior on a transaction.
 
 ## Transaction boundaries with macros
 
@@ -119,6 +119,6 @@ The annotated method must be `throws` (the boundary can fail to open or commit) 
 
 Generates a `static func open(at:mapHeadroom:)` that sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported).
 
-Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `loadEntry(key:as:tx:)`, `setEntry(key:value:flags:tx:)`, `cursor(tx:_:)`. the C wrapper layer is untouched.
+Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `loadEntry(key:as:tx:)`, `setEntry(key:value:flags:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls — the database/cursor `MDB_*_static` functions and `LMDBError` — lives in the standalone `QuickLMDBFunctionalInterop` product: a handle-level C layer (`MDB_dbi`, raw pointer handles) with no QuickLMDB types, re-exported by QuickLMDB. the C wrapper layer itself (CLMDB) is untouched.
 
 **Planned evolution (agreed direction, not yet shipped):** DB statements inside boundaries are slated to become freestanding verb macros — `#store`, `#load`, `#delete`, `#contains` — lowered by `@MDB_transact` into the same tx-bearing calls shown above, with a compile-time diagnostic when a verb appears outside a boundary. The typed `Database.Strict<K,V>` handle already carries both key and value types statically, so the verbs need no `as:` and no `flags: []`. The relationship matrix, `.readWriteChild(parent:)`, forced `.noTLS`, and the zero-ambient contract are all unaffected by this evolution.
