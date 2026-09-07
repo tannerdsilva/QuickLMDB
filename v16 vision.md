@@ -54,14 +54,16 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 48 tests across 6
-  suites green — runtime tests against real LMDB environments (atomicity,
-  rollback, read-only enforcement, child commit-into-parent, child abort leaves
-  parent usable, helper composition, cursor injection, bare dispatch threads),
-  4 strict expansion fixtures freezing the body-macro output, a 6-test
-  transaction-relationship suite pinning engine defaults, a usage-pattern demo
-  suite, and 27 functional-interop tests driven by raw CLMDB (no QuickLMDB
-  types involved).
+- **Verification**: clean build at 0 warnings / 0 errors; 72 tests across 8
+  suites green across ALL targets — runtime tests against real LMDB
+  environments (atomicity, rollback, read-only enforcement, child
+  commit-into-parent, child abort leaves parent usable, helper composition,
+  cursor injection, bare dispatch threads), 4 strict expansion fixtures
+  freezing the body-macro output, a 50-test transaction-relationship suite
+  pinning engine defaults, the MDB_db (12) and MDB_cursor (10)
+  protocol-extension bridge suites driven through RAW Database/Cursor handles,
+  a usage-pattern demo suite, and functional-interop tests driven by raw
+  CLMDB (no QuickLMDB types involved).
 - **Modes**: `.readWrite` (commit once, abort exactly once on error),
   `.readOnly` (never commits, aborts on exit), `.readWriteChild` (requires a
   `parent: borrowing Transaction` parameter; child merges on commit, aborts
@@ -119,13 +121,84 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
   — a handle-level bridge (`MDB_dbi`, `OpaquePointer` tx/cursor handles,
   `MDB_cursor_op`, `UInt32` flags, `MDB_cmp_func_t`) that imports only CLMDB and
   sits BELOW QuickLMDB. the `MDB_*_static` implementations are module-INTERNAL;
-  the target's public api surface is the `consuming MDB_val` functional layer
-  (functions like `MDB_db_get_entry`/`MDB_cursor_get_entry`, which return the
-  buffers LMDB fills). QuickLMDB depends on it and re-exports it via
+  the target's public api surface is the `consuming MDB_val` functional layer —
+  19 functions in total (11 `MDB_db_*`: get/set/contains/delete(x2)/
+  delete-all/delete-database/statistics/flags/assign-compare-key/
+  assign-compare-val; 8 `MDB_cursor_*`: set/delete-current/contains(x2)/
+  get/dupcount/compare-keys/compare-values) — plus `MDB_cmp_func_t` and
+  `LMDBError`. QuickLMDB depends on it and re-exports it via
   `@_exported import`, so `LMDBError` stays visible to consumers and macro
-  expansions unchanged. the ~55 call sites and the two internal macro templates
-  were adapted to the public surface; behavior is preserved and pinned by 27
-  raw-CLMDB-driven tests (see `Tests/QuickLMDBFunctionalInteropTests/`).
+  expansions unchanged. every member of the main-target protocol-extension
+  bridges routes through these 19 (see "Public API surface" below); behavior
+  preserved and pinned by raw-CLMDB-driven tests (see
+  `Tests/QuickLMDBFunctionalInteropTests/`).
+
+## Public API surface — what ships from where
+
+The three-target stack, as it stands after the interop split and the
+protocol-extension bridge work (verified against the per-module symbol graphs):
+
+```
+QuickLMDBMacros (codegen)        QuickLMDBFunctionalInterop (the C bridge)
+└─ 3 public macro impls          └─ 19 consuming-MDB_val functions
+   MDB_transact (body)              MDB_db_* (11) + MDB_cursor_* (8)
+   MDB_environment (schema)         MDB_cmp_func_t, LMDBError
+   MDB_comparable (comparator)      └─ internal MDB_*_static inout tier
+                 │ imports only CLMDB below
+                 ▼
+QuickLMDB (the library)
+└─ handwritten core: Transaction, Environment, Database, Cursor, iterators,
+   MDB_db_flags, Operation(+Flags), MDB_transact_mode, MDB_comparable proto
+└─ protocol tree (11): MDB_db(_basic/_strict/_dupsort/_dupfixed),
+   MDB_cursor(_basic/_strict/_dupsort/_dupfixed)
+└─ protocol-extension bridges (the member-level API):
+   extension MDB_db (11 ops) + extension MDB_cursor/_dupsort (cursor ops)
+└─ internal macro aliases into QuickLMDBMacros (typed-handle/variant members)
+└─ @_exported re-exports: QuickLMDBFunctionalInterop, CLMDB.MDB_val, RAW
+   (MDB_convertible = RAW_accessible & RAW_decodable & RAW_encodable)
+```
+
+**ownership in one line each:**
+
+| public API you see | where it actually lives |
+|---|---|
+| `MDB_val`, `MDB_stat`, `MDB_cursor_op`, `MDB_dbi` | CLMDB (re-exported) |
+| all 19 `MDB_db_*` / `MDB_cursor_*` top-level functions | `QuickLMDBFunctionalInterop` — the main module declares NONE of them; they appear in its symbol graph because of `@_exported` |
+| `LMDBError` (30 members) | `QuickLMDBFunctionalInterop` |
+| `Transaction`, `Environment` (lifecycle, relationships, `.noTLS` env policy) | `QuickLMDB`, handwritten |
+| every member on `Database`, `Database.Strict/DupSort/DupFixed`, `Cursor`, `Cursor.Strict/DupSort/DupFixed` (`setEntry`, `loadEntry`, `opFirst`, iterators, …) | `QuickLMDB`, `extension MDB_db` / `extension MDB_cursor` — written ONCE on the protocol, inherited by every conformer, each member body delegating to the interop function |
+| the typed-handle / typed-cursor members that CANNOT be extension members (`borrowing`-typed access members, cursor inits, dup-set members) | generated per variant by the INTERNAL macros (`@MDB_db_strict_impl`, `@MDB_cursor_basics`, `@MDB_cursor_RAW_access_members`, `@MDB_cursor_dupsort`, `@MDB_cursor_dupfixed`) — declared `internal` in `QuickLMDB/Macros.swift`, implemented in the macro target |
+| `@MDB_transact`, `@MDB_environment`, `@MDB_comparable` | `QuickLMDBMacros` (the only target that writes Swift that rewrites Swift) |
+| `MDB_db_flags`, `Operation(+Flags)`, `DatabaseIterator`, `DatabaseDupIterator`, `MDB_transact_mode` | `QuickLMDB`, handwritten |
+| `MDB_convertible` | typealias over three RAW protocols; `MDB_comparable` refines `RAW_comparable` |
+
+**why the macro layer exists at all (the DRY rule in action):** the library's
+hard rule — never write the same code twice across different variants — is
+satisfied in two complementary ways, and the split between them is a Swift
+compiler limitation, not a preference:
+
+1. **extension-membership**: every operation that CAN be written once on a
+   protocol is written once, in `extension MDB_db` / `extension MDB_cursor`
+   family. all of `Database`, `Database.Strict`, `Database.DupSort`,
+   `Database.DupFixed` (and all four cursor variants) inherit the identical
+   body through the protocol tree; that body delegates to the single
+   interop C-facing copy. zero duplication across the 8 db/cursor variants.
+2. **macro-generation**: the members that the compiler REFUSES to accept as
+   protocol-extension members — the `borrowing`-typed RAW access tier
+   (`@MDB_cursor_RAW_access_members`; per the in-source comment, "when the
+   same code is applied as an extension, the compiler does not allow the
+   functions to be `borrowing`"), the generic cursor inits, and the
+   database-strict set/delete family on typed handles — are generated per
+   variant from ONE template in the macro target. the template is the single
+   copy; the expansion is applied by attaching `@MDB_*` attributes to each
+   variant declaration. users never see these macros; they are `internal`
+   aliases in `Macros.swift`, with the public entry points being only
+   `@MDB_transact` / `@MDB_environment` / `@MDB_comparable`.
+
+the interop target is the third leg of the DRY story: it is where the raw
+`consuming MDB_val` mechanics live exactly once, below BOTH the protocol
+extensions and the macro templates. a future non-LMDB backend could swap
+bodies behind the same 19 functions without touching the member API.
 
 ## The journey (why this shape)
 
