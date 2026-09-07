@@ -18,8 +18,9 @@ Everything underneath — `Transaction`, `MDB_db`/`MDB_cursor`, and the
 `Database.X` handles — is the inherited tagged-release API, unchanged. the
 `MDB_*_static` database/cursor functions and `LMDBError` were split out into
 the standalone `QuickLMDBFunctionalInterop` target (a handle-level C bridge
-below QuickLMDB, re-exported via `@_exported import`); see
-"Functional-interop split" under What is settled.
+below QuickLMDB whose public api surface is the `consuming MDB_val` layer; the
+raw handle functions are module-internal, re-exported via `@_exported import`);
+see "Functional-interop split" under What is settled.
 
 ## The mechanism (the one trick that makes it work)
 
@@ -110,10 +111,13 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
   and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop`
   — a handle-level bridge (`MDB_dbi`, `OpaquePointer` tx/cursor handles,
   `MDB_cursor_op`, `UInt32` flags, `MDB_cmp_func_t`) that imports only CLMDB and
-  sits BELOW QuickLMDB. QuickLMDB depends on it and re-exports it via
+  sits BELOW QuickLMDB. the `MDB_*_static` implementations are module-INTERNAL;
+  the target's public api surface is the `consuming MDB_val` functional layer
+  (functions like `MDB_db_get_entry`/`MDB_cursor_get_entry`, which return the
+  buffers LMDB fills). QuickLMDB depends on it and re-exports it via
   `@_exported import`, so `LMDBError` stays visible to consumers and macro
   expansions unchanged. the ~55 call sites and the two internal macro templates
-  were adapted to pass raw handles; behavior is preserved and pinned by 27
+  were adapted to the public surface; behavior is preserved and pinned by 27
   raw-CLMDB-driven tests (see `Tests/QuickLMDBFunctionalInteropTests/`).
 
 ## The journey (why this shape)

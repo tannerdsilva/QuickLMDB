@@ -19,20 +19,21 @@ internal struct _QUICKLMDB_INTERNAL_cursor_dupfixed_impl:MemberMacro {
 						let valuePtr = valueVal.mv_data
 						#endif
 
-						try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.getMultiple.mdbValue, key:&keyVal, value:&valueVal)
+						let entry = try MDB_cursor_get_entry(cursor:self.cursorHandle(), op:Operation.getMultiple.mdbValue, key:keyVal, value:valueVal)
 
 						#if DEBUG
-						assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
-						assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-						assert(valueVal.mv_size % MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size == 0, "value buffer must be evenly divisible by the expected size of the value type")
-						assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+						assert(keyPtr != entry.key.mv_data, "key buffer was not modified so it cannot be returned")
+						assert(entry.value.mv_size != -1, "value buffer was not modified so it cannot be returned")
+						assert(entry.value.mv_size % MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size == 0, "value buffer must be evenly divisible by the expected size of the value type")
+						assert(valuePtr != entry.value.mv_data, "value buffer was not modified so it cannot be returned")
 						#endif
 
-						return [MDB_cursor_dbtype.MDB_db_val_type](unsafeUninitializedCapacity:(valueVal.mv_size / MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size), initializingWith: { buff, count in
-							var dataSeeker = UnsafeRawPointer(valueVal.mv_data)!
-							while valueVal.mv_size > 0 {
+						var outVal = entry.value
+						return [MDB_cursor_dbtype.MDB_db_val_type](unsafeUninitializedCapacity:(outVal.mv_size / MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size), initializingWith: { buff, count in
+							var dataSeeker = UnsafeRawPointer(outVal.mv_data)!
+							while outVal.mv_size > 0 {
 								buff[count] = MDB_cursor_dbtype.MDB_db_val_type(RAW_staticbuff_seeking:&dataSeeker)
-								valueVal.mv_size -= MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size
+								outVal.mv_size -= MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size
 								count += 1
 							}
 						})
@@ -50,20 +51,21 @@ internal struct _QUICKLMDB_INTERNAL_cursor_dupfixed_impl:MemberMacro {
 						let valuePtr = valueVal.mv_data
 						#endif
 
-						try MDB_cursor_get_entry_static(cursor:self.cursorHandle(), op:Operation.nextMultiple.mdbValue, key:&keyVal, value:&valueVal)
+						let entry = try MDB_cursor_get_entry(cursor:self.cursorHandle(), op:Operation.nextMultiple.mdbValue, key:keyVal, value:valueVal)
 
 						#if DEBUG
-						assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
-						assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
-						assert(valueVal.mv_size % MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size == 0, "value buffer must be evenly divisible by the expected size of the value type")
-						assert(valuePtr != valueVal.mv_data, "value buffer was not modified so it cannot be returned")
+						assert(keyPtr != entry.key.mv_data, "key buffer was not modified so it cannot be returned")
+						assert(entry.value.mv_size != -1, "value buffer was not modified so it cannot be returned")
+						assert(entry.value.mv_size % MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size == 0, "value buffer must be evenly divisible by the expected size of the value type")
+						assert(valuePtr != entry.value.mv_data, "value buffer was not modified so it cannot be returned")
 						#endif
 
-						var dataSeeker = UnsafeRawPointer(valueVal.mv_data)!
-						return [MDB_cursor_dbtype.MDB_db_val_type](unsafeUninitializedCapacity:(valueVal.mv_size / MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size), initializingWith: { buff, count in
-							while valueVal.mv_size > 0 {
+						var outVal = entry.value
+						return [MDB_cursor_dbtype.MDB_db_val_type](unsafeUninitializedCapacity:(outVal.mv_size / MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size), initializingWith: { buff, count in
+							var dataSeeker = UnsafeRawPointer(outVal.mv_data)!
+							while outVal.mv_size > 0 {
 								buff[count] = MDB_cursor_dbtype.MDB_db_val_type(RAW_staticbuff_seeking:&dataSeeker)
-								valueVal.mv_size -= MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size
+								outVal.mv_size -= MemoryLayout<MDB_cursor_dbtype.MDB_db_val_type.RAW_fixed_type>.size
 								count += 1
 							}
 						})

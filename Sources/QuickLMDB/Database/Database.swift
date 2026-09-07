@@ -132,8 +132,8 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
-			MDB_db_assign_compare_val_f(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_key(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_val(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
 		}
 	}
 
@@ -188,8 +188,8 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
-			MDB_db_assign_compare_val_f(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_key(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_val(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
 		}
 	}
 
@@ -239,7 +239,7 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
+			MDB_db_assign_compare_key(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
 		}
 	}
 }

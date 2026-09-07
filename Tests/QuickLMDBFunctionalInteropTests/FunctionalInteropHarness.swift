@@ -134,13 +134,15 @@ func withCursorTxn(_ env:RawEnv, db:MDB_dbi, _ body:(OpaquePointer) throws -> Vo
 
 // - MARK: MDB_val helpers (raw)
 
+/// build an MDB_val over `bytes` and hand it to `body` as a consuming value.
+/// the backing buffer lives for the duration of `body`.
 @discardableResult
-func withVal<T>(_ bytes:[UInt8], _ body:(inout MDB_val) throws -> T) rethrows -> T {
+func withVal<T>(_ bytes:[UInt8], _ body:(consuming MDB_val) throws -> T) rethrows -> T {
 	try bytes.withUnsafeBytes { raw in
 		var val = MDB_val()
 		val.mv_size = raw.count
 		val.mv_data = raw.baseAddress.map { UnsafeMutableRawPointer(mutating:$0) }
-		return try body(&val)
+		return try body(val)
 	}
 }
 

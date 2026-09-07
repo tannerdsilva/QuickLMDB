@@ -8,7 +8,7 @@
 - Removed the internal `_MDBTransactionScope` transaction registry (superseded by the body macro architecture).
 - Fixed `Transaction` so its deinit no longer aborts an already-committed transaction.
 - The transaction-bearing protocol API (`Transaction`, `MDB_db`, `MDB_cursor`, the `Database.X` handles) is unchanged.
-- The database + cursor `MDB_*_static` functions and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop` — a handle-level C bridge (`MDB_dbi` / `OpaquePointer` / `MDB_cursor_op`, no QuickLMDB types) — re-exported by QuickLMDB via `@_exported import`; public behavior is unchanged. covered by a new `QuickLMDBFunctionalInteropTests` target (27 tests driven by raw CLMDB).
+- The database + cursor `MDB_*_static` functions and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop` — a handle-level C bridge with no QuickLMDB types. its public api surface is the `consuming MDB_val` functional layer (`MDB_db_get_entry`/`MDB_db_set_entry`/`MDB_cursor_get_entry`/…); the raw handle functions are module-internal. QuickLMDB bridges through the public surface via `@_exported import`; public behavior is unchanged. covered by a new `QuickLMDBFunctionalInteropTests` target (27 tests driven by raw CLMDB).
 
 # 15.0.0
 
