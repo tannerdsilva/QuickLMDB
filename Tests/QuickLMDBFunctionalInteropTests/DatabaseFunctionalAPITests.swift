@@ -99,38 +99,6 @@ struct DatabaseFunctionalAPITests {
 		}
 	}
 
-	@Test func reserveEntryReturnsWritableBuffer() throws {
-		let env = try RawEnv()
-		defer { env.close() }
-		try withTxn(env) { tx in
-			let dbi = try env.db(nil, tx:tx)
-			try withVal([0x09]) { key in
-				var sizeVal = MDB_val()
-				sizeVal.mv_size = 8
-				sizeVal.mv_data = nil
-				let reserved = try MDB_db_set_entry(db:dbi, returning:MDB_val.self, key:key, value:sizeVal, flags:UInt32(MDB_RESERVE), tx:tx)
-				#expect(reserved.mv_size == 8)
-				guard let ptr = reserved.mv_data else {
-					Issue.record("reserved buffer pointer was nil")
-					return
-				}
-				ptr.storeBytes(of:0xDE, toByteOffset:0, as:UInt8.self)
-				ptr.storeBytes(of:0x42, toByteOffset:7, as:UInt8.self)
-			}
-		}
-		// verify the reserved region was written and committed on a fresh transaction
-		try withTxn(env) { tx in
-			let dbi = try env.db(nil, tx:tx)
-			try withVal([0x09]) { key in
-				let out = try MDB_db_get_entry(db:dbi, key:key, tx:tx)
-				let b = bytes(from:out)
-				#expect(b.count == 8)
-				#expect(b[0] == 0xDE)
-				#expect(b[7] == 0x42)
-			}
-		}
-	}
-
 	// - MARK: pointer provenance
 
 	@Test func getReturnsMapPointerDistinctFromInput() throws {
@@ -150,24 +118,6 @@ struct DatabaseFunctionalAPITests {
 					#expect(out.mv_data != keyPtr, "get must not return the caller-provided key pointer")
 					#expect(bytes(from:out) == [1, 2, 3, 4])
 				}
-			}
-		}
-	}
-
-	@Test func reserveReturnsMapPointerDistinctFromInput() throws {
-		let env = try RawEnv()
-		defer { env.close() }
-		try withTxn(env) { tx in
-			let dbi = try env.db(nil, tx:tx)
-			try withVal([0x09]) { key in
-				let keyPtr = key.mv_data
-				var sizeVal = MDB_val()
-				sizeVal.mv_size = 8
-				sizeVal.mv_data = nil
-				let reserved = try MDB_db_set_entry(db:dbi, returning:MDB_val.self, key:key, value:sizeVal, flags:UInt32(MDB_RESERVE), tx:tx)
-				#expect(reserved.mv_size == 8)
-				#expect(reserved.mv_data != nil, "reserve must return a live map pointer")
-				#expect(reserved.mv_data != keyPtr, "reserve must not return the caller-provided key pointer")
 			}
 		}
 	}

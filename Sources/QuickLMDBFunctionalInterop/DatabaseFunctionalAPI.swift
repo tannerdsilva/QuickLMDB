@@ -38,16 +38,6 @@ internal func MDB_db_set_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, value
 	}
 }
 
-// set entry returns value pointer [RETURNS]
-@available(*, noasync)
-internal func MDB_db_set_entry_static(db:MDB_dbi, returning:CLMDB.MDB_val.Type, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
-	let cursorResult = mdb_put(tx, db, &key, &value, flags)
-	guard cursorResult == MDB_SUCCESS else {
-		throw LMDBError(returnCode:cursorResult)
-	}
-	return value
-}
-
 // check for entry (key only)
 @available(*, noasync)
 internal func MDB_db_contains_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
@@ -165,12 +155,6 @@ public func MDB_db_get_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaqueP
 @available(*, noasync)
 public func MDB_db_set_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) {
 	try MDB_db_set_entry_static(db:db, key:&key, value:&value, flags:flags, tx:tx)
-}
-
-// assign an entry and return the value pointer as rewritten by LMDB (MDB_RESERVE).
-@available(*, noasync)
-public func MDB_db_set_entry(db:MDB_dbi, returning:CLMDB.MDB_val.Type, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
-	return try MDB_db_set_entry_static(db:db, returning:returning, key:&key, value:&value, flags:flags, tx:tx)
 }
 
 // check whether an entry exists for the key.

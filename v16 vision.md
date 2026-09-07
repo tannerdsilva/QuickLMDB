@@ -153,7 +153,7 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
   re-parenthesized; the serialized spacing is cosmetic and deterministic (frozen
   into a fixture) but not hand-beautiful. A candidate for later polish.
 - **Call attribution is by name list** over `loadEntry/setEntry/containsEntry/
-  deleteEntry/deleteAllEntries/cursor/reserveEntry/dbStatistics/dbFlags/
+  deleteEntry/deleteAllEntries/cursor/dbStatistics/dbFlags/
   deleteDatabase`. A user function with one of these names inside a boundary
   would be rewritten. No opt-out attribute yet; the contract is documented.
   the planned verb vocabulary (`#store`/`#load`/`#delete`/`#contains`, see the
@@ -250,13 +250,18 @@ The full inner-transaction vocabulary (one verb per tx-requiring entry point):
 | `deleteDatabase(tx:)`             | `#drop(db)` (consumes the handle)       | 3    |
 | `dbFlags(tx:)`                    | skipped — flags are compile-time on typed handles | — |
 
+(deliberately ABSENT: `reserveEntry`/`MDB_RESERVE` — write-without-initialize
+support was dropped outright; the reserve footguns (uninitialized stores,
+caller-buffer provenance on the returning set path) outweighed the memcpy
+savings, so there is no `#reserve` verb and no returning-set surface.)
+
 deliberately NOT verb candidates: cursor OPERATIONS (`opSet`/`opNext`/dup ops/
 `deleteCurrentEntry` — cursor-bound, tx-free), `makeDupIterator`,
 `dbName`/`dbHandle`/`dbEnvironment` (tx-free metadata), `Environment.sync`/
 `readerCheck`, and the `Transaction` lifecycle (`commit`/`abort`/`reset`/`renew`
-belong to the boundary itself). `#cursor` and `#reserve` keep their
-trailing-closure, non-escaping form; the body macro lowers them exactly as it
-lowers `cursor(tx:)` today (already in the attribution name list).
+belong to the boundary itself). `#cursor` keeps its trailing-closure,
+non-escaping form; the body macro lowers it exactly as it lowers
+`cursor(tx:)` today (already in the attribution name list).
 
 Implementing this is the top backlog item; picky details (exact lowering,
 naming, expansion fixtures) are deferred until then.
@@ -265,8 +270,8 @@ naming, expansion fixtures) are deferred until then.
 
 - **AGREED NEXT DIRECTION — the operation-verb macro vocabulary**:
   implement the phase-1 verbs `#store` / `#load` / `#delete` / `#contains` /
-  `#cursor` / `#clear` as context-consuming verb macros (plus `#reserve` /
-  `#stats` / `#drop` in later phases — see the Planned section table), the
+  `#cursor` / `#clear` as context-consuming verb macros (plus `#stats` /
+  `#drop` in later phases — see the Planned section table), the
   `@MDB_transact` body-macro lowering, the typed-handle companions
   (`load(key:)`, `store(key:value:flags: = [])`, `delete(key:)`,
   `contains(key:)`), the outside-a-boundary diagnostic, and strict expansion

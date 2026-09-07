@@ -64,7 +64,6 @@ public struct Database:Sendable, MDB_db_basic {
 	}
 	@available(*, noasync)
 	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
-		flags.subtract(.reserve)
 		return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
 			return try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
 				return try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)

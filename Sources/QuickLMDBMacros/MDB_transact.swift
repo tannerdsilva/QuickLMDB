@@ -76,7 +76,7 @@ internal struct MDB_transact_macro: BodyMacro {
 	/// argument is absent.
 	private static let txOperationNames:Set<String> = [
 		"loadEntry", "setEntry", "containsEntry", "deleteEntry", "deleteAllEntries",
-		"cursor", "reserveEntry", "dbStatistics", "dbFlags", "deleteDatabase"
+		"cursor", "dbStatistics", "dbFlags", "deleteDatabase"
 	]
 
 	// - MARK: mode parsing

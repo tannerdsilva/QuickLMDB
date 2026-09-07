@@ -20,19 +20,9 @@ extension MDB_db {
 	
 	// set entry implementation
 	public borrowing func setEntry(key keyVal:consuming MDB_val, value valueVal:consuming MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) {
-		flags.subtract(.reserve)
 		try MDB_db_set_entry(db:self.dbHandle(), key:keyVal, value:valueVal, flags:flags.rawValue, tx:tx.txHandle())
 	}
-	
-	public borrowing func reserveEntry(key keyVal:consuming MDB_val, reservedSize valReserve:consuming MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction, _ handlerFunc:(consuming MDB_val) throws -> Void) throws {
-		flags.formUnion(.reserve)
-		#if DEBUG
-		assert(valReserve.mv_size >= 0, "lmdb cannot reserve a buffer of negative size")
-		#endif
-		
-		try handlerFunc(try MDB_db_set_entry(db:self.dbHandle(), returning:MDB_val.self, key:keyVal, value:valReserve, flags:flags.rawValue, tx:tx.txHandle()))
-	}
-	
+
 	// delete entry implementations
 	public borrowing func deleteEntry(key keyVal:consuming MDB_val, tx:borrowing Transaction) throws(LMDBError) {
 		try MDB_db_delete_entry(db:self.dbHandle(), key:keyVal, tx:tx.txHandle())

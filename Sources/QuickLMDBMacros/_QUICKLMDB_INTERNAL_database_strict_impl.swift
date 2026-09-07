@@ -10,7 +10,6 @@ internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
 		return [
 			DeclSyntax("""
 				public borrowing func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) {
-					flags.subtract(.reserve)
 					try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
 						try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
 							try MDB_db_set_entry(db:self.dbHandle(), key:keyVal, value:valueVal, flags:flags.rawValue, tx:tx.txHandle())

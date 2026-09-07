@@ -62,10 +62,7 @@ public enum Operation {
 		
 		/// for ``Cursor/setEntry(value:forKey:flags:)``: overwrite the current key/value pair.
 		public static let current = Flags(rawValue:UInt32(MDB_CURRENT))
-		
-		/// for ``Cursor/setEntry(value:forKey:flags:)``: just reserve space for the value, don't copy it. return a pointer to the reserved space.
-		internal static let reserve = Flags(rawValue:UInt32(MDB_RESERVE))
-		
+	
 		/// pre-sorted keys are being stored in the database. don't split full pages.
 		public static let append = Flags(rawValue:UInt32(MDB_APPEND))
 		
@@ -150,9 +147,6 @@ extension Operation.Flags:CustomDebugStringConvertible {
 		}
 		if contains(.current) {
 			desc.append("MDB_CURRENT")
-		}
-		if contains(.reserve) {
-			desc.append("MDB_RESERVE")
 		}
 		if contains(.append) {
 			desc.append("MDB_APPEND")
