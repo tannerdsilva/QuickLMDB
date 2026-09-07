@@ -118,6 +118,15 @@ public func MDB_cursor_contains_entry(cursor:OpaquePointer, key:consuming CLMDB.
 }
 
 // position the cursor with the given operation and return the retrieved entry.
+//
+// - for every operation EXCEPT `MDB_SET`, the returned key and value point into
+//   LMDB-owned storage (the memory map, or copy-on-write pages inside a write
+//   transaction) and are valid until the next update operation or the end of the
+//   transaction. callers may not modify that memory.
+// - for `op == MDB_SET`, LMDB leaves the KEY object unchanged (lmdb.h: "the key
+//   object is unchanged") — the returned key aliases the caller's CONSUMED
+//   buffer and must not be retained or treated as LMDB-owned storage. the
+//   returned value does point into LMDB storage.
 @available(*, noasync)
 public func MDB_cursor_get_entry(cursor:OpaquePointer, op:MDB_cursor_op, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val) throws(LMDBError) -> (key:CLMDB.MDB_val, value:CLMDB.MDB_val) {
 	try MDB_cursor_get_entry_static(cursor:cursor, op:op, key:&key, value:&value)

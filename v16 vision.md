@@ -107,6 +107,13 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 - **Zero-copy / raw control intact**: `loadEntry(key:as:MDB_val.self, tx:)` and
   manual `Transaction(env:)` remain exactly as before — the macro layer is a
   convenience on top, never a removal.
+- **Cursor-get provenance has one documented exception**: for every op EXCEPT
+  `MDB_SET`, `MDB_cursor_get_entry` returns key/value pointers into LMDB-owned
+  storage. `MDB_SET` leaves the key object unchanged (lmdb.h / mdb.c), so the
+  returned key aliases the caller's consumed buffer — documented on the
+  function and pinned by `setOpReturnsCallerKeyPointerUnchanged`, so a future
+  LMDB that rewrites it surfaces loudly. the typed layer is unaffected: opSet
+  returns the value only.
 - **Functional-interop split**: the database + cursor `MDB_*_static` functions
   and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop`
   — a handle-level bridge (`MDB_dbi`, `OpaquePointer` tx/cursor handles,

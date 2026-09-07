@@ -233,6 +233,33 @@ struct CursorFunctionalAPITests {
 		}
 	}
 
+	@Test func setOpReturnsCallerKeyPointerUnchanged() throws {
+		let env = try RawEnv()
+		defer { env.close() }
+		let db = try openDB(env, "provset")
+		try withTxn(env) { tx in
+			try withVal([0x55]) { key in
+				try withVal([0xAA]) { value in
+					try MDB_db_set_entry(db:db, key:key, value:value, flags:0, tx:tx)
+				}
+			}
+		}
+		try withCursorTxn(env, db:db) { cursor in
+			// MDB_SET is the ONE op where LMDB leaves the key object unchanged — the returned
+			// key MUST alias the caller's consumed buffer, not a map pointer. pinned so a
+			// future LMDB (or wrapper) that rewrites it surfaces loudly.
+			try withVal([0x55]) { key in
+				let keyPtr = key.mv_data
+				let value = MDB_val()
+				let entry = try MDB_cursor_get_entry(cursor:cursor, op:MDB_SET, key:key, value:value)
+				#expect(entry.key.mv_data == keyPtr, "MDB_SET must return the caller's own key pointer (intentional aliasing)")
+				#expect(entry.key.mv_size == 1)
+				#expect(entry.value.mv_data != nil, "the value must still be a live map pointer")
+				#expect(bytes(from:entry.value) == [0xAA])
+			}
+		}
+	}
+
 	// - MARK: cursor writes
 
 	@Test func setEntryThroughCursorPersists() throws {
