@@ -8,11 +8,6 @@ extension MDB_val {
 		return makeVal
 	}
 
-	/// initializes a new MDB_val that overlaps with the contents of an UnsafeMutableBufferPointer.
-	internal init(_ buffer:UnsafeMutableBufferPointer<UInt8>) {
-		self = MDB_val(mv_size:buffer.count, mv_data:buffer.baseAddress)
-	}
-	
 	/// initializes a new MDB_val that overlaps with the contents of the UnsafeBufferPointer.
 	internal init(_ buffer:UnsafeBufferPointer<UInt8>) {
 		self = MDB_val(mv_size:buffer.count, mv_data:UnsafeMutableRawPointer(mutating:buffer.baseAddress))

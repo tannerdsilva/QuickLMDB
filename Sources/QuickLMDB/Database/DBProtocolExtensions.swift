@@ -41,4 +41,14 @@ extension MDB_db {
 	public borrowing func dbFlags(tx:borrowing Transaction) throws(LMDBError) -> MDB_db_flags {
 		return MDB_db_flags(rawValue:try MDB_db_get_flags(db:self.dbHandle(), tx:tx.txHandle()))
 	}
+
+	// compare-function assignment (database config-time plumbing, used by the typed handle inits)
+	@available(*, noasync)
+	internal borrowing func assignCompareKey(_ compare:MDB_cmp_func_t, tx:borrowing Transaction) {
+		MDB_db_assign_compare_key(db:self.dbHandle(), compare:compare, tx:tx.txHandle())
+	}
+	@available(*, noasync)
+	internal borrowing func assignCompareVal(_ compare:MDB_cmp_func_t, tx:borrowing Transaction) {
+		MDB_db_assign_compare_val(db:self.dbHandle(), compare:compare, tx:tx.txHandle())
+	}
 }

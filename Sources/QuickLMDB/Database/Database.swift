@@ -42,40 +42,6 @@ public struct Database:Sendable, MDB_db_basic {
 		}
 		self._db_handle = dbHandle
     }
-	@available(*, noasync)
-	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx:borrowing Transaction) throws(LMDBError) -> V? where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access({ (keyVal:MDB_val) throws(LMDBError) -> V? in 
-			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
-		})
-	}
-	@available(*, noasync)
-	public borrowing func containsEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
-			return try containsEntry(key:keyVal, tx:tx)
-		}
-	}
-	@available(*, noasync)
-	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
-			return try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
-				return try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
-			}
-		}
-	}
-	@available(*, noasync)
-	public borrowing func deleteEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
-			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) in
-				return try deleteEntry(key:keyVal, value:valueVal, tx:tx)
-			}
-		}
-	}
-	@available(*, noasync)
-	public borrowing func deleteEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
-			return try deleteEntry(key:keyVal, tx:tx)
-		}
-	}
 }
 
 extension Database {
@@ -123,8 +89,8 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
-			MDB_db_assign_compare_val(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
+			self.assignCompareKey(MDB_db_key_type.MDB_compare_f, tx:tx)
+			self.assignCompareVal(MDB_db_val_type.MDB_compare_f, tx:tx)
 		}
 	}
 
@@ -179,8 +145,8 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
-			MDB_db_assign_compare_val(db:self.dbHandle(), compare:MDB_db_val_type.MDB_compare_f, tx:tx.txHandle())
+			self.assignCompareKey(MDB_db_key_type.MDB_compare_f, tx:tx)
+			self.assignCompareVal(MDB_db_val_type.MDB_compare_f, tx:tx)
 		}
 	}
 
@@ -230,7 +196,7 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key(db:self.dbHandle(), compare:MDB_db_key_type.MDB_compare_f, tx:tx.txHandle())
+			self.assignCompareKey(MDB_db_key_type.MDB_compare_f, tx:tx)
 		}
 	}
 }
