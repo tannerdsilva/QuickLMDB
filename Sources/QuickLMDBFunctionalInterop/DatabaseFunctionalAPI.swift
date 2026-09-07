@@ -178,53 +178,42 @@ internal func MDB_db_assign_compare_val_static(db:MDB_dbi, compare:MDB_cmp_func_
 // retrieve the value for a key.
 @available(*, noasync)
 public func MDB_db_get_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
-	var key = key
 	return try MDB_db_get_entry_static(db:db, key:&key, tx:tx)
 }
 
 // assign an entry. flags carry the LMDB write-flags bitmask (e.g. MDB_NOOVERWRITE).
 @available(*, noasync)
 public func MDB_db_set_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) {
-	var key = key
-	var value = value
 	try MDB_db_set_entry_static(db:db, key:&key, value:&value, flags:flags, tx:tx)
 }
 
 // assign an entry and return the value pointer as rewritten by LMDB (MDB_RESERVE).
 @available(*, noasync)
 public func MDB_db_set_entry(db:MDB_dbi, returning:CLMDB.MDB_val.Type, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
-	var key = key
-	var value = value
 	return try MDB_db_set_entry_static(db:db, returning:returning, key:&key, value:&value, flags:flags, tx:tx)
 }
 
 // check whether an entry exists for the key.
 @available(*, noasync)
 public func MDB_db_contains_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
-	var key = key
 	return try MDB_db_contains_entry_static(db:db, key:&key, tx:tx)
 }
 
 // check whether the key exists. matching is by key only (mdb_get semantics).
 @available(*, noasync)
 public func MDB_db_contains_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
-	var key = key
-	var value = value
 	return try MDB_db_contains_entry_static(db:db, key:&key, value:&value, tx:tx)
 }
 
 // delete all entries matching the key.
 @available(*, noasync)
 public func MDB_db_delete_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) {
-	var key = key
 	try MDB_db_delete_entry_static(db:db, key:&key, tx:tx)
 }
 
 // delete an exact key/value pairing.
 @available(*, noasync)
 public func MDB_db_delete_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) {
-	var key = key
-	var value = value
 	try MDB_db_delete_entry_static(db:db, key:&key, value:&value, tx:tx)
 }
 

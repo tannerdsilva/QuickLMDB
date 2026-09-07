@@ -96,8 +96,6 @@ internal func MDB_cursor_compare_values_static(tx:OpaquePointer, db:MDB_dbi, lhs
 // write an entry through the cursor.
 @available(*, noasync)
 public func MDB_cursor_set_entry(cursor:OpaquePointer, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32) throws(LMDBError) {
-	var key = key
-	var value = value
 	try MDB_cursor_set_entry_static(cursor:cursor, key:&key, value:&value, flags:flags)
 }
 
@@ -110,23 +108,18 @@ public func MDB_cursor_delete_current_entry(cursor:OpaquePointer, flags:UInt32) 
 // check whether an entry exists at the specified key (MDB_SET).
 @available(*, noasync)
 public func MDB_cursor_contains_entry(cursor:OpaquePointer, key:consuming CLMDB.MDB_val) throws(LMDBError) -> Bool {
-	var key = key
 	return try MDB_cursor_contains_entry_static(cursor:cursor, key:&key)
 }
 
 // check whether a key/value pair exists (MDB_GET_BOTH).
 @available(*, noasync)
 public func MDB_cursor_contains_entry(cursor:OpaquePointer, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val) throws(LMDBError) -> Bool {
-	var key = key
-	var value = value
 	return try MDB_cursor_contains_entry_static(cursor:cursor, key:&key, value:&value)
 }
 
 // position the cursor with the given operation and return the retrieved entry.
 @available(*, noasync)
 public func MDB_cursor_get_entry(cursor:OpaquePointer, op:MDB_cursor_op, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val) throws(LMDBError) -> (key:CLMDB.MDB_val, value:CLMDB.MDB_val) {
-	var key = key
-	var value = value
 	try MDB_cursor_get_entry_static(cursor:cursor, op:op, key:&key, value:&value)
 	return (key:key, value:value)
 }
