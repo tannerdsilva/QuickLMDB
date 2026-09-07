@@ -7,14 +7,18 @@ import CLMDB
 //
 // all functions are noasync and throw QuickLMDBFunctionalInterop.LMDBError.
 
+// - MARK: shared types
+
 /// the C compare-function shape accepted by `mdb_set_compare`/`mdb_set_dupsort`.
 public typealias MDB_cmp_func_t = @convention(c) (UnsafePointer<CLMDB.MDB_val>?, UnsafePointer<CLMDB.MDB_val>?) -> Int32
+
+// - MARK: get / set entries
 
 // get entries (by key, returns value)
 // - regardless of log mode, this function will assert that a valid database pointer is being returned when compiled in DEBUG mode.
 @available(*, noasync)
 public func MDB_db_get_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
-	var valueVal = MDB_val()
+	var valueVal = CLMDB.MDB_val()
 	#if DEBUG
 	let trashPtr = valueVal.mv_data
 	#endif
@@ -60,10 +64,12 @@ public func MDB_db_set_entry_static(db:MDB_dbi, returning:CLMDB.MDB_val.Type, ke
 	return value
 }
 
+// - MARK: contains
+
 // check for entry (key only)
 @available(*, noasync)
 public func MDB_db_contains_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
-	var valueVal = MDB_val()
+	var valueVal = CLMDB.MDB_val()
 	let searchKey = mdb_get(tx, db, &key, &valueVal)
 	switch searchKey {
 		case MDB_SUCCESS:
@@ -88,6 +94,8 @@ public func MDB_db_contains_entry_static(db:MDB_dbi, key:inout CLMDB.MDB_val, va
 			throw LMDBError(returnCode:searchKey)
 	}
 }
+
+// - MARK: delete
 
 // delete entry (key)
 @available(*, noasync)
@@ -125,6 +133,8 @@ public func MDB_db_delete_database_static(db:MDB_dbi, tx:OpaquePointer) throws(L
 	}
 }
 
+// - MARK: metadata
+
 // statistics
 @available(*, noasync)
 public func MDB_db_get_statistics_static(db:MDB_dbi, tx:OpaquePointer) throws(LMDBError) -> MDB_stat {
@@ -146,6 +156,8 @@ public func MDB_db_get_flags_static(db:MDB_dbi, tx:OpaquePointer) throws(LMDBErr
 	}
 	return flagsOut
 }
+
+// - MARK: compare functions
 
 // compare key set
 @available(*, noasync)

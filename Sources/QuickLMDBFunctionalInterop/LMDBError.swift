@@ -7,11 +7,16 @@ import System
 import Darwin
 #endif
 
-/// a structure used to convey 
+// error translation for the functional interop layer: maps raw LMDB return
+// codes (and POSIX errno on Apple platforms and Linux) to typed cases and back.
+
+// - MARK: error cases
+
+/// an error produced by the LMDB core, translated from a raw return code.
 public enum LMDBError:Error {
 
-	//LMDB specific errors
-	
+	// LMDB specific errors
+
 	/// The key/value pair already exists.
 	case keyExists
 	
@@ -41,6 +46,8 @@ public enum LMDBError:Error {
 	
 	/// Environment maximum reader count has been reached.
 	case readersFull
+
+	/// Environment reader slot table is full.
 	case tlsFull
 	
 	/// Transaction has too many dirty
@@ -80,10 +87,13 @@ public enum LMDBError:Error {
 	case outOfMemory
 	case ioError
 	case accessViolation
-	
+
 	// Unknown errors
 	case other(returnCode:Int32)
 
+	// - MARK: return-code interoperability
+
+	/// translate a raw LMDB (or POSIX errno) return code into a typed case.
 	public init(returnCode:Int32) {
 		switch returnCode {
 			case MDB_KEYEXIST: self = .keyExists
@@ -120,11 +130,12 @@ public enum LMDBError:Error {
 			case Glibc.EIO: self = .ioError
 			case Glibc.EACCES: self = .accessViolation
 			#endif
-			
+
 			default: self = .other(returnCode:returnCode)
 		}
 	}
-	
+
+	/// project a typed case back into its raw LMDB (or POSIX errno) return code.
 	public var returnCode:Int32 {
 		get {
 			switch self {
@@ -196,7 +207,10 @@ public enum LMDBError:Error {
 			}
 		}
 	}
-		
+
+	// - MARK: description
+
+	/// the LMDB-native string for the error's return code.
 	public var description:String {
 		get {
 			let strPtr = mdb_strerror(self.returnCode)!
@@ -204,6 +218,8 @@ public enum LMDBError:Error {
 		}
 	}
 }
+
+// - MARK: custom debug description
 
 extension LMDBError:CustomDebugStringConvertible {
 	public var debugDescription:String {

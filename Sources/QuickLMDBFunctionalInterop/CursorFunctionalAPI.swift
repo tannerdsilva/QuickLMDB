@@ -7,6 +7,17 @@ import CLMDB
 //
 // all functions are noasync and throw QuickLMDBFunctionalInterop.LMDBError.
 
+// - MARK: writes
+
+// write an entry through the cursor
+@available(*, noasync)
+public func MDB_cursor_set_entry_static(cursor:OpaquePointer, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val, flags:UInt32) throws(LMDBError) {
+	let result = mdb_cursor_put(cursor, &key, &value, flags)
+	guard result == MDB_SUCCESS else {
+		throw LMDBError(returnCode:result)
+	}
+}
+
 // delete the current entry
 @available(*, noasync)
 public func MDB_cursor_delete_current_entry_static(cursor:OpaquePointer, flags:UInt32) throws(LMDBError) {
@@ -15,6 +26,8 @@ public func MDB_cursor_delete_current_entry_static(cursor:OpaquePointer, flags:U
 		throw LMDBError(returnCode:result)
 	}
 }
+
+// - MARK: contains
 
 // check for an entry at the specified key (MDB_SET)
 @available(*, noasync)
@@ -44,6 +57,8 @@ public func MDB_cursor_contains_entry_static(cursor:OpaquePointer, key:inout CLM
 	}
 }
 
+// - MARK: retrieval
+
 // position the cursor with the given operation and retrieve the entry
 @available(*, noasync)
 public func MDB_cursor_get_entry_static(cursor:OpaquePointer, op:MDB_cursor_op, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val) throws(LMDBError) {
@@ -53,14 +68,20 @@ public func MDB_cursor_get_entry_static(cursor:OpaquePointer, op:MDB_cursor_op, 
 	}
 }
 
-// write an entry through the cursor
+// - MARK: duplicate counts
+
+// return the number of duplicate entries at the current cursor position
 @available(*, noasync)
-public func MDB_cursor_set_entry_static(cursor:OpaquePointer, key:inout CLMDB.MDB_val, value:inout CLMDB.MDB_val, flags:UInt32) throws(LMDBError) {
-	let result = mdb_cursor_put(cursor, &key, &value, flags)
+public func MDB_cursor_get_dupcount_static(cursor:OpaquePointer) throws(LMDBError) -> Int {
+	var count:Int = 0
+	let result = mdb_cursor_count(cursor, &count)
 	guard result == MDB_SUCCESS else {
 		throw LMDBError(returnCode:result)
 	}
+	return count
 }
+
+// - MARK: comparisons
 
 // compare two keys using the database's key comparison function
 @available(*, noasync)
@@ -72,15 +93,4 @@ public func MDB_cursor_compare_keys_static(tx:OpaquePointer, db:MDB_dbi, lhs:ino
 @available(*, noasync)
 public func MDB_cursor_compare_values_static(tx:OpaquePointer, db:MDB_dbi, lhs:inout CLMDB.MDB_val, rhs:inout CLMDB.MDB_val) -> Int32 {
 	return mdb_dcmp(tx, db, &lhs, &rhs)
-}
-
-// return the number of duplicate entries at the current cursor position
-@available(*, noasync)
-public func MDB_cursor_get_dupcount_static(cursor:OpaquePointer) throws(LMDBError) -> Int {
-	var count:Int = 0
-	let result = mdb_cursor_count(cursor, &count)
-	guard result == MDB_SUCCESS else {
-		throw LMDBError(returnCode:result)
-	}
-	return count
 }
