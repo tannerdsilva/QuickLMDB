@@ -1,4 +1,4 @@
-// swift-tools-version:6.2
+// swift-tools-version:6.3
 import PackageDescription
 import CompilerPluginSupport
 
@@ -11,17 +11,13 @@ let package = Package(
         .library(
             name: "QuickLMDB",
             targets: ["QuickLMDB"]
-        ),
-        .library(
-            name: "QuickLMDBFunctionalInterop",
-            targets: ["QuickLMDBFunctionalInterop"]
-        ),
+        )
     ],
     dependencies:[
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", "0.9.26"..<"0.9.31"),
-		.package(url:"https://github.com/tannerdsilva/rawdog.git", branch:"v22-rewrite"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", "22.0.0"..<"23.0.0"),
 		.package(url:"https://github.com/apple/swift-system.git", "1.0.0"..<"2.0.0"),
-		.package(url:"https://github.com/apple/swift-syntax.git", "602.0.0"..<"603.0.0"),
+		.package(url:"https://github.com/apple/swift-syntax.git", "603.0.0"..<"604.0.0"),
 		.package(url:"https://github.com/apple/swift-log.git", "1.0.0"..<"2.0.0")
     ],
 	targets: [

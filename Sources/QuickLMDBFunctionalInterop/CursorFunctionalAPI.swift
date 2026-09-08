@@ -142,15 +142,11 @@ public func MDB_cursor_get_dupcount(cursor:OpaquePointer) throws(LMDBError) -> I
 // compare two keys using the database's key comparison function.
 @available(*, noasync)
 public func MDB_cursor_compare_keys(tx:OpaquePointer, db:MDB_dbi, lhs:consuming CLMDB.MDB_val, rhs:consuming CLMDB.MDB_val) -> Int32 {
-	var lhs = lhs
-	var rhs = rhs
 	return MDB_cursor_compare_keys_static(tx:tx, db:db, lhs:&lhs, rhs:&rhs)
 }
 
 // compare two values using the database's value comparison function.
 @available(*, noasync)
 public func MDB_cursor_compare_values(tx:OpaquePointer, db:MDB_dbi, lhs:consuming CLMDB.MDB_val, rhs:consuming CLMDB.MDB_val) -> Int32 {
-	var lhs = lhs
-	var rhs = rhs
 	return MDB_cursor_compare_values_static(tx:tx, db:db, lhs:&lhs, rhs:&rhs)
 }
