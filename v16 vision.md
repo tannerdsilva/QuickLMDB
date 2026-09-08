@@ -54,12 +54,13 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 72 tests across 8
+- **Verification**: clean build at 0 warnings / 0 errors; 75 tests across 8
   suites green across ALL targets — runtime tests against real LMDB
   environments (atomicity, rollback, read-only enforcement, child
-  commit-into-parent, child abort leaves parent usable, helper composition,
-  cursor injection, bare dispatch threads), 4 strict expansion fixtures
-  freezing the body-macro output, a 50-test transaction-relationship suite
+  commit-into-parent, child abort leaves parent usable, child sees parent's
+  uncommitted writes, helper composition, cursor injection, bare dispatch
+  threads), 4 strict expansion fixtures
+  freezing the body-macro output, a 6-test transaction-relationship suite
   pinning engine defaults, the MDB_db (12) and MDB_cursor (10)
   protocol-extension bridge suites driven through RAW Database/Cursor handles,
   a usage-pattern demo suite, and functional-interop tests driven by raw
@@ -89,8 +90,8 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
     preallocated write txn and blocks on the thread's own non-recursive
     `me_wmutex`; source-verified, no guard exists).
   * multi-level write nesting is LEGAL and atomic: `top → child → grandchild`
-    commits cleanly (probed against real LMDB), so chains like
-    `batch → nested write → nested write` hold full atomicity. the "max 1
+    commits cleanly and, when the grandchild throws, NOTHING in the chain lands
+    (both legs pinned by `multiLevelWriteNestingIsAtomic`). the "max 1
     child" comment in mdb.c is about one ACTIVE child per parent, not depth.
 - **Ambient-free composition is a CONFIRMED DESIGN DECISION**: seamless
   cross-boundary composition via an ambient per-thread boundary stack

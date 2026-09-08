@@ -106,43 +106,27 @@ extension TestCore {
 	}
 
 	// child boundary READS its parent's uncommitted state — the defining child semantic.
-	// the parent boundary below writes without committing, then asks the child for its view.
+	// the parent side of the test is a raw transaction with an explicit `tx:` write; the
+	// child's view of that uncommitted data is what this pins. boundary-driver composition
+	// (parent boundary hands its injected tx to a child) is already exercised by outerWrite.
 	@MDB_transact(.readWriteChild)
 	public func readParentUncommitted(_ key: borrowing TestKey, parent: borrowing Transaction) throws -> TestValue? {
 		return try? primary.loadEntry(key: key, as: TestValue.self)
 	}
 
-	@MDB_transact(.readWrite)
-	public func childSeesParentUncommitted(_ key: borrowing TestKey, _ value: consuming TestValue) throws -> TestValue? {
-		try primary.setEntry(key: key, value: value, flags: [])   // uncommitted at this point
-		return try readParentUncommitted(key, parent: tx)         // the child must see it
-	}
-
-	// misuse surfaced through the macro path: a .readWriteChild boundary is handed a READ
-	// boundary's transaction as `parent:`. the child's Transaction init rejects it (EINVAL).
-	@MDB_transact(.readOnly)
-	public func childUnderReadParentAttempt(_ key: borrowing TestKey) throws -> TestValue? {
-		return try attemptChildUnderReadParent(key, parent: tx)
-	}
-
-	@MDB_transact(.readWriteChild)
-	public func attemptChildUnderReadParent(_ key: borrowing TestKey, parent: borrowing Transaction) throws -> TestValue? {
-		try primary.setEntry(key: key, value: TestValue(RAW_native: 1), flags: [])
-		return TestValue(RAW_native: 1)
-	}
-
 	// multi-level write nesting: a child spawns its own child with ITS injected tx —
-	// top -> child -> grandchild, all one atomic unit (probed; now pinned).
+	// top -> child -> grandchild, one atomic unit (previously only probed). the throwing
+	// variant is the abort leg that proves the chain's all-or-nothing atomicity.
 	@MDB_transact(.readWriteChild)
 	public func writeChildThenGrandchild(_ key: consuming TestKey, _ value: consuming TestValue, _ grandKey: consuming TestKey, _ grandValue: consuming TestValue, parent: borrowing Transaction) throws {
 		try primary.setEntry(key: key, value: value, flags: [])
 		try writeNested(grandKey, grandValue, parent: tx)   // this child's OWN tx -> grandchild
 	}
 
-	@MDB_transact(.readWrite)
-	public func outerWriteGrandchild(_ k1: consuming TestKey, _ v1: consuming TestValue, _ k2: consuming TestKey, _ v2: consuming TestValue, _ k3: consuming TestKey, _ v3: consuming TestValue) throws {
-		try primary.setEntry(key: k1, value: v1, flags: [])
-		try writeChildThenGrandchild(k2, v2, k3, v3, parent: tx)
+	@MDB_transact(.readWriteChild)
+	public func writeChildThenGrandchildThrowing(_ key: consuming TestKey, _ value: consuming TestValue, _ grandKey: consuming TestKey, _ grandValue: consuming TestValue, parent: borrowing Transaction) throws {
+		try primary.setEntry(key: key, value: value, flags: [])
+		try writeNestedThrowing(grandKey, grandValue, parent: tx)
 	}
 
 	@MDB_transact(.readOnly)
@@ -277,37 +261,67 @@ struct MacroRuntimeTests {
 
 	@Test func childSeesParentUncommittedWrites() throws {
 		// the defining parent/child contract: a child transaction operates on its parent's
-		// VIEW — it must observe writes the parent has made but not yet committed.
+		// VIEW — it must observe writes the parent has made but not yet committed. fresh key
+		// in a fresh env: no committed value exists, so a committed-only snapshot -> nil.
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 71)
 		let value = TestValue(RAW_native: 710)
-		let seen = try core.childSeesParentUncommitted(key, value)
+		let parent = try Transaction(env: core.env, readOnly: false)
+		try core.primary.setEntry(key: key, value: value, flags: [], tx: parent)
+		let seen = try core.readParentUncommitted(key, parent: parent)
+		try parent.commit()
 		#expect(seen == value, "a child boundary must see its parent's uncommitted writes")
-		// and the whole unit is durable after the parent commits
+		// and the merged unit is durable after the parent commits
 		#expect(try readViaRawTX(core, key: key) == value)
 	}
 
 	@Test func writeChildUnderReadParentThrowsThroughMacro() throws {
-		// the same EINVAL the raw API pins, surfaced through real boundaries: passing a
-		// .readOnly boundary's injected tx as `parent:` to a .readWriteChild boundary.
+		// the EINVAL the raw API pins, surfaced through a real .readWriteChild boundary:
+		// handing a read transaction in as `parent:` is rejected by mdb_txn_begin before
+		// any body runs (writeNested's expansion is identical to any child boundary).
 		let core = try makeCore()
+		let readParent = try Transaction(env: core.env, readOnly: true)
 		do {
-			_ = try core.childUnderReadParentAttempt(TestKey(RAW_native: 81))
-			Issue.record("expected a .readWriteChild boundary under a .readOnly parent boundary to throw")
+			try core.writeNested(TestKey(RAW_native: 81), TestValue(RAW_native: 810), parent: readParent)
+			Issue.record("expected a .readWriteChild boundary under a read parent to throw")
 		} catch let error as LMDBError {
 			#expect(error.returnCode == LMDBError.invalidParameter.returnCode)
 		}
+		readParent.abort()
 	}
 
-	@Test func multiLevelWriteNestingCommitsAtomically() throws {
-		// top -> child -> grandchild: each level spawns the next with its own injected tx;
-		// all three writes must land together (the journal's "probed" claim, now pinned).
+	@Test func multiLevelWriteNestingIsAtomic() throws {
+		// top -> child -> grandchild, each level spawning the next with its own injected tx.
+		// legacy: only the commit leg existed and the name overclaimed — all-or-nothing
+		// atomicity requires the abort leg: grandchild throws -> NOTHING in the chain lands.
 		let core = try makeCore()
 		let (k1, k2, k3) = (TestKey(RAW_native: 91), TestKey(RAW_native: 92), TestKey(RAW_native: 93))
-		try core.outerWriteGrandchild(k1, TestValue(RAW_native: 1), k2, TestValue(RAW_native: 2), k3, TestValue(RAW_native: 3))
+
+		// commit leg: all three writes land together
+		let top = try Transaction(env: core.env, readOnly: false)
+		try core.primary.setEntry(key: k1, value: TestValue(RAW_native: 1), flags: [], tx: top)
+		try core.writeChildThenGrandchild(k2, TestValue(RAW_native: 2), k3, TestValue(RAW_native: 3), parent: top)
+		try top.commit()
 		#expect(try readViaRawTX(core, key: k1) == TestValue(RAW_native: 1))
 		#expect(try readViaRawTX(core, key: k2) == TestValue(RAW_native: 2))
 		#expect(try readViaRawTX(core, key: k3) == TestValue(RAW_native: 3))
+
+		// abort leg: the grandchild throws -> the whole chain rolls back, top included
+		let k4 = TestKey(RAW_native: 94)
+		let k5 = TestKey(RAW_native: 95)
+		let k6 = TestKey(RAW_native: 96)
+		let failing = try Transaction(env: core.env, readOnly: false)
+		try core.primary.setEntry(key: k4, value: TestValue(RAW_native: 4), flags: [], tx: failing)
+		do {
+			try core.writeChildThenGrandchildThrowing(k5, TestValue(RAW_native: 5), k6, TestValue(RAW_native: 6), parent: failing)
+			Issue.record("expected the grandchild throw to propagate")
+		} catch is TestError {
+			// expected
+		}
+		failing.abort()
+		#expect(try readViaRawTX(core, key: k4) == nil)
+		#expect(try readViaRawTX(core, key: k5) == nil)
+		#expect(try readViaRawTX(core, key: k6) == nil)
 	}
 
 	@Test func explicitTxHelperComposition() throws {
