@@ -159,6 +159,11 @@ struct UsagePatternDemo {
 
 		// 5: value + audit row committed together via a child boundary
 		try core.storeWithAudit(TestKey(RAW_native: 4), TestValue(RAW_native: 40))
+		// 5b: and the child boundary's audit row actually landed (atomic with the parent)
+		let auditTx = try Transaction(env: core.env, readOnly: true)
+		let audit = try? core.secondary.loadEntry(key: TestKey(RAW_native: 4), as: TestValue.self, tx: auditTx)
+		auditTx.abort()
+		#expect(audit == TestValue(RAW_native: 40), "the child boundary's audit write committed atomically with its parent")
 
 		// 6: the sibling read ran BEFORE this boundary's write existed — returns nil
 		let stale = try core.validateThenStore(TestKey(RAW_native: 5), TestValue(RAW_native: 50))
