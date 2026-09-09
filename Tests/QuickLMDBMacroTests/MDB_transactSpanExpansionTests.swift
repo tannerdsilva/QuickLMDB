@@ -7,11 +7,12 @@ import SwiftSyntaxMacros
 import SwiftSyntaxMacrosGenericTestSupport
 @testable import QuickLMDBMacros
 
-// strict expansion fixtures for @MDB_transact_span (attached body macro). the
-// span gates on the @MDB_app attribute of the ENCLOSING type; assertMacroExpansion
-// never populates lexicalContext for body macros, so this harness seeds the
-// context per expansion node by walking the node's parent chain to the enclosing
-// struct (in-process tree walks work). mismatches record a Swift Testing Issue.
+// strict expansion fixtures for @MDB_transact_span (attached body macro) and the
+// @MDB_app container (inventory + generated open(at:) factory). the span gates on the
+// @MDB_app attribute of the ENCLOSING type; assertMacroExpansion never populates
+// lexicalContext for body macros, so this harness seeds the context per expansion
+// node by walking the node's parent chain to the enclosing struct (in-process tree
+// walks work). mismatches record a Swift Testing Issue.
 
 private func assertSpanExpansion(_ source: String, expected expanded: String, diagnostics expectedDiags: [String]? = nil) {
 	var contexts: [BasicMacroExpansionContext] = []
@@ -49,6 +50,7 @@ private func assertSpanExpansion(_ source: String, expected expanded: String, di
 struct MDB_transactSpanExpansionTests {
 
 	@Test func bareTwoReadWriteMembersCommitInOrder() {
+		// bare span: two readWrite members inferred from #store receivers, first-touch order
 		assertSpanExpansion(
 			"""
 			@MDB_app
@@ -88,6 +90,21 @@ struct MDB_transactSpanExpansionTests {
 			    }
 
 			    public static let mdb_environment_property_names: [String] = ["calendar", "contacts"]
+
+			    /// opens every environment core in its own subdirectory (named after the
+			    /// stored property) beneath `basePath`, creating directories as needed, and
+			    /// assembles the container. maps are sized as current file + `mapHeadroom`.
+			    @available(*, noasync)
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			        let calendarDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "calendar")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: calendarDir)
+			        let calendar = try CalendarCore.open(at: calendarDir, mapHeadroom: mapHeadroom)
+			        let contactsDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "contacts")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: contactsDir)
+			        let contacts = try ContactCore.open(at: contactsDir, mapHeadroom: mapHeadroom)
+			        return Self(calendar: calendar, contacts: contacts)
+			    }
 			}
 
 			extension HybridApp: MDB_environment_container {
@@ -97,6 +114,7 @@ struct MDB_transactSpanExpansionTests {
 	}
 
 	@Test func allReadMembersCloseWithoutCommit() {
+		// all-read span: both members open readOnly and close without commit
 		assertSpanExpansion(
 			"""
 			@MDB_app
@@ -138,6 +156,21 @@ struct MDB_transactSpanExpansionTests {
 			    }
 
 			    public static let mdb_environment_property_names: [String] = ["calendar", "contacts"]
+
+			    /// opens every environment core in its own subdirectory (named after the
+			    /// stored property) beneath `basePath`, creating directories as needed, and
+			    /// assembles the container. maps are sized as current file + `mapHeadroom`.
+			    @available(*, noasync)
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			        let calendarDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "calendar")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: calendarDir)
+			        let calendar = try CalendarCore.open(at: calendarDir, mapHeadroom: mapHeadroom)
+			        let contactsDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "contacts")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: contactsDir)
+			        let contacts = try ContactCore.open(at: contactsDir, mapHeadroom: mapHeadroom)
+			        return Self(calendar: calendar, contacts: contacts)
+			    }
 			}
 
 			extension HybridApp: MDB_environment_container {
@@ -147,6 +180,7 @@ struct MDB_transactSpanExpansionTests {
 	}
 
 	@Test func overrideForcesModesAndOrder() {
+		// explicit override forces modes and order
 		assertSpanExpansion(
 			"""
 			@MDB_app
@@ -184,6 +218,21 @@ struct MDB_transactSpanExpansionTests {
 			    }
 
 			    public static let mdb_environment_property_names: [String] = ["calendar", "contacts"]
+
+			    /// opens every environment core in its own subdirectory (named after the
+			    /// stored property) beneath `basePath`, creating directories as needed, and
+			    /// assembles the container. maps are sized as current file + `mapHeadroom`.
+			    @available(*, noasync)
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			        let calendarDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "calendar")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: calendarDir)
+			        let calendar = try CalendarCore.open(at: calendarDir, mapHeadroom: mapHeadroom)
+			        let contactsDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "contacts")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: contactsDir)
+			        let contacts = try ContactCore.open(at: contactsDir, mapHeadroom: mapHeadroom)
+			        return Self(calendar: calendar, contacts: contacts)
+			    }
 			}
 
 			extension HybridApp: MDB_environment_container {
@@ -193,8 +242,7 @@ struct MDB_transactSpanExpansionTests {
 	}
 
 	@Test func childBoundaryCallAndNonVerbCallsPassThrough() {
-		// a .readWriteChild boundary call with a routed tx_<base> parent and a plain
-		// method call are NOT verbs — emitted byte-identical.
+		// a .readWriteChild boundary call (routed parent) and a non-verb helper call pass through byte-identical
 		assertSpanExpansion(
 			"""
 			@MDB_app
@@ -231,6 +279,18 @@ struct MDB_transactSpanExpansionTests {
 			    }
 
 			    public static let mdb_environment_property_names: [String] = ["calendar"]
+
+			    /// opens every environment core in its own subdirectory (named after the
+			    /// stored property) beneath `basePath`, creating directories as needed, and
+			    /// assembles the container. maps are sized as current file + `mapHeadroom`.
+			    @available(*, noasync)
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			        let calendarDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "calendar")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: calendarDir)
+			        let calendar = try CalendarCore.open(at: calendarDir, mapHeadroom: mapHeadroom)
+			        return Self(calendar: calendar)
+			    }
 			}
 
 			extension HybridApp: MDB_environment_container {
@@ -240,8 +300,7 @@ struct MDB_transactSpanExpansionTests {
 	}
 
 	@Test func statsDoesNotForceWriteModeOnFetchOnlyCore() {
-		// #stats is a metadata READ: a core touched only by #stats + #load must
-		// infer readOnly (closes without commit), while a #store core stays write
+		// #stats is a metadata READ: a core touched only by #stats + #load stays readOnly
 		assertSpanExpansion(
 			"""
 			@MDB_app
@@ -285,6 +344,21 @@ struct MDB_transactSpanExpansionTests {
 			    }
 
 			    public static let mdb_environment_property_names: [String] = ["calendar", "contacts"]
+
+			    /// opens every environment core in its own subdirectory (named after the
+			    /// stored property) beneath `basePath`, creating directories as needed, and
+			    /// assembles the container. maps are sized as current file + `mapHeadroom`.
+			    @available(*, noasync)
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			        let calendarDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "calendar")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: calendarDir)
+			        let calendar = try CalendarCore.open(at: calendarDir, mapHeadroom: mapHeadroom)
+			        let contactsDir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, "contacts")
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: contactsDir)
+			        let contacts = try ContactCore.open(at: contactsDir, mapHeadroom: mapHeadroom)
+			        return Self(calendar: calendar, contacts: contacts)
+			    }
 			}
 
 			extension HybridApp: MDB_environment_container {
@@ -294,7 +368,8 @@ struct MDB_transactSpanExpansionTests {
 	}
 
 	@Test func missingMDBAppIsDiagnosed() {
-		// the same body WITHOUT @MDB_app on the container — the span gate fires.
+		// the same body WITHOUT @MDB_app on the container — the span gate fires and the
+		// body is left untouched (verb calls stay unlowered)
 		assertSpanExpansion(
 			"""
 			struct NotAContainer {

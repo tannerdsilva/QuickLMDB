@@ -141,10 +141,9 @@ extension TestCore {
 }
 
 extension TestCore {
-	// direct read path used by assertions — raw Transaction plus the unchanged tx-bearing API
-	public func loadEntryDirect(_ key: borrowing TestKey, tx: borrowing Transaction) throws -> TestValue? {
-		return try? primary.loadEntry(key: key, as: TestValue.self, tx: tx)
-	}
+	// (the committed-read members on the typed handles — readCommitted /
+	// readCommittedDups / containsCommitted — provide the assertion read path;
+	// no per-suite raw-transaction helpers remain)
 }
 
 // - MARK: harness
@@ -153,45 +152,9 @@ extension TestCore {
 struct MacroRuntimeTests {
 
 	private func makeCore() throws -> TestCore {
+		// the @MDB_environment-generated open(at:) creates the directory as needed
 		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-macro-\(UUID().uuidString)", isDirectory:true)
-		try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
 		return try TestCore.open(at: dir.path)
-	}
-
-	private func readViaRawTX(_ core: TestCore, key: TestKey) throws -> TestValue? {
-		let tx = try Transaction(env:core.env, readOnly:true)
-		do {
-			let result = try core.loadEntryDirect(key, tx: tx)
-			tx.abort()
-			return result
-		} catch let error {
-			tx.abort()
-			throw error
-		}
-	}
-
-	private func readDupsViaRawTX(_ core: TestCore, key: TestKey) throws -> [TestValue] {
-		let tx = try Transaction(env:core.env, readOnly:true)
-		var vals:[TestValue] = []
-		core.secondary.cursor(tx: tx) { cursor in
-			for (_, dup) in cursor.makeDupIterator(key: key) {
-				vals.append(dup)
-			}
-		}
-		tx.abort()
-		return vals
-	}
-
-	private func containsDupViaRawTX(_ core: TestCore, key: TestKey) throws -> Bool {
-		let tx = try Transaction(env:core.env, readOnly:true)
-		do {
-			let result = try core.secondary.containsEntry(key: key, tx: tx)
-			tx.abort()
-			return result
-		} catch let error {
-			tx.abort()
-			throw error
-		}
 	}
 
 	@Test func environmentOpenAndSingleWriteCommits() throws {
@@ -199,7 +162,7 @@ struct MacroRuntimeTests {
 		let key = TestKey(RAW_native: 7)
 		let value = TestValue(RAW_native: 700)
 		try core.writePrimary(key, value)
-		let readBack = try readViaRawTX(core, key: key)
+		let readBack = try core.primary.readCommitted(key: key)
 		#expect(readBack == value)
 	}
 
@@ -207,9 +170,9 @@ struct MacroRuntimeTests {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 9)
 		try core.writeBoth(key, TestValue(RAW_native: 100), TestValue(RAW_native: 200))
-		let p = try readViaRawTX(core, key: key)
+		let p = try core.primary.readCommitted(key: key)
 		#expect(p == TestValue(RAW_native: 100))
-		let s = try readDupsViaRawTX(core, key: key)
+		let s = try core.secondary.readCommittedDups(key: key)
 		#expect(s == [TestValue(RAW_native: 200)])
 	}
 
@@ -222,9 +185,9 @@ struct MacroRuntimeTests {
 		} catch is TestError {
 			// expected
 		}
-		let p = try readViaRawTX(core, key: key)
+		let p = try core.primary.readCommitted(key: key)
 		#expect(p == nil)
-		let s = try containsDupViaRawTX(core, key: key)
+		let s = try core.secondary.containsCommitted(key: key)
 		#expect(s == false)
 	}
 
@@ -233,8 +196,8 @@ struct MacroRuntimeTests {
 		let outerKey = TestKey(RAW_native: 21)
 		let innerKey = TestKey(RAW_native: 22)
 		try core.outerWrite(outerKey, TestValue(RAW_native: 1), innerKey, TestValue(RAW_native: 2))
-		#expect(try readViaRawTX(core, key: outerKey) == TestValue(RAW_native: 1))
-		#expect(try readViaRawTX(core, key: innerKey) == TestValue(RAW_native: 2))
+		#expect(try core.primary.readCommitted(key: outerKey) == TestValue(RAW_native: 1))
+		#expect(try core.primary.readCommitted(key: innerKey) == TestValue(RAW_native: 2))
 	}
 
 	@Test func childAbortLeavesParentUsable() throws {
@@ -243,8 +206,8 @@ struct MacroRuntimeTests {
 		let innerKey = TestKey(RAW_native: 32)
 		try core.outerWriteChildAbort(key, TestValue(RAW_native: 99), innerKey, TestValue(RAW_native: 100))
 		// parent write persists; the aborted child's write is rolled back
-		#expect(try readViaRawTX(core, key: key) == TestValue(RAW_native: 99))
-		#expect(try readViaRawTX(core, key: innerKey) == nil)
+		#expect(try core.primary.readCommitted(key: key) == TestValue(RAW_native: 99))
+		#expect(try core.primary.readCommitted(key: innerKey) == nil)
 	}
 
 	@Test func childSeesParentUncommittedWrites() throws {
@@ -260,7 +223,7 @@ struct MacroRuntimeTests {
 		try parent.commit()
 		#expect(seen == value, "a child boundary must see its parent's uncommitted writes")
 		// and the merged unit is durable after the parent commits
-		#expect(try readViaRawTX(core, key: key) == value)
+		#expect(try core.primary.readCommitted(key: key) == value)
 	}
 
 	@Test func writeChildUnderReadParentThrowsThroughMacro() throws {
@@ -290,9 +253,9 @@ struct MacroRuntimeTests {
 		try core.primary.setEntry(key: k1, value: TestValue(RAW_native: 1), flags: [], tx: top)
 		try core.writeChildThenGrandchild(k2, TestValue(RAW_native: 2), k3, TestValue(RAW_native: 3), parent: top)
 		try top.commit()
-		#expect(try readViaRawTX(core, key: k1) == TestValue(RAW_native: 1))
-		#expect(try readViaRawTX(core, key: k2) == TestValue(RAW_native: 2))
-		#expect(try readViaRawTX(core, key: k3) == TestValue(RAW_native: 3))
+		#expect(try core.primary.readCommitted(key: k1) == TestValue(RAW_native: 1))
+		#expect(try core.primary.readCommitted(key: k2) == TestValue(RAW_native: 2))
+		#expect(try core.primary.readCommitted(key: k3) == TestValue(RAW_native: 3))
 
 		// abort leg: the grandchild throws -> the whole chain rolls back, top included
 		let k4 = TestKey(RAW_native: 94)
@@ -307,9 +270,9 @@ struct MacroRuntimeTests {
 			// expected
 		}
 		failing.abort()
-		#expect(try readViaRawTX(core, key: k4) == nil)
-		#expect(try readViaRawTX(core, key: k5) == nil)
-		#expect(try readViaRawTX(core, key: k6) == nil)
+		#expect(try core.primary.readCommitted(key: k4) == nil)
+		#expect(try core.primary.readCommitted(key: k5) == nil)
+		#expect(try core.primary.readCommitted(key: k6) == nil)
 	}
 
 	@Test func readOnlyBoundaryReads() throws {
@@ -350,6 +313,6 @@ struct MacroRuntimeTests {
 		try DispatchQueue(label:"qlmdb-bare-thread-\(UUID().uuidString)").sync {
 			try core.writePrimary(key, TestValue(RAW_native: 610))
 		}
-		#expect(try readViaRawTX(core, key: key) == TestValue(RAW_native: 610))
+		#expect(try core.primary.readCommitted(key: key) == TestValue(RAW_native: 610))
 	}
 }

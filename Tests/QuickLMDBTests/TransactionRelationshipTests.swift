@@ -64,7 +64,7 @@ struct TransactionRelationshipTests {
 		let another = TestValue(RAW_native: 9999)
 		let observedDuringWrite = try core.siblingReadThenWrite(key, committed: another)
 		#expect(observedDuringWrite == unseen, "the outer read boundary's snapshot predates the sibling write (it sees the state committed before it)")
-		let persisted = try core.loadEntryDirect(key, tx: try Transaction(env:core.env, readOnly:true))
+		let persisted = try core.primary.readCommitted(key: key)
 		#expect(persisted == another, "the sibling write committed independently and survived the read boundary's close")
 	}
 
@@ -101,7 +101,7 @@ struct TransactionRelationshipTests {
 		// existing `outerWrite`: parent boundary writes, then a .readWriteChild(& parent: tx)
 		// writes the same key — the child merges into the parent on commit
 		try core.outerWrite(key, TestValue(RAW_native: 414), key, TestValue(RAW_native: 515))
-		let p = try core.loadEntryDirect(key, tx: try Transaction(env:core.env, readOnly:true))
+		let p = try core.primary.readCommitted(key: key)
 		#expect(p == TestValue(RAW_native: 515))
 	}
 

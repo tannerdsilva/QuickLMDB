@@ -7,8 +7,8 @@ import QuickLMDB
 enum TestHelpers {
 	@available(*, noasync)
 	static func tempDirPath() throws -> String {
+		// the generated open(at:) creates the directory as needed
 		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-tests-\(UUID().uuidString)", isDirectory:true)
-		try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
 		return dir.path
 	}
 

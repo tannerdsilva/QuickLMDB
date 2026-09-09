@@ -359,44 +359,15 @@ public struct HybridApp {
 struct HybridAppDemo {
 
 	private func makeApp() throws -> HybridApp {
+		// the @MDB_app-generated open(at:) creates each core's subdirectory and
+		// opens every environment in one call — no per-env path plumbing here
 		let base = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-hybrid-\(UUID().uuidString)", isDirectory: true)
-		try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-		let cal = base.appendingPathComponent("cal", isDirectory: true)
-		let con = base.appendingPathComponent("con", isDirectory: true)
-		try FileManager.default.createDirectory(at: cal, withIntermediateDirectories: true)
-		try FileManager.default.createDirectory(at: con, withIntermediateDirectories: true)
-		return try HybridApp.open(calendarAt: cal.path, contactsAt: con.path)
+		return try HybridApp.open(at: base.path)
 	}
 
-	// raw read helpers — an explicit transaction plus the tx-bearing read API, used to
-	// verify what actually became durable after a boundary (or spanning call).
-	private func readEventViaRaw(_ app: HybridApp, day: DayKey) throws -> EventID? {
-		let tx = try Transaction(env: app.calendar.env, readOnly: true)
-		let result = try? app.calendar.events.loadEntry(key: day, as: EventID.self, tx: tx)
-		tx.abort()
-		return result
-	}
-
-	private func readInviteesViaRaw(_ app: HybridApp, event: EventID) throws -> [ContactID] {
-		let tx = try Transaction(env: app.calendar.env, readOnly: true)
-		var result: [ContactID] = []
-		if (try? app.calendar.invitees.containsEntry(key: event, tx: tx)) == true {
-			app.calendar.invitees.cursor(tx: tx) { cursor in
-				for (_, dup) in cursor.makeDupIterator(key: event) {
-					result.append(dup)
-				}
-			}
-		}
-		tx.abort()
-		return result
-	}
-
-	private func readLastSyncViaRaw(_ app: HybridApp, contact: ContactID) throws -> Timestamp? {
-		let tx = try Transaction(env: app.contacts.env, readOnly: true)
-		let result = try? app.contacts.lastSync.loadEntry(key: contact, as: Timestamp.self, tx: tx)
-		tx.abort()
-		return result
-	}
+	// verification reads: the self-scoped committed-read members on the typed
+	// handles (readCommitted / readCommittedDups) open a read txn and close it
+	// internally — no manual Transaction ceremony at the assertion site.
 
 	// - MARK: single-environment cells
 
@@ -405,7 +376,7 @@ struct HybridAppDemo {
 		let day = DayKey(RAW_native: 1)
 		let event = EventID(RAW_native: 100)
 		try app.calendar.bookEvent(event, on: day)
-		#expect(try readEventViaRaw(app, day: day) == event)
+		#expect(try app.calendar.events.readCommitted(key: day) == event)
 		#expect(try app.calendar.eventOn(day) == event)
 	}
 
@@ -416,8 +387,8 @@ struct HybridAppDemo {
 		let invitees = [ContactID(RAW_native: 1), ContactID(RAW_native: 2), ContactID(RAW_native: 3)]
 		// one boundary, parent write + three child merges — all land together
 		try app.calendar.bookWithInvitees(event, on: day, invitees: invitees)
-		#expect(try readEventViaRaw(app, day: day) == event)
-		#expect(try readInviteesViaRaw(app, event: event) == invitees)
+		#expect(try app.calendar.events.readCommitted(key: day) == event)
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == invitees)
 	}
 
 	@Test func siblingReadInsideWriteValidatesCommittedState() throws {
@@ -430,13 +401,13 @@ struct HybridAppDemo {
 		let rejected = EventID(RAW_native: 301)
 		let booked = try app.calendar.bookIfSlotFree(rejected, on: day)
 		#expect(booked == false)
-		#expect(try readEventViaRaw(app, day: day) == existing, "the rejected booking must not have written")
+		#expect(try app.calendar.events.readCommitted(key: day) == existing, "the rejected booking must not have written")
 
 		// free slot: books and commits
 		let freeDay = DayKey(RAW_native: 4)
 		let accepted = EventID(RAW_native: 302)
 		#expect(try app.calendar.bookIfSlotFree(accepted, on: freeDay) == true)
-		#expect(try readEventViaRaw(app, day: freeDay) == accepted)
+		#expect(try app.calendar.events.readCommitted(key: freeDay) == accepted)
 	}
 
 	@Test func siblingReadInsideWriteCannotSeeOwnUncommittedWrite() throws {
@@ -447,7 +418,7 @@ struct HybridAppDemo {
 		// the committed state (nil) — the write is invisible until the boundary commits.
 		let selfCheck = try app.calendar.bookAndSelfCheck(event, on: day)
 		#expect(selfCheck == nil, "a sibling read must not see this boundary's uncommitted write")
-		#expect(try readEventViaRaw(app, day: day) == event, "the write itself must land on commit")
+		#expect(try app.calendar.events.readCommitted(key: day) == event, "the write itself must land on commit")
 	}
 
 	@Test func siblingWriteInsideReadCommitsIndependently() throws {
@@ -460,7 +431,7 @@ struct HybridAppDemo {
 		// snapshot sees the committed value; the sibling write commits on its own
 		let before = try app.contacts.snapshotAndBump(contact, at: later)
 		#expect(before == early, "the read boundary's snapshot predates the sibling write")
-		#expect(try readLastSyncViaRaw(app, contact: contact) == later, "the sibling write committed independently")
+		#expect(try app.contacts.lastSync.readCommitted(key: contact) == later, "the sibling write committed independently")
 	}
 
 	@Test func siblingReadInsideReadIsLegal() throws {
@@ -481,8 +452,8 @@ struct HybridAppDemo {
 		let good2 = ContactID(RAW_native: 2)
 		let accepted = try app.calendar.bookWithAvailableInvitees(event, on: day, invitees: [good1, blocked, good2])
 		#expect(accepted == [good1, good2], "the blocked child aborted independently; the others merged")
-		#expect(try readEventViaRaw(app, day: day) == event, "the parent boundary's write survived the child abort")
-		#expect(try readInviteesViaRaw(app, event: event) == [good1, good2], "only the surviving children's writes landed")
+		#expect(try app.calendar.events.readCommitted(key: day) == event, "the parent boundary's write survived the child abort")
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == [good1, good2], "only the surviving children's writes landed")
 	}
 
 	// - MARK: spanning (cross-environment) cells
@@ -498,10 +469,10 @@ struct HybridAppDemo {
 		// and a contacts write txn, both committed.
 		try app.scheduleMeeting(event, on: day, invitees: invitees, at: when)
 
-		#expect(try readEventViaRaw(app, day: day) == event)
-		#expect(try readInviteesViaRaw(app, event: event) == invitees)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == when)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 2)) == when)
+		#expect(try app.calendar.events.readCommitted(key: day) == event)
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == invitees)
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 1)) == when)
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 2)) == when)
 	}
 
 	@Test func spanningReadReadsBothEnvironments() throws {
@@ -515,7 +486,7 @@ struct HybridAppDemo {
 		let overview = try app.dayOverview(on: day, contact: ContactID(RAW_native: 7))
 		#expect(overview.event == event)
 		#expect(overview.lastSync == when)
-		#expect(try readInviteesViaRaw(app, event: event) == invitees)
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == invitees)
 	}
 
 	@Test func bodyThrowAbortsAllSpanMembers() throws {
@@ -536,9 +507,9 @@ struct HybridAppDemo {
 		} catch is ContactError {
 			// expected
 		}
-		#expect(try readEventViaRaw(app, day: day) == nil, "the calendar member aborted — no partial logical op survived")
-		#expect(try readInviteesViaRaw(app, event: event) == [], "the calendar invitees member aborted")
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == nil, "the contacts member aborted")
+		#expect(try app.calendar.events.readCommitted(key: day) == nil, "the calendar member aborted — no partial logical op survived")
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == [], "the calendar invitees member aborted")
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 1)) == nil, "the contacts member aborted")
 	}
 
 	@Test func isolatedTwoStepContrastLeavesFirstStepDurable() throws {
@@ -557,9 +528,9 @@ struct HybridAppDemo {
 		} catch is ContactError {
 			// expected
 		}
-		#expect(try readEventViaRaw(app, day: day) == event, "the isolated calendar boundary already committed and survives")
-		#expect(try readInviteesViaRaw(app, event: event) == invitees)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == nil, "the isolated contacts boundary aborted — nothing landed")
+		#expect(try app.calendar.events.readCommitted(key: day) == event, "the isolated calendar boundary already committed and survives")
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == invitees)
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 1)) == nil, "the isolated contacts boundary aborted — nothing landed")
 	}
 
 	@Test func explicitOverrideReachesSameState() throws {
@@ -572,10 +543,10 @@ struct HybridAppDemo {
 		let when = Timestamp(RAW_native: 9_000)
 
 		try app.scheduleMeetingPinned(event, on: day, invitees: invitees, at: when)
-		#expect(try readEventViaRaw(app, day: day) == event)
-		#expect(try readInviteesViaRaw(app, event: event) == invitees)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 5)) == when)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 6)) == when)
+		#expect(try app.calendar.events.readCommitted(key: day) == event)
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == invitees)
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 5)) == when)
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 6)) == when)
 	}
 
 	@Test func manualTwoTransactionContrastReachesSameState() throws {
@@ -588,8 +559,8 @@ struct HybridAppDemo {
 		// the boundary version (scheduleMeeting) and the manual raw version
 		// (scheduleMeetingManual) must leave identical durable state.
 		try app.scheduleMeetingManual(event, on: day, invitees: invitees, at: when)
-		#expect(try readEventViaRaw(app, day: day) == event)
-		#expect(try readInviteesViaRaw(app, event: event) == invitees)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 3)) == when)
+		#expect(try app.calendar.events.readCommitted(key: day) == event)
+		#expect(try app.calendar.invitees.readCommittedDups(key: event) == invitees)
+		#expect(try app.contacts.lastSync.readCommitted(key: ContactID(RAW_native: 3)) == when)
 	}
 }

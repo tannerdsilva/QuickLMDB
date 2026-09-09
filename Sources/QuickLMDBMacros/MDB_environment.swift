@@ -131,10 +131,12 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		// -- build the open(at:) factory
 		var lines:[String] = []
 		lines.append("/// opens the environment and all of its tables with a single setup write-transaction.")
-		lines.append("/// - parameter basePath: an existing directory that will contain the environment file.")
+		lines.append("/// - parameter basePath: the directory that will contain the environment file (created if")
+		lines.append("///   it does not already exist).")
 		lines.append("/// - parameter mapHeadroom: added to the current file size when sizing the memory map.")
 		lines.append("@available(*, noasync)")
 		lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
+		lines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)")
 		lines.append("    let slash = basePath.hasSuffix(\"/\") ? \"\" : \"/\"")
 		lines.append("    let targetPath = basePath + slash + \(fileArg)")
 		lines.append("    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)")

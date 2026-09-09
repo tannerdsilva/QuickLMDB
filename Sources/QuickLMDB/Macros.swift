@@ -160,9 +160,11 @@ public macro drop(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MD
 
 /// marks a struct as an environment CONTAINER: its stored `@MDB_environment` cores
 /// become the environment inventory that ``MDB_transact_span(_:)`` routes to.
-/// generates the `MDB_environment_container` conformance plus the
-/// `mdb_environment_property_names` inventory from the stored properties.
-@attached(member, names: named(mdb_environment_property_names))
+/// generates the `MDB_environment_container` conformance, the
+/// `mdb_environment_property_names` inventory, and a container-level
+/// `open(at:mapHeadroom:)` that creates each core's subdirectory and opens every
+/// core in one call.
+@attached(member, names: named(mdb_environment_property_names), named(open(at:mapHeadroom:)))
 @attached(extension, conformances: MDB_environment_container)
 public macro MDB_app() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_app_macro")
 

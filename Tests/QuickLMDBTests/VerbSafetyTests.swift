@@ -15,16 +15,9 @@ import QuickLMDB
 struct VerbSafetyTests {
 
 	private func makeCore() throws -> TestCore {
+		// the @MDB_environment-generated open(at:) creates the directory as needed
 		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-verbs-\(UUID().uuidString)", isDirectory:true)
-		try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
 		return try TestCore.open(at: dir.path)
-	}
-
-	private func readViaRawTX(_ core: TestCore, key: TestKey) throws -> TestValue? {
-		let tx = try Transaction(env:core.env, readOnly:true)
-		let result = try? core.primary.loadEntry(key:key, as:TestValue.self, tx:tx)
-		tx.abort()
-		return result
 	}
 
 	@Test func userHelperNamedSetEntryRunsUntouched() throws {
@@ -32,14 +25,14 @@ struct VerbSafetyTests {
 		let label = "hello"
 		let n = try core.userHelperNamedLikeOperation(TestKey(RAW_native: 101), TestValue(RAW_native: 10101), label)
 		#expect(n == label.count, "the user helper must execute its REAL body — the marker gate kept the call untouched")
-		#expect(try readViaRawTX(core, key:TestKey(RAW_native: 101)) == TestValue(RAW_native: 10101), "the verb write still landed")
+		#expect(try core.primary.readCommitted(key:TestKey(RAW_native: 101)) == TestValue(RAW_native: 10101), "the verb write still landed")
 	}
 
 	@Test func verbsAndExplicitTxCoexistInOneBoundary() throws {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 102)
 		try core.verbAndExplicitTxHybrid(key, TestValue(RAW_native: 10202))
-		#expect(try readViaRawTX(core, key:key) == TestValue(RAW_native: 10202))
+		#expect(try core.primary.readCommitted(key:key) == TestValue(RAW_native: 10202))
 	}
 
 	@Test func dupWorkflowVerbsDeletePairAndScan() throws {

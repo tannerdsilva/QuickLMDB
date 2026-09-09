@@ -114,12 +114,12 @@ extension DemoCore {
 		return result
 	}
 
-	// 9. the raw path is untouched: any code that wants its own transaction owns it
-	public func readRaw(_ key: borrowing TestKey) throws -> TestValue? {
-		let tx = try Transaction(env: env, readOnly: true)
-		let result = try? primary.loadEntry(key: key, as: TestValue.self, tx: tx)
-		tx.abort()
-		return result
+	// 9. self-scoped committed read: readCommitted opens + closes its own read
+	//    transaction — verification reads need no manual Transaction ceremony.
+	//    (the raw manual Transaction surface is still available for code that
+	//    deliberately manages its own transaction.)
+	public func readCommitted(_ key: borrowing TestKey) throws -> TestValue? {
+		return try primary.readCommitted(key: key)
 	}
 }
 
@@ -127,8 +127,8 @@ extension DemoCore {
 struct UsagePatternDemo {
 
 	private func makeCore() throws -> DemoCore {
+		// the @MDB_environment-generated open(at:) creates the directory as needed
 		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-demo-\(UUID().uuidString)", isDirectory:true)
-		try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
 		return try DemoCore.open(at: dir.path)
 	}
 
@@ -169,7 +169,7 @@ struct UsagePatternDemo {
 		#expect(all.count == 5)
 
 		// 9: the raw path still works; and the env macro forced .noTLS
-		#expect(try core.readRaw(TestKey(RAW_native: 1)) == TestValue(RAW_native: 10))
+		#expect(try core.readCommitted(TestKey(RAW_native: 1)) == TestValue(RAW_native: 10))
 		#expect(core.env.flags.contains(.noTLS))
 	}
 }

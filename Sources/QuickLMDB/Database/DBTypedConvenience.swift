@@ -65,6 +65,79 @@ extension MDB_db {
 	}
 }
 
+// - MARK: self-scoped committed reads
+
+// verification reads (tests, health checks) that manage their own read
+// transaction — "what is the last committed state" without manual transaction
+// ceremony. these are NOT verbs/boundaries: a verb's contract is boundary
+// participation, the opposite of a self-scoped read. deliberately absent from
+// the boundary vocabulary for that reason.
+
+extension MDB_db {
+
+	/// reads the last committed value for `key` through a self-scoped read-only
+	/// transaction that this call creates and closes. notFound yields nil.
+	/// - parameters:
+	/// 	- key: the key to read.
+	/// - returns: the stored value, or nil if the key does not exist.
+	@available(*, noasync)
+	public borrowing func readCommitted(key:borrowing MDB_db_key_type) throws -> MDB_db_val_type? {
+		// only the transaction creation can throw; the typed load is non-throwing
+		let tx = try Transaction(env:self.dbEnvironment(), readOnly:true)
+		let result = self.load(key:key, tx:tx)
+		tx.abort()
+		return result
+	}
+
+	/// true when the last committed state contains `key`.
+	/// - parameters:
+	/// 	- key: the key to check.
+	/// - returns: true if an entry exists in the committed state, false if not.
+	@available(*, noasync)
+	public borrowing func containsCommitted(key:borrowing MDB_db_key_type) throws -> Bool {
+		let tx = try Transaction(env:self.dbEnvironment(), readOnly:true)
+		do {
+			let result = try self.contains(key:key, tx:tx)
+			tx.abort()
+			return result
+		} catch {
+			tx.abort()
+			throw error
+		}
+	}
+}
+
+extension MDB_db_dupsort {
+
+	/// reads every LAST COMMITTED duplicate value for `key` through a self-scoped
+	/// read-only transaction. an absent key yields an empty array.
+	/// - parameters:
+	/// 	- key: the key whose duplicates to read.
+	/// - returns: every duplicate stored for `key`, in key order.
+	@available(*, noasync)
+	public borrowing func readCommittedDups(key:borrowing MDB_db_key_type) throws -> [MDB_db_val_type] {
+		let tx = try Transaction(env:self.dbEnvironment(), readOnly:true)
+		do {
+			var result:[MDB_db_val_type] = []
+			if try self.contains(key:key, tx:tx) {
+				// makeDupIterator consumes its key; an explicit copy flows out of
+				// the borrowing param into the non-escaping cursor closure
+				let keyCopy = copy key
+				self.cursor(tx:tx) { cursor in
+					for (_, dup) in cursor.makeDupIterator(key:keyCopy) {
+						result.append(dup)
+					}
+				}
+			}
+			tx.abort()
+			return result
+		} catch {
+			tx.abort()
+			throw error
+		}
+	}
+}
+
 extension MDB_db_dupsort {
 
 	/// typed pair delete — removes exactly the key/value pairing. only meaningful

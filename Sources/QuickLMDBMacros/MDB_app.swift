@@ -62,7 +62,7 @@ internal struct MDB_app_macro:MemberMacro, ExtensionMacro {
 			""")]
 	}
 
-	// - MARK: MemberMacro (the inventory)
+	// - MARK: MemberMacro (the inventory + the container open factory)
 
 	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, conformingTo protocols:[SwiftSyntax.TypeSyntax], in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
 		guard let structDecl = declaration.as(StructDeclSyntax.self) else {
@@ -73,9 +73,36 @@ internal struct MDB_app_macro:MemberMacro, ExtensionMacro {
 			throw MacroError.noCores
 		}
 		let names = cores.map { "\"\($0.name)\"" }.joined(separator:", ")
-		let access = structDecl.modifiers.filter { $0.name.text == "public" }.isEmpty ? "public" : "public"
-		return [DeclSyntax("""
+		let access = "public"
+
+		// -- the open(at:) factory: creates base + per-core subdirectories, opens
+		//    every core through its own @MDB_environment-generated open(at:), and
+		//    assembles Self. mirror-shares the env macro's signature (mapHeadroom
+		//    default 1 GiB) so a container opens with one line.
+		var openLines:[String] = []
+		openLines.append("/// opens every environment core in its own subdirectory (named after the")
+		openLines.append("/// stored property) beneath `basePath`, creating directories as needed, and")
+		openLines.append("/// assembles the container. maps are sized as current file + `mapHeadroom`.")
+		openLines.append("@available(*, noasync)")
+		openLines.append("\(access) static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
+		openLines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)")
+		var initArgs:[String] = []
+		for core in cores {
+			openLines.append("    let \(core.name)Dir = QuickLMDB._MDBEnvironmentSupport.__joinPath(basePath, \"\(core.name)\")")
+			openLines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: \(core.name)Dir)")
+			openLines.append("    let \(core.name) = try \(core.type).open(at: \(core.name)Dir, mapHeadroom: mapHeadroom)")
+			initArgs.append("\(core.name): \(core.name)")
+		}
+		openLines.append("    return Self(\(initArgs.joined(separator:", ")))")
+		openLines.append("}")
+
+		var result:[SwiftSyntax.DeclSyntax] = []
+		result.append(DeclSyntax("""
 			\(raw: access) static let mdb_environment_property_names:[String] = [\(raw: names)]
-			""")]
+			"""))
+		// single DeclSyntax for the whole factory keeps the expansion formatter on
+		// one pass (per-line DeclSyntaxes produce ragged spacing)
+		result.append(DeclSyntax(stringLiteral: openLines.joined(separator:"\n")))
+		return result
 	}
 }

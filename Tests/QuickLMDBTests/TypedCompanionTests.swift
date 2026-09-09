@@ -13,17 +13,9 @@ import QuickLMDB
 struct TypedCompanionTests {
 
 	private func makeCore() throws -> TestCore {
+		// the @MDB_environment-generated open(at:) creates the directory as needed
 		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-comp-\(UUID().uuidString)", isDirectory:true)
-		try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
 		return try TestCore.open(at: dir.path)
-	}
-
-	// a raw read transaction so assertions observe durable committed state.
-	private func readViaRawTX(_ core: TestCore, key: TestKey) throws -> TestValue? {
-		let tx = try Transaction(env:core.env, readOnly:true)
-		let result = try? core.primary.loadEntry(key:key, as:TestValue.self, tx:tx)
-		tx.abort()
-		return result
 	}
 
 	@Test func storeThenLoadRoundTrip() throws {
@@ -53,13 +45,13 @@ struct TypedCompanionTests {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 3)
 		try core.writePrimary(key, TestValue(RAW_native: 300))
-		#expect(try readViaRawTX(core, key:key) == TestValue(RAW_native: 300))
+		#expect(try core.primary.readCommitted(key:key) == TestValue(RAW_native: 300))
 
 		let write = try Transaction(env:core.env, readOnly:false)
 		try core.primary.delete(key:key, tx:write)
 		try write.commit()
 
-		#expect(try readViaRawTX(core, key:key) == nil)
+		#expect(try core.primary.readCommitted(key:key) == nil)
 	}
 
 	@Test func containsReflectsPresence() throws {
@@ -123,20 +115,27 @@ struct TypedCompanionTests {
 		}
 		read.abort()
 		#expect(pairFound == true, "the surviving pairing must be found via GET_BOTH")
-		let dups = try readDupsViaRawTX(core, key:key)
+		let dups = try core.secondary.readCommittedDups(key:key)
 		#expect(dups == [valueB], "only the surviving dup remains")
 	}
 
-	// raw dup-scan helper for the pair-delete assertion above.
-	private func readDupsViaRawTX(_ core: TestCore, key: TestKey) throws -> [TestValue] {
-		let tx = try Transaction(env:core.env, readOnly:true)
-		var vals:[TestValue] = []
-		core.secondary.cursor(tx:tx) { cursor in
-			for (_, dup) in cursor.makeDupIterator(key:key) {
-				vals.append(dup)
-			}
-		}
-		tx.abort()
-		return vals
+	@Test func committedReadsReflectCommittedState() throws {
+		let core = try makeCore()
+		let key = TestKey(RAW_native: 7)
+		let value = TestValue(RAW_native: 700)
+		try core.writePrimary(key, value)
+
+		// readCommitted: self-scoped read txn, last-committed value, missing key -> nil
+		#expect(try core.primary.readCommitted(key:key) == value)
+		#expect(try core.primary.readCommitted(key:TestKey(RAW_native: 99)) == nil)
+		#expect(try core.primary.containsCommitted(key:key) == true)
+		#expect(try core.primary.containsCommitted(key:TestKey(RAW_native: 99)) == false)
+
+		// readCommittedDups: dupsort table, absent key -> empty
+		let writeTX = try Transaction(env:core.env, readOnly:false)
+		try core.secondary.store(key:key, value:TestValue(RAW_native: 701), tx:writeTX)
+		try writeTX.commit()
+		#expect(try core.secondary.readCommittedDups(key:key) == [TestValue(RAW_native: 701)])
+		#expect(try core.secondary.readCommittedDups(key:TestKey(RAW_native: 99)) == [])
 	}
 }
