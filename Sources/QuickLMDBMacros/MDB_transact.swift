@@ -13,8 +13,10 @@ import SwiftParser
 //   1. injects a local `let tx = try Transaction(env: self.env, ...)` owning the scope,
 //   2. wraps the original body in a nested local function `__mdb_body(_ tx: borrowing
 //      Transaction)` so the transaction is passed by explicit borrow (never captured),
-//   3. rewrites every call to a QuickLMDB operation that omits the `tx:` argument to
-//      append `tx: tx`,
+//   3. lowers freestanding VERB calls (#store / #load / #delete / #contains / #cursor /
+//      #clear) to the tx-bearing operation form. every other line is emitted
+//      byte-identical — marker-gated attribution (a user function named `setEntry`
+//      is unreachable-by-rewrite by construction),
 //   4. commits once on success, aborts exactly once on any thrown error, and returns the
 //      body's captured result.
 //
@@ -71,13 +73,10 @@ internal struct MDB_transact_macro: BodyMacro {
 		}
 	}
 
-	/// names of QuickLMDB operations whose call sites may omit the `tx:` argument inside a
-	/// `@MDB_transact` body. the expansion appends `tx: tx` to these calls when the
-	/// argument is absent.
-	private static let txOperationNames:Set<String> = [
-		"loadEntry", "setEntry", "containsEntry", "deleteEntry", "deleteAllEntries",
-		"cursor", "dbStatistics", "dbFlags", "deleteDatabase"
-	]
+	/// names of the freestanding verb macros the boundary lowers. the rewriter matches
+	/// ONLY these `MacroExpansionExprSyntax` names — everything else in the body is
+	/// emitted byte-identical (marker-gated attribution; no callee-name lists).
+	private static let verbNames:Set<String> = ["store", "load", "delete", "contains", "cursor", "clear"]
 
 	// - MARK: mode parsing
 
@@ -102,45 +101,83 @@ internal struct MDB_transact_macro: BodyMacro {
 		}
 	}
 
-	// - MARK: call rewriting
+	// - MARK: verb lowering
 
-	private final class TXInjectionRewriter:SyntaxRewriter {
-		override func visit(_ node:FunctionCallExprSyntax) -> ExprSyntax {
+	/// lowers a single verb call to the tx-bearing operation form, using the typed
+	/// companions (`store`/`load`/`delete`/`contains`) or the existing cursor /
+	/// deleteAllEntries members. returns nil when the call shape is unrecognized
+	/// (the node is then left as-is; the standalone verb expansion diagnoses it).
+	private static func lowerVerb(_ node:MacroExpansionExprSyntax) -> ExprSyntax? {
+		// the first argument is the handle (no label); key/value/flags/as are labeled
+		guard let firstArg = node.arguments.first, firstArg.label == nil else { return nil }
+		let db = firstArg.expression.trimmedDescription
+		var labeled:[String:String] = [:]
+		for arg in node.arguments.dropFirst() {
+			if let label = arg.label?.text {
+				labeled[label] = arg.expression.trimmedDescription
+			}
+		}
+		let get = { (label:String) -> String? in labeled[label] }
+
+		switch node.macroName.text {
+			case "store":
+				guard let key = get("key"), let value = get("value") else { return nil }
+				var parts = ["key: \(key)", "value: \(value)"]
+				if let flags = get("flags") { parts.append("flags: \(flags)") }
+				parts.append("tx: tx")
+				return ExprSyntax(stringLiteral:"\(db).store(\(parts.joined(separator:", ")))")
+
+			case "load":
+				if let asType = get("as") {
+					guard let key = get("key") else { return nil }
+					return ExprSyntax(stringLiteral:"\(db).loadEntry(key: \(key), as: \(asType), tx: tx)")
+				}
+				guard let key = get("key") else { return nil }
+				return ExprSyntax(stringLiteral:"\(db).load(key: \(key), tx: tx)")
+
+			case "delete":
+				if let value = get("value") {
+					guard let key = get("key") else { return nil }
+					return ExprSyntax(stringLiteral:"\(db).delete(key: \(key), value: \(value), tx: tx)")
+				}
+				guard let key = get("key") else { return nil }
+				return ExprSyntax(stringLiteral:"\(db).delete(key: \(key), tx: tx)")
+
+			case "contains":
+				guard let key = get("key") else { return nil }
+				if let value = get("value") {
+					// the pair check is CURSOR-only (real MDB_GET_BOTH). a DB-level pair
+					// contains would answer true for any existing key (silent no-op).
+					return ExprSyntax(stringLiteral:"\(db).cursor(tx: tx) { try $0.containsEntry(key: \(key), value: \(value)) }")
+				}
+				return ExprSyntax(stringLiteral:"\(db).contains(key: \(key), tx: tx)")
+
+			case "cursor":
+				// only the trailing-closure form is supported (the documented contract)
+				guard let closure = node.trailingClosure else { return nil }
+				return ExprSyntax(stringLiteral:"\(db).cursor(tx: tx) \(closure.trimmedDescription)")
+
+			case "clear":
+				return ExprSyntax(stringLiteral:"\(db).deleteAllEntries(tx: tx)")
+
+			default:
+				return nil
+		}
+	}
+
+	private final class VerbLoweringRewriter:SyntaxRewriter {
+		override func visit(_ node:MacroExpansionExprSyntax) -> ExprSyntax {
+			// NESTED VERBS CONSUME INNER-FIRST: visit children before folding this node,
+			// so an inner verb inside an outer verb's arguments/closures is already
+			// lowered before the outer rewrites (an un-lowered inner would hit the
+			// standalone diagnostic on the next expansion pass).
 			let processed = super.visit(node)
-			let call = processed.cast(FunctionCallExprSyntax.self)
-			var calleeName:String? = nil
-			if let member = call.calledExpression.as(MemberAccessExprSyntax.self) {
-				calleeName = member.declName.baseName.text
-			} else if let ref = call.calledExpression.as(DeclReferenceExprSyntax.self) {
-				calleeName = ref.baseName.text
+			let expansion = processed.cast(MacroExpansionExprSyntax.self)
+			// marker gate: only a freestanding verb in the closed set is touched
+			guard MDB_transact_macro.verbNames.contains(expansion.macroName.text) else {
+				return ExprSyntax(expansion)
 			}
-			guard let calleeName, MDB_transact_macro.txOperationNames.contains(calleeName) else {
-				return ExprSyntax(call)
-			}
-			// an explicit `tx:` argument wins (allows passing a caller-provided transaction)
-			guard call.arguments.contains(where: { $0.label?.text == "tx" }) == false else {
-				return ExprSyntax(call)
-			}
-			let txArg = LabeledExprSyntax(label:.identifier("tx"), colon:.colonToken(trailingTrivia:.space), expression:DeclReferenceExprSyntax(baseName:.identifier("tx")))
-			var newCall = call
-			if call.arguments.isEmpty {
-				// a call that had only a trailing closure stores BOTH its arguments and
-				// its parentheses with missing presence — build a fresh argument list and
-				// explicit parens so `cursor(tx: tx) { ... }` serializes correctly
-				newCall.arguments = LabeledExprListSyntax([txArg])
-				newCall.leftParen = .leftParenToken(trailingTrivia:.space)
-				newCall.rightParen = .rightParenToken()
-			} else {
-				var newArguments = call.arguments
-				// give the previous last argument its separator comma, then append
-				let lastIndex = newArguments.index(before:newArguments.endIndex)
-				var lastArg = newArguments[lastIndex]
-				lastArg.trailingComma = .commaToken(trailingTrivia:.space)
-				newArguments[lastIndex] = lastArg
-				newArguments.append(txArg)
-				newCall.arguments = newArguments
-			}
-			return ExprSyntax(newCall)
+			return MDB_transact_macro.lowerVerb(expansion) ?? ExprSyntax(expansion)
 		}
 	}
 
@@ -206,8 +243,8 @@ internal struct MDB_transact_macro: BodyMacro {
 		bodyCallArgs.append("tx")
 		let bodyCall = "__mdb_body(\(bodyCallArgs.joined(separator:", ")))"
 
-		// -- transform the original body: append `tx: tx` to eligible calls
-		let rewriter = TXInjectionRewriter()
+		// -- transform the original body: lower verb calls to tx-bearing form
+		let rewriter = VerbLoweringRewriter()
 		let originalStatements = fn.body?.statements ?? CodeBlockItemListSyntax([])
 		let transformedItems = rewriter.visit(originalStatements)
 		let bodyText = transformedItems.map { $0.trimmedDescription }.joined(separator:"\n")

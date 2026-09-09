@@ -94,19 +94,19 @@ extension CalendarCore {
 	// 1. readWrite top-level: one atomic write. commits once on success, aborts once on throw.
 	@MDB_transact(.readWrite)
 	public func bookEvent(_ event: consuming EventID, on day: consuming DayKey) throws {
-		try events.setEntry(key: day, value: event, flags: [])
+		try #store(events, key: day, value: event)
 	}
 
 	// 2. readOnly top-level: never commits.
 	@MDB_transact(.readOnly)
 	public func eventOn(_ day: borrowing DayKey) throws -> EventID? {
-		return try? events.loadEntry(key: day, as: EventID.self)
+		return try? #load(events, key: day)
 	}
 
 	// 3. child boundary: merges into the calling boundary's write on commit.
 	@MDB_transact(.readWriteChild)
 	public func addInvitee(_ event: borrowing EventID, _ contact: consuming ContactID, parent: borrowing Transaction) throws {
-		try invitees.setEntry(key: event, value: contact, flags: [])
+		try #store(invitees, key: event, value: contact)
 	}
 
 	// 4. one boundary = one atomic unit across BOTH tables, via sequential children.
@@ -117,7 +117,7 @@ extension CalendarCore {
 	@MDB_transact(.readWrite)
 	public func bookWithInvitees(_ event: consuming EventID, on day: consuming DayKey, invitees: [ContactID]) throws {
 		let eventCopy = event
-		try events.setEntry(key: day, value: eventCopy, flags: [])
+		try #store(events, key: day, value: eventCopy)
 		for invitee in invitees {
 			try addInvitee(event, invitee, parent: tx)
 		}
@@ -129,13 +129,13 @@ extension CalendarCore {
 	//    data before committing".
 	@MDB_transact(.readOnly)
 	public func committedEvent(on day: DayKey) throws -> EventID? {
-		return try? events.loadEntry(key: day, as: EventID.self)
+		return try? #load(events, key: day)
 	}
 
 	@MDB_transact(.readWrite)
 	public func bookIfSlotFree(_ event: consuming EventID, on day: borrowing DayKey) throws -> Bool {
 		guard try committedEvent(on: day) == nil else { return false }
-		try events.setEntry(key: day, value: event, flags: [])
+		try #store(events, key: day, value: event)
 		return true
 	}
 
@@ -144,7 +144,7 @@ extension CalendarCore {
 	//    siblings until the boundary commits.
 	@MDB_transact(.readWrite)
 	public func bookAndSelfCheck(_ event: consuming EventID, on day: borrowing DayKey) throws -> EventID? {
-		try events.setEntry(key: day, value: event, flags: [])
+		try #store(events, key: day, value: event)
 		return try committedEvent(on: day)
 	}
 
@@ -162,13 +162,13 @@ extension CalendarCore {
 	@MDB_transact(.readWriteChild)
 	public func addInviteeGuarded(_ event: borrowing EventID, _ contact: consuming ContactID, parent: borrowing Transaction) throws {
 		guard contact != ContactID(RAW_native: 0) else { throw CalendarError.blockedContact }
-		try invitees.setEntry(key: event, value: contact, flags: [])
+		try #store(invitees, key: event, value: contact)
 	}
 
 	@MDB_transact(.readWrite)
 	public func bookWithAvailableInvitees(_ event: consuming EventID, on day: consuming DayKey, invitees: [ContactID]) throws -> [ContactID] {
 		let eventCopy = event
-		try events.setEntry(key: day, value: eventCopy, flags: [])
+		try #store(events, key: day, value: eventCopy)
 		var accepted: [ContactID] = []
 		for invitee in invitees {
 			do {
@@ -196,9 +196,9 @@ extension CalendarCore {
 	// 10. dup-sort read: all invitees of an event, in a readOnly boundary.
 	@MDB_transact(.readOnly)
 	public func inviteesFor(_ event: EventID) throws -> [ContactID] {
-		guard try invitees.containsEntry(key: event) else { return [] }
+		guard try #contains(invitees, key: event) else { return [] }
 		var result: [ContactID] = []
-		invitees.cursor { cursor in
+		#cursor(invitees) { cursor in
 			for (_, dup) in cursor.makeDupIterator(key: event) {
 				result.append(dup)
 			}
@@ -221,14 +221,14 @@ extension ContactCore {
 	@MDB_transact(.readWrite)
 	public func markSync(_ ids: [ContactID], at timestamp: Timestamp) throws {
 		for id in ids {
-			try lastSync.setEntry(key: id, value: timestamp, flags: [])
+			try #store(lastSync, key: id, value: timestamp)
 		}
 	}
 
 	// 12. readOnly top-level.
 	@MDB_transact(.readOnly)
 	public func lastSyncFor(_ id: ContactID) throws -> Timestamp? {
-		return try? lastSync.loadEntry(key: id, as: Timestamp.self)
+		return try? #load(lastSync, key: id)
 	}
 
 	// 13. sibling WRITE inside a READ: the inner write commits independently and the
@@ -245,7 +245,7 @@ extension ContactCore {
 	@MDB_transact(.readWrite)
 	public func markSyncThrowing(_ ids: [ContactID], at timestamp: Timestamp) throws {
 		for id in ids {
-			try lastSync.setEntry(key: id, value: timestamp, flags: [])
+			try #store(lastSync, key: id, value: timestamp)
 		}
 		throw ContactError.syncFailed
 	}

@@ -37,30 +37,30 @@ extension TestCore {
 
 	@MDB_transact(.readWrite)
 	public func writePrimary(_ key: consuming TestKey, _ value: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 	}
 
 	@MDB_transact(.readWrite)
 	public func writeBoth(_ key: consuming TestKey, _ primaryValue: consuming TestValue, _ secondaryValue: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: primaryValue, flags: [])
-		try secondary.setEntry(key: key, value: secondaryValue, flags: [])
+		try #store(primary, key: key, value: primaryValue)
+		try #store(secondary, key: key, value: secondaryValue)
 	}
 
 	@MDB_transact(.readWrite)
 	public func writeBothThrowing(_ key: consuming TestKey, _ primaryValue: consuming TestValue, _ secondaryValue: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: primaryValue, flags: [])
-		try secondary.setEntry(key: key, value: secondaryValue, flags: [])
+		try #store(primary, key: key, value: primaryValue)
+		try #store(secondary, key: key, value: secondaryValue)
 		throw TestError.simulatedFailure
 	}
 
 	@MDB_transact(.readOnly)
 	public func readOnlyRead(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? primary.loadEntry(key: key, as: TestValue.self)
+		return try? #load(primary, key: key)
 	}
 
 	@MDB_transact(.readOnly)
 	public func readOnlyWriteAttempt(_ key: consuming TestKey, _ value: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 	}
 
 	// explicit parent-free composition: the injected `tx` is passed to a shared helper
@@ -80,24 +80,24 @@ extension TestCore {
 	// child transaction boundary: parent merges on commit, aborts independently on error
 	@MDB_transact(.readWriteChild)
 	public func writeNested(_ key: consuming TestKey, _ value: consuming TestValue, parent: borrowing Transaction) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 	}
 
 	@MDB_transact(.readWriteChild)
 	public func writeNestedThrowing(_ key: consuming TestKey, _ value: consuming TestValue, parent: borrowing Transaction) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		throw TestError.simulatedFailure
 	}
 
 	@MDB_transact(.readWrite)
 	public func outerWrite(_ key: consuming TestKey, _ value: consuming TestValue, _ innerKey: consuming TestKey, _ innerValue: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		try writeNested(innerKey, innerValue, parent: tx)
 	}
 
 	@MDB_transact(.readWrite)
 	public func outerWriteChildAbort(_ key: consuming TestKey, _ value: consuming TestValue, _ innerKey: consuming TestKey, _ innerValue: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		do {
 			try writeNestedThrowing(innerKey, innerValue, parent: tx)
 		} catch TestError.simulatedFailure {
@@ -111,7 +111,7 @@ extension TestCore {
 	// (parent boundary hands its injected tx to a child) is already exercised by outerWrite.
 	@MDB_transact(.readWriteChild)
 	public func readParentUncommitted(_ key: borrowing TestKey, parent: borrowing Transaction) throws -> TestValue? {
-		return try? primary.loadEntry(key: key, as: TestValue.self)
+		return try? #load(primary, key: key)
 	}
 
 	// multi-level write nesting: a child spawns its own child with ITS injected tx —
@@ -119,20 +119,20 @@ extension TestCore {
 	// variant is the abort leg that proves the chain's all-or-nothing atomicity.
 	@MDB_transact(.readWriteChild)
 	public func writeChildThenGrandchild(_ key: consuming TestKey, _ value: consuming TestValue, _ grandKey: consuming TestKey, _ grandValue: consuming TestValue, parent: borrowing Transaction) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		try writeNested(grandKey, grandValue, parent: tx)   // this child's OWN tx -> grandchild
 	}
 
 	@MDB_transact(.readWriteChild)
 	public func writeChildThenGrandchildThrowing(_ key: consuming TestKey, _ value: consuming TestValue, _ grandKey: consuming TestKey, _ grandValue: consuming TestValue, parent: borrowing Transaction) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		try writeNestedThrowing(grandKey, grandValue, parent: tx)
 	}
 
 	@MDB_transact(.readOnly)
 	public func scanAll() throws -> [(key: TestKey, value: TestValue)] {
 		var result: [(key: TestKey, value: TestValue)] = []
-		primary.cursor { cursor in
+		#cursor(primary) { cursor in
 			for (k, v) in cursor {
 				result.append((key: k, value: v))
 			}
@@ -143,7 +143,7 @@ extension TestCore {
 	@MDB_transact(.readOnly)
 	public func scanCount() throws -> UInt64 {
 		var result: UInt64 = 0
-		primary.cursor { cursor in
+		#cursor(primary) { cursor in
 			for _ in cursor {
 				result += 1
 			}

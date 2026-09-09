@@ -38,13 +38,13 @@ extension DemoCore {
 	// 1. read-write boundary: own write txn, committed exactly once on success
 	@MDB_transact(.readWrite)
 	public func store(_ key: consuming TestKey, _ value: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 	}
 
 	// 2. read-only boundary: own read txn, aborted on exit — never commits
 	@MDB_transact(.readOnly)
 	public func fetch(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? primary.loadEntry(key: key, as: TestValue.self)
+		return try? #load(primary, key: key)
 	}
 
 	// 3. helper composition: the injected `tx` is passed to a plain helper whose
@@ -61,8 +61,8 @@ extension DemoCore {
 	// 4. one boundary = one atomic unit, across any number of tables
 	@MDB_transact(.readWrite)
 	public func storeBoth(_ key: consuming TestKey, _ v1: consuming TestValue, _ v2: consuming TestValue) throws {
-		try primary.setEntry(key: key, value: v1, flags: [])
-		try secondary.setEntry(key: key, value: v2, flags: [])
+		try #store(primary, key: key, value: v1)
+		try #store(secondary, key: key, value: v2)
 	}
 
 	// 5. write composition INSIDE a write: the child boundary merges into the parent.
@@ -71,13 +71,13 @@ extension DemoCore {
 	@MDB_transact(.readWrite)
 	public func storeWithAudit(_ key: consuming TestKey, _ value: consuming TestValue) throws {
 		let auditValue = value                       // explicit copy for the audit row
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		try logAudit(key, auditValue, parent: tx)
 	}
 
 	@MDB_transact(.readWriteChild)
 	public func logAudit(_ key: consuming TestKey, _ value: consuming TestValue, parent: borrowing Transaction) throws {
-		try secondary.setEntry(key: key, value: value, flags: [])
+		try #store(secondary, key: key, value: value)
 	}
 
 	// 6. sibling READ inside a WRITE: the inner read is an independent snapshot of
@@ -86,13 +86,13 @@ extension DemoCore {
 	@MDB_transact(.readWrite)
 	public func validateThenStore(_ key: consuming TestKey, _ value: consuming TestValue) throws -> TestValue? {
 		let committed = try currentValue(key)   // sibling read: predates the write below
-		try primary.setEntry(key: key, value: value, flags: [])
+		try #store(primary, key: key, value: value)
 		return committed
 	}
 
 	@MDB_transact(.readOnly)
 	public func currentValue(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? primary.loadEntry(key: key, as: TestValue.self)
+		return try? #load(primary, key: key)
 	}
 
 	// 7. sibling WRITE inside a READ: legal; it commits independently and the outer
@@ -117,7 +117,7 @@ extension DemoCore {
 	@MDB_transact(.readOnly)
 	public func scan() throws -> [(key: TestKey, value: TestValue)] {
 		var result: [(key: TestKey, value: TestValue)] = []
-		primary.cursor { cursor in
+		#cursor(primary) { cursor in
 			for (k, v) in cursor {
 				result.append((key: k, value: v))
 			}
