@@ -23,7 +23,9 @@ import RAW
 //     readOnly inside readOnly             sibling reads: daySnapshotTwice
 //     (.noTLS makes this legal)
 //     child abort leaves parent usable     bookWithAvailableInvitees
-//     injected-tx helper composition       bookViaHelper
+//     (reusable write logic is a child      composition = .readWriteChild(parent:)
+//      boundary, NOT a tx: helper)          — there is no tx:-parameterized-helper
+//                                           pattern; helpers are boundaries
 //
 //   cross-env, HybridApp (the spanning layer):
 //     spanning WRITE = one calendar txn   scheduleMeeting:
@@ -181,19 +183,7 @@ extension CalendarCore {
 		return accepted
 	}
 
-	// 9. injected-tx helper composition: the boundary's `tx` handed to a plain helper
-	//    whose operation call carries `tx:` explicitly. the helper's value param must
-	//    be `consuming` because setEntry consumes its value.
-	@MDB_transact(.readWrite)
-	public func bookViaHelper(_ event: consuming EventID, on day: borrowing DayKey) throws {
-		try writeEventHelper(event, day, tx: tx)
-	}
-
-	public func writeEventHelper(_ event: consuming EventID, _ day: borrowing DayKey, tx: borrowing Transaction) throws {
-		try events.setEntry(key: day, value: event, flags: [], tx: tx)
-	}
-
-	// 10. dup-sort read: all invitees of an event, in a readOnly boundary.
+	// 9. dup-sort read: all invitees of an event, in a readOnly boundary.
 	@MDB_transact(.readOnly)
 	public func inviteesFor(_ event: EventID) throws -> [ContactID] {
 		guard try #contains(invitees, key: event) else { return [] }
@@ -217,7 +207,7 @@ public struct ContactCore: Sendable {
 
 extension ContactCore {
 
-	// 11. readWrite top-level.
+	// 10. readWrite top-level.
 	@MDB_transact(.readWrite)
 	public func markSync(_ ids: [ContactID], at timestamp: Timestamp) throws {
 		for id in ids {
@@ -225,13 +215,13 @@ extension ContactCore {
 		}
 	}
 
-	// 12. readOnly top-level.
+	// 11. readOnly top-level.
 	@MDB_transact(.readOnly)
 	public func lastSyncFor(_ id: ContactID) throws -> Timestamp? {
 		return #load(lastSync, key: id)
 	}
 
-	// 13. sibling WRITE inside a READ: the inner write commits independently and the
+	// 12. sibling WRITE inside a READ: the inner write commits independently and the
 	//     outer read's snapshot is unaffected (it keeps seeing the pre-write state).
 	@MDB_transact(.readOnly)
 	public func snapshotAndBump(_ id: ContactID, at timestamp: Timestamp) throws -> Timestamp? {
@@ -240,7 +230,7 @@ extension ContactCore {
 		return before
 	}
 
-	// 14. a write that fails AFTER writing: its transaction aborts, so nothing lands.
+	// 13. a write that fails AFTER writing: its transaction aborts, so nothing lands.
 	//     used to demonstrate that a spanning operation is best-effort (see below).
 	@MDB_transact(.readWrite)
 	public func markSyncThrowing(_ ids: [ContactID], at timestamp: Timestamp) throws {
@@ -267,7 +257,7 @@ public struct HybridApp {
 		return HybridApp(calendar: try CalendarCore.open(at: calendarAt), contacts: try ContactCore.open(at: contactsAt))
 	}
 
-	// 15. spanning WRITE: one app method, two real transactions behind the seams —
+	// 14. spanning WRITE: one app method, two real transactions behind the seams —
 	//     a calendar write and a contacts write, opened up front and committed
 	//     back-to-back. the syntax looks exactly like any other operation; the two
 	//     boundaries are the implementation.
@@ -280,7 +270,7 @@ public struct HybridApp {
 		}
 	}
 
-	// 16. spanning READ: an all-read span — two read members, no commits. the sync
+	// 15. spanning READ: an all-read span — two read members, no commits. the sync
 	//     timestamp of a contact plus a calendar lookup in one app call.
 	@MDB_transact_span
 	public func dayOverview(on day: DayKey, contact: ContactID) throws -> (event: EventID?, lastSync: Timestamp?) {
@@ -289,7 +279,7 @@ public struct HybridApp {
 		return (event, synced)
 	}
 
-	// 17b. explicit-override span: same logical op, but the member list is forced —
+	// 16. explicit-override span: same logical op, but the member list is forced —
 	//      calendar pinned readWrite, contacts pinned readWrite (override form).
 	//      reaches identical durable state to the bare-inferred version (15).
 	@MDB_transact_span([.readWrite("calendar"), .readWrite("contacts")])
@@ -493,14 +483,6 @@ struct HybridAppDemo {
 		#expect(accepted == [good1, good2], "the blocked child aborted independently; the others merged")
 		#expect(try readEventViaRaw(app, day: day) == event, "the parent boundary's write survived the child abort")
 		#expect(try readInviteesViaRaw(app, event: event) == [good1, good2], "only the surviving children's writes landed")
-	}
-
-	@Test func injectedTxHelperComposition() throws {
-		let app = try makeApp()
-		let day = DayKey(RAW_native: 8)
-		let event = EventID(RAW_native: 800)
-		try app.calendar.bookViaHelper(event, on: day)
-		#expect(try readEventViaRaw(app, day: day) == event)
 	}
 
 	// - MARK: spanning (cross-environment) cells

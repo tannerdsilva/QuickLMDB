@@ -47,9 +47,11 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
   from `__mdb_body`, and the outer function performs commit + return after.
   Returns inside inner closures (cursor handlers) are untouched by construction.
 * No capture of the noncopyable transaction: it flows as an explicit parameter.
-* The injected name `tx` is the documented contract for composing with helpers
-  that take `tx: borrowing Transaction` — a boundary's transaction can be handed
-  on without defeating the point.
+* The injected name `tx` exists for ONE composition purpose: passing as `parent:`
+  to a `.readWriteChild` boundary. reusable write logic is a `.readWriteChild`
+  boundary (mode declared in its own attribute), reusable read logic a `.readOnly`
+  boundary. there is deliberately NO plain-helper-with-`tx:` pattern — a helper
+  that does DB work belongs in a boundary, not behind a transaction parameter.
 * Any operation call that already carries an explicit `tx:` is left untouched.
 
 ## What is settled (all verified at time of writing)
@@ -423,7 +425,9 @@ the pair. cross-env atomicity is impossible.
 - DocC for the two macros and the transaction-boundary article (docc catalog
   currently carries a prose section; symbol docs for the macros pending).
 - Downstream canaries: migrate pricedb / wiremand / ascension slices to the
-  macro layer as the migration corpus; verify the injected-`tx` helper story
-  against their actual composable helpers.
+  macro layer as the migration corpus, converting any existing
+  tx-parameterized helpers into `.readWriteChild(parent:)` / `.readOnly`
+  boundaries (the full-`tx:` pattern is an anti-pattern, not a migration
+  story).
 - Decide the release vehicle and consumer-facing macro product packaging.
 - Revisit the owning-box pattern when the toolchain grows consuming accessors.

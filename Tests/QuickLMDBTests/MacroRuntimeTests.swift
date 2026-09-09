@@ -62,19 +62,7 @@ extension TestCore {
 	public func readOnlyWriteAttempt(_ key: consuming TestKey, _ value: consuming TestValue) throws {
 		try #store(primary, key: key, value: value)
 	}
-
-	// explicit parent-free composition: the injected `tx` is passed to a shared helper
-	@MDB_transact(.readWrite)
-	public func writePrimaryViaHelper(_ key: consuming TestKey, _ value: consuming TestValue) throws {
-		try storeHelper(key, value, tx: tx)
-	}
-
-	// shared helper taking an explicit transaction (unchanged API shape)
-	public func storeHelper(_ key: borrowing TestKey, _ value: consuming TestValue, tx: borrowing Transaction) throws {
-		try primary.setEntry(key: key, value: value, flags: [], tx: tx)
-	}
 }
-
 extension TestCore {
 
 	// child transaction boundary: parent merges on commit, aborts independently on error
@@ -322,13 +310,6 @@ struct MacroRuntimeTests {
 		#expect(try readViaRawTX(core, key: k4) == nil)
 		#expect(try readViaRawTX(core, key: k5) == nil)
 		#expect(try readViaRawTX(core, key: k6) == nil)
-	}
-
-	@Test func explicitTxHelperComposition() throws {
-		let core = try makeCore()
-		let key = TestKey(RAW_native: 41)
-		try core.writePrimaryViaHelper(key, TestValue(RAW_native: 222))
-		#expect(try readViaRawTX(core, key: key) == TestValue(RAW_native: 222))
 	}
 
 	@Test func readOnlyBoundaryReads() throws {

@@ -30,8 +30,12 @@ import SwiftParser
 //   - the enclosing type must have a stored `env` property of type `Environment`.
 //   - `.readWriteChild` requires a `parent: borrowing Transaction` parameter, which the
 //     expansion uses as the child's parent.
-//   - the name `tx` becomes usable inside the body to pass the boundary transaction to
-//     helper functions that take `tx: borrowing Transaction`.
+//   - the name `tx` exists for ONE composition purpose: passing as `parent:` to a
+//     `.readWriteChild` boundary. reusable write logic is a `.readWriteChild`
+//     boundary (its mode lives in its own attribute); reusable read logic is a
+//     `.readOnly` boundary. there is deliberately no plain-helper-with-`tx:`
+//     pattern: a helper that does DB work declares its mode as a boundary, not
+//     via a transaction parameter the caller must already know.
 //
 // the underlying C wrapper layer is untouched: the expansion only adds ownership of an
 // `Environment` transaction and forwards calls through the existing public protocol API.
