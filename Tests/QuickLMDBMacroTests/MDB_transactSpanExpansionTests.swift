@@ -239,6 +239,60 @@ struct MDB_transactSpanExpansionTests {
 		)
 	}
 
+	@Test func statsDoesNotForceWriteModeOnFetchOnlyCore() {
+		// #stats is a metadata READ: a core touched only by #stats + #load must
+		// infer readOnly (closes without commit), while a #store core stays write
+		assertSpanExpansion(
+			"""
+			@MDB_app
+			struct HybridApp {
+			    var calendar: CalendarCore
+			    var contacts: ContactCore
+			    @MDB_transact_span
+			    func report(_ day: DayKey) throws -> Int {
+			        _ = #load(calendar.events, key: day)
+			        _ = #stats(calendar.events)
+			        try #store(contacts.lastSync, key: ContactID(), value: Timestamp())
+			        return 0
+			    }
+			}
+			""",
+			expected: """
+
+			struct HybridApp {
+			    var calendar: CalendarCore
+			    var contacts: ContactCore
+			    func report(_ day: DayKey) throws -> Int {
+			        let tx_calendar = try Transaction(env: self.calendar.env, readOnly: true)
+			        let tx_contacts = try Transaction(env: self.contacts.env, readOnly: false)
+			        func __mdb_body(_ day: DayKey, _ tx_calendar: borrowing Transaction, _ tx_contacts: borrowing Transaction) throws -> Int {
+			            _ = calendar.events.load(key: day, tx: tx_calendar)
+			            _ = calendar.events.dbStatistics(tx: tx_calendar)
+			            try contacts.lastSync.store(key: ContactID(), value: Timestamp(), tx: tx_contacts)
+			            return 0
+			        }
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try __mdb_body(day, tx_calendar, tx_contacts)
+			        } catch let error {
+			            tx_calendar.abort()
+			            tx_contacts.abort()
+			            throw error
+			        }
+			        tx_calendar.abort()
+			        try tx_contacts.commit()
+			        return __mdb_output
+			    }
+
+			    public static let mdb_environment_property_names: [String] = ["calendar", "contacts"]
+			}
+
+			extension HybridApp: MDB_environment_container {
+			}
+			"""
+		)
+	}
+
 	@Test func missingMDBAppIsDiagnosed() {
 		// the same body WITHOUT @MDB_app on the container — the span gate fires.
 		assertSpanExpansion(

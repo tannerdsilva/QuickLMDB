@@ -111,7 +111,8 @@ internal struct MDB_transact_span_macro:BodyMacro {
 	}
 
 	private static func isWriteVerb(_ verb:String) -> Bool {
-		return verb == "store" || verb == "delete" || verb == "clear"
+		// #drop (deleteDatabase) is destructive even though it does not write rows
+		return verb == "store" || verb == "delete" || verb == "clear" || verb == "drop"
 	}
 
 	// - MARK: the enclosing @MDB_app container

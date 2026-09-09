@@ -144,6 +144,20 @@ public macro cursor(_ db: Any, _ body: (Any) -> Any) = #externalMacro(module:"Qu
 @freestanding(expression)
 public macro clear(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
 
+/// returns the statistics for `db` as an `MDB_stat` (a read — never marks a
+/// span member write). only meaningful inside a transaction boundary; used
+/// elsewhere this is a compile-time error.
+@freestanding(expression)
+public macro stats(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// deletes `db` and all of its contents from the environment. `deleteDatabase`
+/// CONSUMES the handle, so the receiver must be a handle the body owns (a local
+/// raw `Database`, not a stored `self.X` table) and cannot be used afterwards.
+/// only meaningful inside a transaction boundary; used elsewhere this is a
+/// compile-time error.
+@freestanding(expression)
+public macro drop(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
 /// marks a struct as an environment CONTAINER: its stored `@MDB_environment` cores
 /// become the environment inventory that ``MDB_transact_span(_:)`` routes to.
 /// generates the `MDB_environment_container` conformance plus the

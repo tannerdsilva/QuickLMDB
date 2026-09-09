@@ -15,7 +15,7 @@ import SwiftParser
 enum MDB_verbLowering {
 
 	/// the closed set of freestanding verb macros the rewriter lowers.
-	static let names:Set<String> = ["store", "load", "delete", "contains", "cursor", "clear"]
+	static let names:Set<String> = ["store", "load", "delete", "contains", "cursor", "clear", "stats", "drop"]
 
 	/// maps a verb's receiver BASE identifier to the transaction expression that
 	/// should thread it. stateless by contract (the route closures only pattern
@@ -109,6 +109,15 @@ enum MDB_verbLowering {
 
 			case "clear":
 				return ExprSyntax(stringLiteral:"\(receiver).deleteAllEntries(tx: \(tx))")
+
+			case "stats":
+				// dbStatistics is a READ (metadata) — never marks a span member write
+				return ExprSyntax(stringLiteral:"\(receiver).dbStatistics(tx: \(tx))")
+
+			case "drop":
+				// deleteDatabase CONSUMES the handle — the receiver must be a handle the
+				// body owns (a local raw Database, not a stored `self.X` table)
+				return ExprSyntax(stringLiteral:"\(receiver).deleteDatabase(tx: \(tx))")
 
 			default:
 				return nil

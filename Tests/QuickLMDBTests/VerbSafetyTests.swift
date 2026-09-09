@@ -68,6 +68,32 @@ struct VerbSafetyTests {
 		let cleared = try core.clearWorkflow(key, dups)
 		#expect(cleared == true, "#contains must report false after #clear")
 	}
+
+	@Test func statsVerbReportsEntryCount() throws {
+		// #stats lowers to dbStatistics(tx:) and reports the live entry count
+		let core = try makeCore()
+		let entries = (1...5).map { TestKey(RAW_native: UInt32($0 + 200)) }
+		let count = try core.statsWorkflow(entries)
+		#expect(count == 5, "dbStatistics.ms_entries must report all five stored entries")
+	}
+
+	@Test func dropVerbRemovesTheDatabase() throws {
+		// #drop consumes a locally-owned raw handle; after commit the named table
+		// must be gone from the environment (reopening without .create fails)
+		let core = try makeCore()
+		let name = "dropme-\(UUID().uuidString)"
+		try core.dropWorkflow(name)
+
+		let tx = try Transaction(env: core.env, readOnly: true)
+		do {
+			_ = try Database(env: core.env, name: name, flags: [], tx: tx)
+			Issue.record("expected the dropped database to be gone from the environment")
+		} catch let error {
+			// Database(env:flags:tx:) throws LMDBError (typed throws)
+			#expect(error.returnCode == LMDBError.notFound.returnCode, "the drop must remove the named dbi (open without .create → notFound)")
+		}
+		tx.abort()
+	}
 }
 
 // the boundary bodies, on TestCore. the regression case proves the marker gate:
@@ -125,5 +151,23 @@ extension TestCore {
 		}
 		try #clear(secondary)
 		return (try #contains(secondary, key: key)) == false
+	}
+
+	// #stats lowers to dbStatistics(tx:) — a metadata READ through the boundary.
+	@MDB_transact(.readWrite)
+	public func statsWorkflow(_ entries: [TestKey]) throws -> Int {
+		for entry in entries {
+			try #store(primary, key: entry, value: TestValue(RAW_native: 1))
+		}
+		return Int(try #stats(primary).ms_entries)
+	}
+
+	// #drop lowers to deleteDatabase(tx:) — the receiver must be a handle the body
+	// owns (deleteDatabase CONSUMES it), so a local raw Database opened inside the
+	// boundary is dropped; a stored `self.X` table would not compile.
+	@MDB_transact(.readWrite)
+	public func dropWorkflow(_ name: String) throws {
+		let db = try Database(env: env, name: name, flags: [.create], tx: tx)
+		try #drop(db)
 	}
 }
