@@ -43,7 +43,19 @@ extension BookingCore {
   - `#stats(db)` reads `dbStatistics(tx:)` (metadata); `#drop(db)` runs `deleteDatabase(tx:)` — destructive and handle-consuming, so its receiver must be a locally-owned raw `Database`, never a stored `self.X` table.
   - Composition of reusable logic is BOUNDARIES, not tx-taking helpers: the injected `tx` exists for exactly one purpose — passing as `parent:` to a `.readWriteChild` boundary (write reuse, merges into the caller's view) or `.readOnly` sibling (read reuse). a helper that does DB work declares its mode in its own boundary attribute; there is no plain-helper-with-`tx:` pattern for it to leak mode through.
 
-- `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` — schema assembly: generates `static func open(at:mapHeadroom:)` which sizes the memory map, opens the environment, and opens every `Database.X` table in one setup write-transaction.
+- **`@MDB_environment(file:flags:maxReaders:maxDBs:mode:)`** — schema assembly: generates `static func open(at:mapHeadroom:)` which creates the directory as needed, sizes the memory map, opens the environment, and opens every `Database.X` table in one setup write-transaction.
+
+## Self-scoped committed reads
+
+For verification reads (tests, health checks) that just want "what is the last committed state", the typed handles carry self-scoped read members — each opens its own read-only transaction, performs the read, and closes it internally:
+
+```swift
+let v = try core.primary.readCommitted(key: key)          // -> Value? (nil when absent)
+let present = try core.primary.containsCommitted(key: key) // -> Bool
+let dups = try core.secondary.readCommittedDups(key: key)  // -> [Value] (dupsort)
+```
+
+these are NOT boundary verbs: a verb's contract is boundary participation, the opposite of a self-scoped verification read. they are protocol-extension members of `MDB_db`, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them with no manual `Transaction` ceremony.
 
 ## Cross-environment boundaries (spans)
 
@@ -67,7 +79,7 @@ public struct HybridApp {
 }
 ```
 
-- `@MDB_app` marks the struct as an environment **container** (its stored `@MDB_environment` cores become the environment inventory) and is required on the span's containing type.
+- `@MDB_app` marks the struct as an environment **container** (its stored `@MDB_environment` cores become the environment inventory) and is required on the span's containing type. it also generates a container-level `open(at:mapHeadroom:)` that creates the base directory + one subdirectory per core and opens every core in one call — no per-env path plumbing.
 - The **bare form infers everything from the verbs**: environments = the receiver base names, modes = any write verb (`#store`/`#delete`/`#clear`) marks a core read-write (read-only access alone marks it read-only), commit order = first-touch order.
 - The **override form** forces modes/order explicitly: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])` — cores named by stored property as strings (a naked `.readWrite(calendar)` can't type-check: attribute arguments are evaluated on the type level).
 - Injected names are `tx_<core>` (e.g. `tx_calendar`): hand one to a `.readWriteChild(parent:)` boundary to merge into a member transaction with the span.

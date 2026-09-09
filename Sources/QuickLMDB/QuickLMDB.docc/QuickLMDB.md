@@ -119,7 +119,11 @@ The annotated method must be `throws` (the boundary can fail to open or commit) 
 
 ### ``QuickLMDB/MDB_environment(file:flags:maxReaders:maxDBs:mode:)`` — schema assembly
 
-Generates a `static func open(at:mapHeadroom:)` that sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported).
+Generates a `static func open(at:mapHeadroom:)` that creates the directory as needed, sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported).
+
+### Self-scoped committed reads
+
+Verification reads ("what is the last committed state") carry no transaction ceremony. ``QuickLMDB/MDB_db`` protocol-extension members `readCommitted(key:)`, `containsCommitted(key:)`, and (on dupsort databases) `readCommittedDups(key:)` each open their own read-only transaction, perform the read, and close it internally. they are deliberately NOT boundary verbs — a verb's contract is boundary participation, the opposite of a self-scoped verification read — so they are members, not macros.
 
 Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:flags:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
 
@@ -148,6 +152,7 @@ public struct HybridApp {
 ```
 
 - the **bare form infers everything from the verbs**: environments = the verb receivers' base names, modes = any write verb (`#store`/`#delete`/`#clear`) marks a core read-write (read-only access alone marks it read-only), commit order = first-touch order.
+- ``MDB_app(_:)`` also generates a container-level `open(at:mapHeadroom:)`: it creates the base directory and one subdirectory per core (named after the stored property), then opens every core through its own generated ``MDB_environment`` `open(at:)`. a container opens with one call and no per-env path plumbing.
 - the **override form** forces modes/order: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])` names cores by their stored property as strings (naked `.readWrite(calendar)` cannot type-check — attribute arguments are evaluated on the type level, outside instance scope).
 - injected names are `tx_<core>` (e.g. `tx_calendar`) — the composition contract for handing a routed member transaction to a ``QuickLMDB/MDB_transact(_:)`` `.readWriteChild(parent:)` boundary so it merges into the member and commits with the span.
 - the span requires `@MDB_app` on its containing type (gated at expansion).

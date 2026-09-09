@@ -56,7 +56,7 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 109 tests across 12
+- **Verification**: clean build at 0 warnings / 0 errors; 108 tests across 12
   suites green across ALL targets — runtime tests against real LMDB
   environments (atomicity, rollback, read-only enforcement, child
   commit-into-parent, child abort leaves parent usable, child sees parent's
@@ -389,6 +389,22 @@ the type level, outside instance scope). injected names are `tx_<core>`, the
 composition contract for handing a routed member transaction to a
 `.readWriteChild(parent:)` boundary. the same marker-gated verb lowering as
 single-env: only verbs are rewritten.
+
+`@MDB_app` also generates a container-level `open(at:mapHeadroom:)`: it creates
+the base directory plus one subdirectory per core (Foundation-free through
+`_MDBEnvironmentSupport`), opens every core via that core's own generated
+`open(at:)`, and assembles `Self` — a container opens with one call and zero
+per-env path plumbing. `@MDB_environment`'s generated `open(at:)` likewise now
+creates its base directory (the old "must pre-exist" contract was ceremony).
+
+**Verification reads are self-scoped members, NOT verbs**: `readCommitted(key:)`,
+`containsCommitted(key:)`, and (dupsort) `readCommittedDups(key:)` on `MDB_db`.
+each opens its own read-only transaction, performs the read, and closes it. a
+verb's contract is boundary participation — the opposite of a self-scoped
+verification read — which is why these are protocol-extension members, not
+macros. the suite-level `readViaRawTX`/`loadEntryDirect`/`*ViaRaw` helpers
+(open txn → read → abort by hand) were rooted out; ~40 call sites across the
+suites now call the committed-read members directly.
 
 **Honest ceiling (kept in the docs):** cross-environment commits are
 BEST-EFFORT. the span opens all members up front, so a body throw aborts all of
