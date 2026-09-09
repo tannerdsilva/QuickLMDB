@@ -124,3 +124,32 @@ Generates a `static func open(at:mapHeadroom:)` that sizes the memory map as cur
 Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:flags:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
 
 The typed-handle companions the verbs lower to (`load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)`, plus the dupsort pair `delete(key:value:tx:)`) are protocol-extension members of ``QuickLMDB/MDB_db``, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them. the raw ``QuickLMDB/MDB_val`` tier keeps `loadEntry(key:as:tx:)` for value-raw call sites.
+
+### ``QuickLMDB/MDB_app(_:)`` + ``QuickLMDB/MDB_transact_span(_:)`` — cross-environment boundaries
+
+Apps that own MORE than one ``QuickLMDB/Environment`` can coordinate all of them behind one method. ``MDB_app(_:)`` marks the struct as an environment **container** (its stored ``MDB_environment`` cores become the routing inventory), and ``MDB_transact_span(_:)`` opens ONE top-level transaction per core up front, aborts ALL of them on any body throw, and commits the write members back-to-back in first-touch/declaration order on success (read members simply close).
+
+```swift
+@MDB_app
+public struct HybridApp {
+    public var calendar: CalendarCore
+    public var contacts: ContactCore
+
+    @MDB_transact_span
+    public func scheduleMeeting(_ event: EventID, on day: DayKey,
+                                invitees: [ContactID], at timestamp: Timestamp) throws {
+        try #store(calendar.events, key: day, value: event)
+        for invitee in invitees {
+            try #store(calendar.invitees, key: event, value: invitee)
+            try #store(contacts.lastSync, key: invitee, value: timestamp)
+        }
+    }
+}
+```
+
+- the **bare form infers everything from the verbs**: environments = the verb receivers' base names, modes = any write verb (`#store`/`#delete`/`#clear`) marks a core read-write (read-only access alone marks it read-only), commit order = first-touch order.
+- the **override form** forces modes/order: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])` names cores by their stored property as strings (naked `.readWrite(calendar)` cannot type-check — attribute arguments are evaluated on the type level, outside instance scope).
+- injected names are `tx_<core>` (e.g. `tx_calendar`) — the composition contract for handing a routed member transaction to a ``QuickLMDB/MDB_transact(_:)`` `.readWriteChild(parent:)` boundary so it merges into the member and commits with the span.
+- the span requires `@MDB_app` on its containing type (gated at expansion).
+
+**Honest ceiling:** cross-environment commits are best-effort. opening all members up front means a body throw aborts ALL of them (nothing lands), but a crash between the two adjacent commit calls can still split the pair. cross-env atomicity is impossible — the span narrows the window to the commit pair itself, it does not fake atomicity. reader-side consistency across the pair (never straddling the commit window) is a separate post-v1 primitive.

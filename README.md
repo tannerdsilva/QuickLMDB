@@ -44,7 +44,35 @@ extension BookingCore {
 
 - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` — schema assembly: generates `static func open(at:mapHeadroom:)` which sizes the memory map, opens the environment, and opens every `Database.X` table in one setup write-transaction.
 
-Both macros expand to plain calls through the existing public API (`Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:flags:tx:)`, `cursor(tx:_:)`). The raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. The C wrapper layer itself (CLMDB) is untouched.
+## Cross-environment boundaries (spans)
+
+For apps that own MORE than one environment, `@MDB_app` + `@MDB_transact_span` coordinate all of them behind one method — one top-level transaction per core, all opened up front, ALL aborted on any body throw, and the write members committed back-to-back in first-touch order (read members simply close):
+
+```swift
+@MDB_app
+public struct HybridApp {
+    public var calendar: CalendarCore
+    public var contacts: ContactCore
+
+    @MDB_transact_span
+    public func scheduleMeeting(_ event: EventID, on day: DayKey,
+                                invitees: [ContactID], at timestamp: Timestamp) throws {
+        try #store(calendar.events, key: day, value: event)
+        for invitee in invitees {
+            try #store(calendar.invitees, key: event, value: invitee)
+            try #store(contacts.lastSync, key: invitee, value: timestamp)
+        }
+    }
+}
+```
+
+- `@MDB_app` marks the struct as an environment **container** (its stored `@MDB_environment` cores become the environment inventory) and is required on the span's containing type.
+- The **bare form infers everything from the verbs**: environments = the receiver base names, modes = any write verb (`#store`/`#delete`/`#clear`) marks a core read-write (read-only access alone marks it read-only), commit order = first-touch order.
+- The **override form** forces modes/order explicitly: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])` — cores named by stored property as strings (a naked `.readWrite(calendar)` can't type-check: attribute arguments are evaluated on the type level).
+- Injected names are `tx_<core>` (e.g. `tx_calendar`): hand one to a `.readWriteChild(parent:)` boundary to merge into a member transaction with the span.
+- **Honest ceiling:** cross-environment commits are best-effort — the span aborts ALL members on a body throw (nothing lands), but a crash between the two adjacent commit calls can still split the pair. cross-env atomicity is impossible.
+
+All four macros expand to plain calls through the existing public API (`Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:flags:tx:)`, `cursor(tx:_:)`). The raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. The C wrapper layer itself (CLMDB) is untouched.
 
 ## Transaction relationships
 

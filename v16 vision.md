@@ -54,19 +54,21 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 99 tests across 11
+- **Verification**: clean build at 0 warnings / 0 errors; 106 tests across 12
   suites green across ALL targets — runtime tests against real LMDB
   environments (atomicity, rollback, read-only enforcement, child
   commit-into-parent, child abort leaves parent usable, child sees parent's
   uncommitted writes, helper composition, cursor injection, bare dispatch
   threads), 6 strict expansion fixtures
   freezing the body-macro output (including verb lowering in all three modes
-  and a user-`setEntry`-untouched marker-gate fixture), a 6-test
+  and a user-`setEntry`-untouched marker-gate fixture), 5 span expansion
+  fixtures (bare/mixed/override/child-pass-through/requires-MDB_app), a 6-test
   transaction-relationship suite pinning engine defaults, the MDB_db (12) and
   MDB_cursor (10) protocol-extension bridge suites driven through RAW
   Database/Cursor handles, typed-companion (6), verb marker-gating safety (4),
-  and a usage-pattern demo suite, plus functional-interop tests driven by raw
-  CLMDB (no QuickLMDB types involved).
+  and a usage-pattern + cross-environment hybrid demo suite (span
+  all-or-nothing abort, isolated two-step contrast, explicit-override span),
+  plus functional-interop tests driven by raw CLMDB (no QuickLMDB types involved).
 - **Modes**: `.readWrite` (commit once, abort exactly once on error),
   `.readOnly` (never commits, aborts on exit), `.readWriteChild` (requires a
   `parent: borrowing Transaction` parameter; child merges on commit, aborts
@@ -350,21 +352,73 @@ Remaining from the verb milestone: phase-2/3 verbs (`#stats`, `#drop`), and
 the expansion polish items below. the SPI/consumer canaries and DocC symbol
 coverage remain on the backlog.
 
+## SHIPPED (16.1.0): cross-environment span boundaries
+
+The designed follow-on is shipped: `@MDB_app` marks a container of
+`@MDB_environment` cores, and `@MDB_transact_span` coordinates them with one
+top-level transaction per core — all opened up front (full staging overlap),
+ALL aborted on body throw, write members committed back-to-back in
+first-touch/declaration order, read members just closed.
+
+```swift
+@MDB_app
+public struct HybridApp {
+    public var calendar: CalendarCore
+    public var contacts: ContactCore
+
+    @MDB_transact_span
+    public func scheduleMeeting(_ event: EventID, on day: DayKey,
+                                invitees: [ContactID], at timestamp: Timestamp) throws {
+        try #store(calendar.events, key: day, value: event)
+        for invitee in invitees {
+            try #store(calendar.invitees, key: event, value: invitee)
+            try #store(contacts.lastSync, key: invitee, value: timestamp)
+        }
+    }
+}
+```
+
+The bare form infers envs/modes/order from the body's own verbs (receiver base
+names; any write verb marks readWrite; first-touch order). an explicit override
+(`@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])`) forces
+modes/order — named by STORED PROPERTY as a string, because naked
+`.readWrite(calendar)` cannot type-check (attribute arguments are evaluated on
+the type level, outside instance scope). injected names are `tx_<core>`, the
+composition contract for handing a routed member transaction to a
+`.readWriteChild(parent:)` boundary. the same marker-gated verb lowering as
+single-env: only verbs are rewritten.
+
+**Honest ceiling (kept in the docs):** cross-environment commits are
+BEST-EFFORT. the span opens all members up front, so a body throw aborts all of
+them (a calendar write is rolled back with the failed contacts write — pinned
+by `bodyThrowAbortsAllSpanMembers`); the residual, unavoidable window is only
+the two adjacent commit calls at the end — a crash between them can still split
+the pair. cross-env atomicity is impossible.
+
+**toolchain findings recorded in code:**
+- a body macro's `lexicalContext` exposes the enclosing type's NAME + ATTRIBUTES
+  but NOT its stored members (empty member shell verified; `declaration.parent`
+  stops at the function decl). the span gates on the `@MDB_app` ATTRIBUTE
+  (visible) and lets the compiler validate core names at the generated
+  `self.<name>.env` splice. the `@MDB_app`-generated inventory is the public
+  surface, not the span's scan input.
+- expansion fixtures seed `BasicMacroExpansionContext(lexicalContext:)` by
+  walking the node's parent chain (in-process trees allow it; the compiler
+  provides it for the runtime path).
+
 ## Backlog / next candidates
 
 - **SHIPPED in 16.1.0 — the operation-verb macro vocabulary** (see the SHIPPED
   section above). Remaining phase-2/3 verbs: `#stats` (dbStatistics) and
   `#drop` (deleteDatabase).
-- **THE DESIGNED FOLLOW-ON — `@MDB_transact_span`**: the cross-environment
-  spanning boundary (see `.hermes/plans/2026-09-08_143157-span-boundary-macro.md`):
-  one app method coordinating K environments, verbs routed by receiver base
-  name, all members abort on body throw, commit-pair in declared order. builds
-  directly on the verb-lowering machinery just shipped.
-- **`@MDB_app` container macro** (span's companion): environment inventory
-  (property name → core) for span routing + diagnostics.
+- **SHIPPED — `@MDB_transact_span` + `@MDB_app`** (the cross-environment
+  spanning boundary; see `.hermes/plans/2026-09-08_143157-span-boundary-macro.md`).
+  extracted into its own section below.
+- Remaining from the span milestone: `#cursor`-with-delete inside a readOnly
+  member needs the explicit override to `.readWrite` (runtime `EACCES` otherwise);
+  span-under-single-env (child members, v2) and the cross-env reader-writer gate
+  remain post-v1.
 - Expansion polish (the `cursor ( tx:)` spacing; parameter trivia).
-- Cross-env diagnostic for the span try to catch (`#store(calendar.events …)`
-  with a stray `tx:` from another environment).
 - `.readOnly` write lint (macro-level body scan).
 - DocC for the two macros and the transaction-boundary article (docc catalog
   currently carries a prose section; symbol docs for the macros pending).

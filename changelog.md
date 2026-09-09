@@ -5,7 +5,8 @@
   - the pair form `#contains(db, key:, value:)` lowers to the cursor's real `MDB_GET_BOTH` path (a database-level pair check is a silent no-op by key).
   - `#load(db, key:, as:)` remains for raw `MDB_val` handles; typed handles need no `as:`.
 - Added typed-handle companions the verbs lower to: `load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)` on `MDB_db` (one copy inherited by every handle), plus the dupsort pair `delete(key:value:tx:)` on `MDB_db_dupsort`.
-- Updated docs: the transaction-boundary README + DocC sections now describe the verb contract; examples migrated to verbs.
+- **Cross-environment span boundaries: `@MDB_app` + `@MDB_transact_span`.** `@MDB_app` marks a struct as an environment container (its stored `@MDB_environment` cores become the routing inventory). `@MDB_transact_span` coordinates ALL of them behind one method: one top-level transaction per core, opened up front; a body throw aborts ALL of them (nothing lands — impossible with two isolated boundaries, the prior shape); write members commit back-to-back in first-touch/declaration order, read members close. bare form infers environments/modes/order from the body's verb calls; the override form (`@MDB_transact_span([.readWrite("calendar")])`) forces them explicitly. honest ceiling (documented): cross-environment commits remain best-effort — a crash between the adjacent commit calls can still split the pair; cross-env atomicity is impossible.
+- Updated docs: the transaction-boundary README + DocC sections now describe the verb contract and the span boundary; examples migrated to verbs/spans.
 
 # 16.0.0
 
