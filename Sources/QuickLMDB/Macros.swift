@@ -154,11 +154,15 @@ public macro MDB_app() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_app_
 
 /// per-core mode override for ``MDB_transact_span(_:)``. only used when the bare
 /// inference forms are not what you want — forcing a mode or pinning commit order.
+///
+/// the core is named by its STORED PROPERTY name as a string: `.readWrite("calendar")`.
+/// (a naked `.readWrite(calendar)` cannot type-check: attribute arguments are
+/// evaluated on the type level, where instance stored properties are not in scope.)
 public enum MDB_span_member {
 	/// this environment core participates as a read/write member (commits with the span).
-	case readWrite(any MDB_environment)
+	case readWrite(String)
 	/// this environment core participates as a read-only member (never commits; aborts on close).
-	case readOnly(any MDB_environment)
+	case readOnly(String)
 }
 
 /// makes the annotated method a transaction boundary across MULTIPLE `@MDB_environment`
@@ -173,8 +177,10 @@ public enum MDB_span_member {
 /// names are the cores; any write verb (`#store`/`#delete`/`#clear`) marks a core
 /// read-write; read-only access alone marks it read-only.
 ///
-/// OVERRIDE form: `@MDB_transact_span([.readWrite(calendar), .readOnly(contacts)])`
-/// forces modes and order explicitly.
+/// OVERRIDE form: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])`
+/// forces modes and order explicitly. cores are named by their stored property
+/// names as strings (naked `.readWrite(calendar)` cannot type-check — attribute
+/// arguments are evaluated on the type level, outside instance scope).
 ///
 /// injected names are `tx_<core>` (e.g. `tx_calendar`) — the documented composition
 /// contract for handing a routed member transaction to a `.readWriteChild(parent:)`

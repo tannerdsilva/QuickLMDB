@@ -25,7 +25,7 @@ import SwiftParser
 //           ...
 //       }
 //
-//       @MDB_transact_span([.readWrite(calendar)])   // override: force modes/order
+//       @MDB_transact_span([.readWrite("calendar")])   // override: force modes/order
 //       public func forceMode(...) throws { ... }
 //   }
 //
@@ -138,7 +138,7 @@ internal struct MDB_transact_span_macro:BodyMacro {
 
 	// - MARK: override parsing
 
-	/// parses `@MDB_transact_span([.readWrite(calendar), .readOnly(contacts)])`
+	/// parses `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])`
 	private static func parseOverride(_ node:AttributeSyntax) throws -> [Member]? {
 		guard let argList = node.arguments?.as(LabeledExprListSyntax.self), let first = argList.first else {
 			return nil   // bare form
@@ -149,15 +149,22 @@ internal struct MDB_transact_span_macro:BodyMacro {
 		var members:[Member] = []
 		for element in array.elements {
 			guard let call = element.expression.as(FunctionCallExprSyntax.self),
-				  let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
-				  let modeArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self) else {
+				  let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) else {
+				throw MacroError.invalidMember(element.expression.trimmedDescription)
+			}
+			// the core is named by its stored property name as a string literal
+			guard let nameArg = call.arguments.first?.expression.as(StringLiteralExprSyntax.self) else {
 				throw MacroError.invalidMember(element.expression.trimmedDescription)
 			}
 			let modeName = memberAccess.declName.baseName.text
 			guard modeName == "readWrite" || modeName == "readOnly" else {
 				throw MacroError.invalidMember(element.expression.trimmedDescription)
 			}
-			members.append(Member(name:modeArg.baseName.text, isWrite:modeName == "readWrite"))
+			let name = nameArg.segments.first?.as(StringSegmentSyntax.self)?.content.text ?? ""
+			guard name.isEmpty == false else {
+				throw MacroError.invalidMember(element.expression.trimmedDescription)
+			}
+			members.append(Member(name:name, isWrite:modeName == "readWrite"))
 		}
 		return members
 	}

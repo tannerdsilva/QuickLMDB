@@ -16,7 +16,8 @@ import SwiftSyntaxMacrosGenericTestSupport
 private func assertSpanExpansion(_ source: String, expected expanded: String, diagnostics expectedDiags: [String]? = nil) {
 	var contexts: [BasicMacroExpansionContext] = []
 	let file = Parser.parse(source: source)
-	guard let expandedFile = try? file.expand(macros: [
+	// the contextGenerator form returns plain Syntax (never fails)
+	let expandedFile = file.expand(macros: [
 		"MDB_app": MDB_app_macro.self,
 		"MDB_transact_span": MDB_transact_span_macro.self
 	], contextGenerator: { node in
@@ -32,10 +33,7 @@ private func assertSpanExpansion(_ source: String, expected expanded: String, di
 		let ctx = BasicMacroExpansionContext(lexicalContext: enclosingStruct.map { [Syntax($0)] } ?? [])
 		contexts.append(ctx)
 		return ctx
-	}) else {
-		Issue.record("failed to expand the span fixture")
-		return
-	}
+	})
 	#expect(String(describing: expandedFile) == expanded, Comment(stringLiteral: "span expansion mismatch: \(String(describing: expandedFile))"))
 	guard let expectedDiags else { return }
 	var actualDiags: [String] = []
@@ -155,7 +153,7 @@ struct MDB_transactSpanExpansionTests {
 			struct HybridApp {
 			    var calendar: CalendarCore
 			    var contacts: ContactCore
-			    @MDB_transact_span([.readOnly(calendar), .readWrite(contacts)])
+			    @MDB_transact_span([.readOnly("calendar"), .readWrite("contacts")])
 			    func pinned(_ day: DayKey) throws {
 			        _ = #load(calendar.events, key: day)
 			        try #store(contacts.lastSync, key: ContactID(), value: Timestamp())

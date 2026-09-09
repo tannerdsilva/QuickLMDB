@@ -289,6 +289,18 @@ public struct HybridApp {
 		return (event, synced)
 	}
 
+	// 17b. explicit-override span: same logical op, but the member list is forced —
+	//      calendar pinned readWrite, contacts pinned readWrite (override form).
+	//      reaches identical durable state to the bare-inferred version (15).
+	@MDB_transact_span([.readWrite("calendar"), .readWrite("contacts")])
+	public func scheduleMeetingPinned(_ event: EventID, on day: DayKey, invitees: [ContactID], at timestamp: Timestamp) throws {
+		try #store(calendar.events, key: day, value: event)
+		for invitee in invitees {
+			try #store(calendar.invitees, key: event, value: invitee)
+			try #store(contacts.lastSync, key: invitee, value: timestamp)
+		}
+	}
+
 	// 17. spanning failure is BEST-EFFORT but all-abort: the span opens BOTH member
 	//     transactions up front, so a throw in the contacts write aborts BOTH — the
 	//     calendar write is rolled back with it. the residual, unavoidable window is
@@ -566,6 +578,22 @@ struct HybridAppDemo {
 		#expect(try readEventViaRaw(app, day: day) == event, "the isolated calendar boundary already committed and survives")
 		#expect(try readInviteesViaRaw(app, event: event) == invitees)
 		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == nil, "the isolated contacts boundary aborted — nothing landed")
+	}
+
+	@Test func explicitOverrideReachesSameState() throws {
+		// the forced-member-list span must leave identical durable state to the
+		// bare-inferred span (both are calendar+contacts readWrite, same order).
+		let app = try makeApp()
+		let day = DayKey(RAW_native: 15)
+		let event = EventID(RAW_native: 1500)
+		let invitees = [ContactID(RAW_native: 5), ContactID(RAW_native: 6)]
+		let when = Timestamp(RAW_native: 9_000)
+
+		try app.scheduleMeetingPinned(event, on: day, invitees: invitees, at: when)
+		#expect(try readEventViaRaw(app, day: day) == event)
+		#expect(try readInviteesViaRaw(app, event: event) == invitees)
+		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 5)) == when)
+		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 6)) == when)
 	}
 
 	@Test func manualTwoTransactionContrastReachesSameState() throws {
