@@ -30,7 +30,14 @@ import SwiftParser
 // contract: the struct's stored properties must be exactly `env` plus `Database.X` tables.
 // plain `Database` (raw MDB_val) tables are supported.
 
-internal struct MDB_environment_macro:MemberMacro {
+internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
+
+	// marks every @MDB_environment struct as an environment core for @MDB_app containers
+	static func expansion(of node: SwiftSyntax.AttributeSyntax, attachedTo declaration: some SwiftSyntax.DeclGroupSyntax, providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.ExtensionDeclSyntax] {
+		return [try ExtensionDeclSyntax("""
+			extension \(type):MDB_environment {}
+			""")]
+	}
 
 	private enum MacroError:Swift.Error, CustomStringConvertible {
 		case notAStruct

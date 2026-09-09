@@ -73,10 +73,9 @@ internal struct MDB_transact_macro: BodyMacro {
 		}
 	}
 
-	/// names of the freestanding verb macros the boundary lowers. the rewriter matches
-	/// ONLY these `MacroExpansionExprSyntax` names — everything else in the body is
-	/// emitted byte-identical (marker-gated attribution; no callee-name lists).
-	private static let verbNames:Set<String> = ["store", "load", "delete", "contains", "cursor", "clear"]
+	/// the single-env route: every verb threads the boundary's one injected `tx`.
+	/// (the span boundary uses a per-core route instead — see MDB_transact_span.)
+	private static let singleEnvRoute: MDB_verbLowering.Route = { _ in "tx" }
 
 	// - MARK: mode parsing
 
@@ -98,86 +97,6 @@ internal struct MDB_transact_macro: BodyMacro {
 			case "readOnly": return .readOnly
 			case "readWriteChild": return .readWriteChild
 			default: throw MacroError.invalidMode(member.declName.baseName.text)
-		}
-	}
-
-	// - MARK: verb lowering
-
-	/// lowers a single verb call to the tx-bearing operation form, using the typed
-	/// companions (`store`/`load`/`delete`/`contains`) or the existing cursor /
-	/// deleteAllEntries members. returns nil when the call shape is unrecognized
-	/// (the node is then left as-is; the standalone verb expansion diagnoses it).
-	private static func lowerVerb(_ node:MacroExpansionExprSyntax) -> ExprSyntax? {
-		// the first argument is the handle (no label); key/value/flags/as are labeled
-		guard let firstArg = node.arguments.first, firstArg.label == nil else { return nil }
-		let db = firstArg.expression.trimmedDescription
-		var labeled:[String:String] = [:]
-		for arg in node.arguments.dropFirst() {
-			if let label = arg.label?.text {
-				labeled[label] = arg.expression.trimmedDescription
-			}
-		}
-		let get = { (label:String) -> String? in labeled[label] }
-
-		switch node.macroName.text {
-			case "store":
-				guard let key = get("key"), let value = get("value") else { return nil }
-				var parts = ["key: \(key)", "value: \(value)"]
-				if let flags = get("flags") { parts.append("flags: \(flags)") }
-				parts.append("tx: tx")
-				return ExprSyntax(stringLiteral:"\(db).store(\(parts.joined(separator:", ")))")
-
-			case "load":
-				if let asType = get("as") {
-					guard let key = get("key") else { return nil }
-					return ExprSyntax(stringLiteral:"\(db).loadEntry(key: \(key), as: \(asType), tx: tx)")
-				}
-				guard let key = get("key") else { return nil }
-				return ExprSyntax(stringLiteral:"\(db).load(key: \(key), tx: tx)")
-
-			case "delete":
-				if let value = get("value") {
-					guard let key = get("key") else { return nil }
-					return ExprSyntax(stringLiteral:"\(db).delete(key: \(key), value: \(value), tx: tx)")
-				}
-				guard let key = get("key") else { return nil }
-				return ExprSyntax(stringLiteral:"\(db).delete(key: \(key), tx: tx)")
-
-			case "contains":
-				guard let key = get("key") else { return nil }
-				if let value = get("value") {
-					// the pair check is CURSOR-only (real MDB_GET_BOTH). a DB-level pair
-					// contains would answer true for any existing key (silent no-op).
-					return ExprSyntax(stringLiteral:"\(db).cursor(tx: tx) { try $0.containsEntry(key: \(key), value: \(value)) }")
-				}
-				return ExprSyntax(stringLiteral:"\(db).contains(key: \(key), tx: tx)")
-
-			case "cursor":
-				// only the trailing-closure form is supported (the documented contract)
-				guard let closure = node.trailingClosure else { return nil }
-				return ExprSyntax(stringLiteral:"\(db).cursor(tx: tx) \(closure.trimmedDescription)")
-
-			case "clear":
-				return ExprSyntax(stringLiteral:"\(db).deleteAllEntries(tx: tx)")
-
-			default:
-				return nil
-		}
-	}
-
-	private final class VerbLoweringRewriter:SyntaxRewriter {
-		override func visit(_ node:MacroExpansionExprSyntax) -> ExprSyntax {
-			// NESTED VERBS CONSUME INNER-FIRST: visit children before folding this node,
-			// so an inner verb inside an outer verb's arguments/closures is already
-			// lowered before the outer rewrites (an un-lowered inner would hit the
-			// standalone diagnostic on the next expansion pass).
-			let processed = super.visit(node)
-			let expansion = processed.cast(MacroExpansionExprSyntax.self)
-			// marker gate: only a freestanding verb in the closed set is touched
-			guard MDB_transact_macro.verbNames.contains(expansion.macroName.text) else {
-				return ExprSyntax(expansion)
-			}
-			return MDB_transact_macro.lowerVerb(expansion) ?? ExprSyntax(expansion)
 		}
 	}
 
@@ -244,7 +163,7 @@ internal struct MDB_transact_macro: BodyMacro {
 		let bodyCall = "__mdb_body(\(bodyCallArgs.joined(separator:", ")))"
 
 		// -- transform the original body: lower verb calls to tx-bearing form
-		let rewriter = VerbLoweringRewriter()
+		let rewriter = MDB_verbLowering.Rewriter(route:singleEnvRoute)
 		let originalStatements = fn.body?.statements ?? CodeBlockItemListSyntax([])
 		let transformedItems = rewriter.visit(originalStatements)
 		let bodyText = transformedItems.map { $0.trimmedDescription }.joined(separator:"\n")

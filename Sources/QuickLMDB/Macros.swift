@@ -48,7 +48,9 @@ public macro MDB_transact(_ mode:MDB_transact_mode) = #externalMacro(module:"Qui
 
 /// schema assembly for an environment struct: generates a `static func open(at:mapHeadroom:)`
 /// that sizes the memory map, opens the environment, and opens every `Database.X` table in
-/// one setup write-transaction (table names are derived from the property names).
+/// one setup write-transaction (table names are derived from the property names). the
+/// generated struct also conforms to ``MDB_environment`` (marking it as an environment core
+/// for ``MDB_app`` containers).
 ///
 /// - Parameters:
 ///   - file: the name of the environment file (appended to the base path).
@@ -62,6 +64,7 @@ public macro MDB_transact(_ mode:MDB_transact_mode) = #externalMacro(module:"Qui
 ///
 /// the struct must store exactly an `env: Environment` property plus `Database.X` tables.
 @attached(member, names: arbitrary)
+@attached(extension, conformances: MDB_environment)
 public macro MDB_environment(file: Swift.String, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
 
 @attached(member, names:			named(setEntry(key:value:flags:tx:)),
@@ -140,3 +143,42 @@ public macro cursor(_ db: Any, _ body: (Any) -> Any) = #externalMacro(module:"Qu
 /// boundary; used elsewhere this is a compile-time error.
 @freestanding(expression)
 public macro clear(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// marks a struct as an environment CONTAINER: its stored `@MDB_environment` cores
+/// become the environment inventory that ``MDB_transact_span(_:)`` routes to.
+/// generates the `MDB_environment_container` conformance plus the
+/// `mdb_environment_property_names` inventory from the stored properties.
+@attached(member, names: named(mdb_environment_property_names))
+@attached(extension, conformances: MDB_environment_container)
+public macro MDB_app() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_app_macro")
+
+/// per-core mode override for ``MDB_transact_span(_:)``. only used when the bare
+/// inference forms are not what you want — forcing a mode or pinning commit order.
+public enum MDB_span_member {
+	/// this environment core participates as a read/write member (commits with the span).
+	case readWrite(any MDB_environment)
+	/// this environment core participates as a read-only member (never commits; aborts on close).
+	case readOnly(any MDB_environment)
+}
+
+/// makes the annotated method a transaction boundary across MULTIPLE `@MDB_environment`
+/// cores (an `@MDB_app` container). one top-level transaction per participating core
+/// is opened up front; a thrown body aborts ALL of them; on success the write members
+/// commit back-to-back in first-touch (or declaration) order while read-only members
+/// just close. cross-environment commits are best-effort (LMDB commits are
+/// per-environment); the span narrows the window to the adjacent commit calls.
+///
+/// BARE form: `@MDB_transact_span` infers the participating cores, their modes, and
+/// their commit order from the freestanding verb calls in the body — receiver base
+/// names are the cores; any write verb (`#store`/`#delete`/`#clear`) marks a core
+/// read-write; read-only access alone marks it read-only.
+///
+/// OVERRIDE form: `@MDB_transact_span([.readWrite(calendar), .readOnly(contacts)])`
+/// forces modes and order explicitly.
+///
+/// injected names are `tx_<core>` (e.g. `tx_calendar`) — the documented composition
+/// contract for handing a routed member transaction to a `.readWriteChild(parent:)`
+/// boundary. same marker-gated verb lowering as ``MDB_transact(_:)``: only the
+/// freestanding verbs are rewritten; every other line is byte-identical.
+@attached(body)
+public macro MDB_transact_span(_ members: [MDB_span_member]? = nil) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_transact_span_macro")

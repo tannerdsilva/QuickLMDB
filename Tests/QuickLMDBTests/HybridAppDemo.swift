@@ -255,6 +255,10 @@ extension ContactCore {
 
 /// owns both apps; the spanning methods below read/write BOTH environments behind
 /// a single app-level call. no transaction plumbing appears in their signatures.
+/// `@MDB_app` marks this struct as an environment container (its stored cores are
+/// the routing inventory), and `@MDB_transact_span` boundaries coordinate a
+/// calendar transaction and a contacts transaction behind one app method.
+@MDB_app
 public struct HybridApp {
 	public let calendar: CalendarCore
 	public let contacts: ContactCore
@@ -264,35 +268,55 @@ public struct HybridApp {
 	}
 
 	// 15. spanning WRITE: one app method, two real transactions behind the seams —
-	//     a calendar write (+ its children) and a contacts write. the syntax looks
-	//     exactly like any other operation; the two boundaries are the implementation.
+	//     a calendar write and a contacts write, opened up front and committed
+	//     back-to-back. the syntax looks exactly like any other operation; the two
+	//     boundaries are the implementation.
+	@MDB_transact_span
 	public func scheduleMeeting(_ event: EventID, on day: DayKey, invitees: [ContactID], at timestamp: Timestamp) throws {
-		try calendar.bookWithInvitees(event, on: day, invitees: invitees)
-		try contacts.markSync(invitees, at: timestamp)
+		try #store(calendar.events, key: day, value: event)
+		for invitee in invitees {
+			try #store(calendar.invitees, key: event, value: invitee)
+			try #store(contacts.lastSync, key: invitee, value: timestamp)
+		}
 	}
 
-	// 16. spanning READ: three top-level reads (two calendar, one contacts) in one
-	//     app call; each is a separate transaction, none of them ever commits.
-	public func dayOverview(on day: DayKey, contact: ContactID) throws -> (event: EventID?, invitees: [ContactID], lastSync: Timestamp?) {
-		let event = try calendar.eventOn(day)
-		let invitees = try event.flatMap { try calendar.inviteesFor($0) } ?? []
-		let synced = try contacts.lastSyncFor(contact)
-		return (event, invitees, synced)
+	// 16. spanning READ: an all-read span — two read members, no commits. the sync
+	//     timestamp of a contact plus a calendar lookup in one app call.
+	@MDB_transact_span
+	public func dayOverview(on day: DayKey, contact: ContactID) throws -> (event: EventID?, lastSync: Timestamp?) {
+		let event = #load(calendar.events, key: day)
+		let synced = #load(contacts.lastSync, key: contact)
+		return (event, synced)
 	}
 
-	// 17. spanning is BEST-EFFORT, never atomic. there is no cross-environment commit:
-	//     the calendar write committed before the contacts write even started, so a
-	//     contacts failure leaves the calendar side durable. that is the true shape
-	//     of "one logical transaction across two environments" — two commit points.
+	// 17. spanning failure is BEST-EFFORT but all-abort: the span opens BOTH member
+	//     transactions up front, so a throw in the contacts write aborts BOTH — the
+	//     calendar write is rolled back with it. the residual, unavoidable window is
+	//     only the two adjacent commit calls at the very end (crash between them can
+	//     still split the pair — cross-environment atomicity is impossible).
+	@MDB_transact_span
+	public func scheduleMeetingAllOrNothing(_ event: EventID, on day: DayKey, invitees: [ContactID], at timestamp: Timestamp) throws {
+		try #store(calendar.events, key: day, value: event)
+		for invitee in invitees {
+			try #store(calendar.invitees, key: event, value: invitee)
+			try #store(contacts.lastSync, key: invitee, value: timestamp)
+		}
+		throw ContactError.syncFailed
+	}
+
+	// 18. manual, non-span variants used as the OLD two-step contrast: the two
+	//     boundaries are isolated, so a contacts failure leaves the calendar write
+	//     durable (the pre-span behavior the span removes). kept to prove the
+	//     upgrade and to assert the manual raw ceremony reaches the same state.
 	public func scheduleMeetingBestEffort(_ event: EventID, on day: DayKey, invitees: [ContactID], at timestamp: Timestamp) throws {
 		try calendar.bookWithInvitees(event, on: day, invitees: invitees)
 		try contacts.markSyncThrowing(invitees, at: timestamp)
 	}
 
-	// 18. the manual raw version of scheduleMeeting — the ceremony the boundary layer
-	//     removes: two explicit transactions, N explicit children, three commits,
-	//     two abort paths, and a mid-loop nested do/catch for every child. the
-	//     commit-after-catch shape is identical to what the body macro expands.
+	// the manual raw version of scheduleMeeting — the ceremony the boundary layer
+	// removes: two explicit transactions, N explicit children, three commits,
+	// two abort paths, and a mid-loop nested do/catch for every child. the
+	// commit-after-catch shape is identical to what the body macro expands.
 	public func scheduleMeetingManual(_ event: EventID, on day: DayKey, invitees: [ContactID], at timestamp: Timestamp) throws {
 		let calTX = try Transaction(env: calendar.env, readOnly: false)
 		do {
@@ -496,11 +520,16 @@ struct HybridAppDemo {
 
 		let overview = try app.dayOverview(on: day, contact: ContactID(RAW_native: 7))
 		#expect(overview.event == event)
-		#expect(overview.invitees == invitees)
 		#expect(overview.lastSync == when)
+		#expect(try readInviteesViaRaw(app, event: event) == invitees)
 	}
 
-	@Test func spanningWriteIsBestEffortNotAtomic() throws {
+	@Test func bodyThrowAbortsAllSpanMembers() throws {
+		// THE headline guarantee: a throw anywhere in the span body aborts ALL
+		// member transactions — the calendar write is rolled back with the failed
+		// contacts write. impossible with two isolated boundaries (the old
+		// scheduleMeetingBestEffort, asserted in the next test, leaves the
+		// calendar side durable).
 		let app = try makeApp()
 		let day = DayKey(RAW_native: 12)
 		let event = EventID(RAW_native: 1200)
@@ -508,22 +537,41 @@ struct HybridAppDemo {
 		let when = Timestamp(RAW_native: 7_000)
 
 		do {
-			// the contacts side throws AFTER writing; its own txn aborts. the calendar
-			// side already committed — there is no cross-environment rollback.
+			try app.scheduleMeetingAllOrNothing(event, on: day, invitees: invitees, at: when)
+			Issue.record("expected the span body's throw to propagate")
+		} catch is ContactError {
+			// expected
+		}
+		#expect(try readEventViaRaw(app, day: day) == nil, "the calendar member aborted — no partial logical op survived")
+		#expect(try readInviteesViaRaw(app, event: event) == [], "the calendar invitees member aborted")
+		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == nil, "the contacts member aborted")
+	}
+
+	@Test func isolatedTwoStepContrastLeavesFirstStepDurable() throws {
+		// the pre-span contrast: two isolated boundaries. a contacts failure leaves
+		// the already-committed calendar write durable — exactly what the span's
+		// all-abort removes. pinned so the upgrade is meaningful.
+		let app = try makeApp()
+		let day = DayKey(RAW_native: 13)
+		let event = EventID(RAW_native: 1300)
+		let invitees = [ContactID(RAW_native: 1)]
+		let when = Timestamp(RAW_native: 7_000)
+
+		do {
 			try app.scheduleMeetingBestEffort(event, on: day, invitees: invitees, at: when)
 			Issue.record("expected the contacts failure to propagate")
 		} catch is ContactError {
 			// expected
 		}
-		#expect(try readEventViaRaw(app, day: day) == event, "the calendar write committed independently and survives")
+		#expect(try readEventViaRaw(app, day: day) == event, "the isolated calendar boundary already committed and survives")
 		#expect(try readInviteesViaRaw(app, event: event) == invitees)
-		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == nil, "the contacts txn aborted — nothing landed")
+		#expect(try readLastSyncViaRaw(app, contact: ContactID(RAW_native: 1)) == nil, "the isolated contacts boundary aborted — nothing landed")
 	}
 
 	@Test func manualTwoTransactionContrastReachesSameState() throws {
 		let app = try makeApp()
-		let day = DayKey(RAW_native: 13)
-		let event = EventID(RAW_native: 1300)
+		let day = DayKey(RAW_native: 14)
+		let event = EventID(RAW_native: 1400)
 		let invitees = [ContactID(RAW_native: 3), ContactID(RAW_native: 4)]
 		let when = Timestamp(RAW_native: 8_000)
 
