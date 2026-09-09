@@ -111,7 +111,7 @@ extension BookingCore {
 }
 ```
 
-The verb vocabulary: `#store(db, key:, value:, flags: = [])`, `#load(db, key:)` (and `#load(db, key:, as:)` on raw ``QuickLMDB/MDB_val`` handles), `#delete(db, key:)` (and `#delete(db, key:, value:)` on duplicate-bearing tables), `#contains(db, key:)` (the `key:, value:` pair form lowers to the cursor's real ``MDB_GET_BOTH`` path — a database-level pair check would be a silent no-op), `#cursor(db) { cursor in ... }`, and `#clear(db)`. Each verb used **outside** a boundary is a compile-time diagnostic.
+The verb vocabulary: `#store(db, key:, value:, flags: = [])`, `#load(db, key:)` (and `#load(db, key:, as:)` on raw ``QuickLMDB/MDB_val`` handles), `#delete(db, key:)` (and `#delete(db, key:, value:)` on duplicate-bearing tables), `#contains(db, key:)` (the `key:, value:` pair form lowers to the cursor's real ``MDB_GET_BOTH`` path — a database-level pair check would be a silent no-op), `#cursor(db) { cursor in ... }`, `#clear(db)`, `#stats(db)` (metadata read), and `#drop(db)` (deleteDatabase — destructive and handle-consuming; receiver must be a locally-owned raw ``QuickLMDB/Database``, never a stored `self.X` table). Each verb used **outside** a boundary is a compile-time diagnostic.
 
 The injected name `tx` is also the documented way to hand a boundary transaction to a shared helper that takes `tx: borrowing Transaction` (e.g. `try applyDeltas(item, tx: tx)`). composable helpers that take an existing transaction keep their explicit `tx:` parameter and can be called from inside a boundary using the injected name. `.readWriteChild` requires a parent transaction parameter: `func commitBatch(_ items: [Item], parent: borrowing Transaction) throws`.
 

@@ -54,7 +54,7 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 106 tests across 12
+- **Verification**: clean build at 0 warnings / 0 errors; 109 tests across 12
   suites green across ALL targets — runtime tests against real LMDB
   environments (atomicity, rollback, read-only enforcement, child
   commit-into-parent, child abort leaves parent usable, child sees parent's
@@ -298,8 +298,8 @@ public func appendEvent(_ acct: AccountKey, _ event: EventID, parent: borrowing 
 
 What shipped, exactly:
 
-- **`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear` are
-  context-consuming freestanding macros**: used OUTSIDE a boundary, their own
+- **`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear`/`#stats`/`#drop`
+  are context-consuming freestanding macros**: used OUTSIDE a boundary, their own
   expansion is a compile-time diagnostic (`must only appear inside an
   @MDB_transact body`); used INSIDE one, the body macro consumes the verb call
   and lowers it to the tx-bearing operation form. the diagnostic is the payoff
@@ -331,8 +331,8 @@ The shipped inner-transaction vocabulary (one verb per tx-requiring entry point)
 | `deleteEntry(key:value:tx:)`      | `#delete(db, key:, value:)` (dupsort)   | shipped |
 | `cursor(tx:_:)`                   | `#cursor(db) { cursor in … }`           | shipped |
 | `deleteAllEntries(tx:)`           | `#clear(db)`                            | shipped |
-| `dbStatistics(tx:)`               | `#stats(db)` → `MDB_stat`               | phase 2 (not built) |
-| `deleteDatabase(tx:)`             | `#drop(db)` (consumes the handle)       | phase 3 (not built) |
+| `dbStatistics(tx:)`               | `#stats(db)` → `MDB_stat`               | shipped (16.1.0) |
+| `deleteDatabase(tx:)`             | `#drop(db)` (consumes the handle)       | shipped (16.1.0) |
 | `dbFlags(tx:)`                    | skipped — flags are compile-time on typed handles | — |
 | `reserveEntry`                    | deliberately ABSENT (see below)         | — |
 
@@ -409,8 +409,8 @@ the pair. cross-env atomicity is impossible.
 ## Backlog / next candidates
 
 - **SHIPPED in 16.1.0 — the operation-verb macro vocabulary** (see the SHIPPED
-  section above). Remaining phase-2/3 verbs: `#stats` (dbStatistics) and
-  `#drop` (deleteDatabase).
+  section above; the full verb set — `#store`/`#load`/`#delete`/`#contains`/
+  `#cursor`/`#clear`/`#stats`/`#drop` — is shipped).
 - **SHIPPED — `@MDB_transact_span` + `@MDB_app`** (the cross-environment
   spanning boundary; see `.hermes/plans/2026-09-08_143157-span-boundary-macro.md`).
   extracted into its own section below.

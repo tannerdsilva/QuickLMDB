@@ -38,8 +38,9 @@ extension BookingCore {
 }
 ```
 
-  - **Marker gating (the rawdog principle):** no line is rewritten unless it is a freestanding verb macro in the closed set above. every other line is emitted byte-identical — a user function named `setEntry` can never be reached by the rewriter. consequence: a plain operation call inside a boundary must carry `tx:` explicitly (verb-free code either uses `tx: tx` or fails to compile).
+  - **Marker gating (the rawdog principle):** no line is rewritten unless it is a freestanding verb macro in the closed set — `#store`, `#load`, `#delete`, `#contains`, `#cursor`, `#clear`, `#stats`, `#drop`. every other line is emitted byte-identical — a user function named `setEntry` can never be reached by the rewriter. consequence: a plain operation call inside a boundary must carry `tx:` explicitly (verb-free code either uses `tx: tx` or fails to compile).
   - Using a verb **outside** a boundary is a compile-time diagnostic (`must only appear inside an @MDB_transact body`) — the standalone verb expansion is a hard error by construction.
+  - `#stats(db)` reads `dbStatistics(tx:)` (metadata); `#drop(db)` runs `deleteDatabase(tx:)` — destructive and handle-consuming, so its receiver must be a locally-owned raw `Database`, never a stored `self.X` table.
   - Verbs compose with helper functions: the injected `tx` name passes the boundary transaction to plain helpers that take `tx: borrowing Transaction`; `.readWriteChild` boundaries take a `parent:` transaction and merge into it on commit.
 
 - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` — schema assembly: generates `static func open(at:mapHeadroom:)` which sizes the memory map, opens the environment, and opens every `Database.X` table in one setup write-transaction.
