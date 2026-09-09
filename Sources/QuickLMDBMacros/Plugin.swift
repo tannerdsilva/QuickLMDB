@@ -16,6 +16,7 @@ struct QuickLMDBMacros:CompilerPlugin {
 		_QUICKLMDB_INTERNAL_database_strict_impl.self,
 		_QUICKLMDB_INTERNAL_cursor_dupsort_impl.self,
 		MDB_environment_macro.self,
-		MDB_transact_macro.self
+		MDB_transact_macro.self,
+		MDB_verb_error_macro.self
 	]
 }

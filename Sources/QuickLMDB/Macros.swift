@@ -65,15 +65,15 @@ public macro MDB_transact(_ mode:MDB_transact_mode) = #externalMacro(module:"Qui
 public macro MDB_environment(file: Swift.String, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
 
 @attached(member, names:			named(setEntry(key:value:flags:tx:)),
-									named(deleteEntry(key:value:tx:)),
-									named(deleteEntry(key:tx:)),
-									named(loadEntry(key:as:tx:)),
-									named(containsEntry(key:tx:)))
+								named(deleteEntry(key:value:tx:)),
+								named(deleteEntry(key:tx:)),
+								named(loadEntry(key:as:tx:)),
+								named(containsEntry(key:tx:)))
 internal macro MDB_db_strict_impl() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_database_strict_impl")
 
 /// applies member implementations for the dupsort-based cursor functions.
 @attached(member,		names:			named(opGetMultiple(returning:key:)),
-										named(opNextMultiple(returning:key:)))
+									named(opNextMultiple(returning:key:)))
 internal macro MDB_cursor_dupfixed() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_dupfixed_impl")
 
 @attached(member,		names:			named(opGetBoth(returning:key:value:)),
@@ -85,3 +85,58 @@ internal macro MDB_cursor_dupfixed() = #externalMacro(module:"QuickLMDBMacros", 
 										named(opPreviousDup(returning:)),
 										named(opPreviousNoDup(returning:)))
 internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_dupsort_impl")
+
+// - MARK: verb vocabulary (freestanding expression macros)
+
+// the verb macros are the marker-gated call surface inside transaction
+// boundaries. each boundary macro (MDB_transact, and the later span boundary)
+// CONSUMES the verb calls in the body and lowers them to the tx-bearing
+// operation call; this standalone declaration is the fallback for use OUTSIDE
+// a boundary, where the shared implementation always emits a diagnostic.
+// the boundary macro expands before these standalone expansions, so inside a
+// boundary the fallback is never reachable by construction (see
+// swift-macro-development references/verb-macro-consumption-architecture.md).
+
+/// stores `value` under `key` in `db`. only meaningful inside a transaction
+/// boundary (``MDB_transact``); used elsewhere this is a compile-time error.
+@freestanding(expression)
+public macro store(_ db: Any, key: Any, value: Any, flags: QuickLMDB.Operation.Flags = []) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// loads the value for `key` from `db`. typed handles infer the value type;
+/// raw ``MDB_val`` handles pass `as:` for the value type.
+/// only meaningful inside a transaction boundary; used elsewhere this is a
+/// compile-time error.
+@freestanding(expression)
+public macro load(_ db: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+@freestanding(expression)
+public macro load(_ db: Any, key: Any, as: Any.Type) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// deletes the entry for `key` (or the exact `key`/`value` pairing on
+/// duplicate-bearing databases). only meaningful inside a transaction
+/// boundary; used elsewhere this is a compile-time error.
+@freestanding(expression)
+public macro delete(_ db: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+@freestanding(expression)
+public macro delete(_ db: Any, key: Any, value: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// checks whether `key` (or the exact `key`/`value` pairing, lowered to the
+/// cursor GET_BOTH path) exists in `db`. only meaningful inside a transaction
+/// boundary; used elsewhere this is a compile-time error.
+@freestanding(expression)
+public macro contains(_ db: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+@freestanding(expression)
+public macro contains(_ db: Any, key: Any, value: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// opens a cursor over `db` for the duration of the trailing closure. only
+/// meaningful inside a transaction boundary; used elsewhere this is a
+/// compile-time error.
+@freestanding(expression)
+public macro cursor(_ db: Any, _ body: (Any) -> Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+
+/// removes every entry from `db`. only meaningful inside a transaction
+/// boundary; used elsewhere this is a compile-time error.
+@freestanding(expression)
+public macro clear(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
