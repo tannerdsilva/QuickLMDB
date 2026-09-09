@@ -13,7 +13,7 @@ import QuickLMDB
 struct TypedCompanionTests {
 
 	private func makeCore() throws -> TestCore {
-		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-comp-\\(UUID().uuidString)", isDirectory:true)
+		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-comp-\(UUID().uuidString)", isDirectory:true)
 		try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
 		return try TestCore.open(at: dir.path)
 	}
@@ -66,13 +66,15 @@ struct TypedCompanionTests {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 4)
 		let read = try Transaction(env:core.env, readOnly:true)
-		#expect((try core.primary.contains(key:key, tx:read)) == false)
+		let firstResult = try core.primary.contains(key:key, tx:read)
+		#expect(firstResult == false)
 		read.abort()
 
 		try core.writePrimary(key, TestValue(RAW_native: 400))
 
 		let read2 = try Transaction(env:core.env, readOnly:true)
-		#expect((try core.primary.contains(key:key, tx:read2)) == true)
+		let secondResult = try core.primary.contains(key:key, tx:read2)
+		#expect(secondResult == true)
 		read2.abort()
 	}
 
