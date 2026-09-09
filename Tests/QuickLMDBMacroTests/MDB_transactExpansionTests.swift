@@ -183,7 +183,7 @@ struct MDB_transactExpansionTests {
 			    var secondary: Database.DupSort<TestKey, TestValue>
 			    @MDB_transact(.readWrite)
 			    func orchestrate(_ key: TestKey, _ value: TestValue, _ dup: TestValue) throws -> TestValue? {
-			        let v = try #load(primary, key: key)
+			        let v = #load(primary, key: key)
 			        let present = try #contains(secondary, key: key)
 			        let pair = try #contains(secondary, key: key, value: dup)
 			        try #delete(primary, key: key)
@@ -201,7 +201,7 @@ struct MDB_transactExpansionTests {
 			    func orchestrate(_ key: TestKey, _ value: TestValue, _ dup: TestValue) throws -> TestValue? {
 			        let tx = try Transaction(env: self.env, readOnly: false)
 			        func __mdb_body(_ key: TestKey, _ value: TestValue, _ dup: TestValue, _ tx: borrowing Transaction) throws -> TestValue? {
-			            let v = try primary.load(key: key, tx: tx)
+			            let v = primary.load(key: key, tx: tx)
 			            let present = try secondary.contains(key: key, tx: tx)
 			            let pair = try secondary.cursor(tx: tx) {
 			                try $0.containsEntry(key: key, value: dup)

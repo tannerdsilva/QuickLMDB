@@ -26,7 +26,7 @@ extension TestCore {
 
 	@MDB_transact(.readOnly)
 	public func innerRead(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? #load(primary, key: key)
+		return #load(primary, key: key)
 	}
 
 	@MDB_transact(.readOnly)
@@ -49,7 +49,7 @@ extension TestCore {
 	// outer READ + sibling WRITE: the write commits independently of the outer read
 	@MDB_transact(.readOnly)
 	public func siblingReadThenWrite(_ key: borrowing TestKey, committed value: consuming TestValue) throws -> TestValue? {
-		let before = try? #load(primary, key: key)
+		let before = #load(primary, key: key)
 		try touchWrite(key, value)
 		return before
 	}

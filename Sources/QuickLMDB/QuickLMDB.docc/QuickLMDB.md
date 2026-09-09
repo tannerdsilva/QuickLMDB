@@ -82,7 +82,7 @@ QuickLMDB ships two macros that organize transactions into method boundaries wit
 
 1. opens the boundary transaction (`Transaction(env: self.env, ...)`) as a `let tx`,
 2. wraps the original body in a local function that receives `tx` as an explicit `borrowing` parameter,
-3. appends `tx: tx` to every QuickLMDB operation call in the body that omits the `tx:` argument,
+3. lowers the freestanding verb macros — `#store`, `#load`, `#delete`, `#contains`, `#cursor`, `#clear` — to their tx-bearing calls, threading `tx`; every other line is emitted byte-identical (**marker gating**: a user function named like an operation can never be reached by the rewriter),
 4. commits once on success and aborts exactly once if the body throws.
 
 ```swift
@@ -95,13 +95,13 @@ public struct BookingCore: Sendable {
 extension BookingCore {
     @MDB_transact(.readWrite)
     public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
-        try sheets.setEntry(key: key, value: record, flags: [])   // tx: omitted
+        try #store(sheets, key: key, value: record)
     }
 
     @MDB_transact(.readOnly)
     public func nearestSlot(to date: SlotKey) throws -> SlotRecord? {
         var found: SlotRecord? = nil
-        try sheets.cursor { cursor in                              // tx: omitted
+        #cursor(sheets) { cursor in
             if let first = try? cursor.opSetRange(key: date).value {
                 found = first
             }
@@ -111,14 +111,16 @@ extension BookingCore {
 }
 ```
 
+The verb vocabulary: `#store(db, key:, value:, flags: = [])`, `#load(db, key:)` (and `#load(db, key:, as:)` on raw ``QuickLMDB/MDB_val`` handles), `#delete(db, key:)` (and `#delete(db, key:, value:)` on duplicate-bearing tables), `#contains(db, key:)` (the `key:, value:` pair form lowers to the cursor's real ``MDB_GET_BOTH`` path — a database-level pair check would be a silent no-op), `#cursor(db) { cursor in ... }`, and `#clear(db)`. Each verb used **outside** a boundary is a compile-time diagnostic.
+
 The injected name `tx` is also the documented way to hand a boundary transaction to a shared helper that takes `tx: borrowing Transaction` (e.g. `try applyDeltas(item, tx: tx)`). composable helpers that take an existing transaction keep their explicit `tx:` parameter and can be called from inside a boundary using the injected name. `.readWriteChild` requires a parent transaction parameter: `func commitBatch(_ items: [Item], parent: borrowing Transaction) throws`.
 
-The annotated method must be `throws` (the boundary can fail to open or commit) and must not be `async`; operation calls that already carry an explicit `tx:` argument are left untouched.
+The annotated method must be `throws` (the boundary can fail to open or commit) and must not be `async`; non-verb operation calls inside the boundary must carry an explicit `tx:` argument (they are left byte-identical by the marker gate).
 
 ### ``QuickLMDB/MDB_environment(file:flags:maxReaders:maxDBs:mode:)`` — schema assembly
 
 Generates a `static func open(at:mapHeadroom:)` that sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported).
 
-Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `loadEntry(key:as:tx:)`, `setEntry(key:value:flags:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
+Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:flags:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
 
-**Planned evolution (agreed direction, not yet shipped):** DB statements inside boundaries are slated to become freestanding verb macros — `#store`, `#load`, `#delete`, `#contains` — lowered by `@MDB_transact` into the same tx-bearing calls shown above, with a compile-time diagnostic when a verb appears outside a boundary. The typed `Database.Strict<K,V>` handle already carries both key and value types statically, so the verbs need no `as:` and no `flags: []`. The relationship matrix, `.readWriteChild(parent:)`, forced `.noTLS`, and the zero-ambient contract are all unaffected by this evolution.
+The typed-handle companions the verbs lower to (`load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)`, plus the dupsort pair `delete(key:value:tx:)`) are protocol-extension members of ``QuickLMDB/MDB_db``, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them. the raw ``QuickLMDB/MDB_val`` tier keeps `loadEntry(key:as:tx:)` for value-raw call sites.

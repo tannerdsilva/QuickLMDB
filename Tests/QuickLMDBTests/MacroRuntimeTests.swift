@@ -55,7 +55,7 @@ extension TestCore {
 
 	@MDB_transact(.readOnly)
 	public func readOnlyRead(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? #load(primary, key: key)
+		return #load(primary, key: key)
 	}
 
 	@MDB_transact(.readOnly)
@@ -111,7 +111,7 @@ extension TestCore {
 	// (parent boundary hands its injected tx to a child) is already exercised by outerWrite.
 	@MDB_transact(.readWriteChild)
 	public func readParentUncommitted(_ key: borrowing TestKey, parent: borrowing Transaction) throws -> TestValue? {
-		return try? #load(primary, key: key)
+		return #load(primary, key: key)
 	}
 
 	// multi-level write nesting: a child spawns its own child with ITS injected tx —

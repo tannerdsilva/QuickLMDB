@@ -54,16 +54,18 @@ func publishSlot(_ key: SlotKey, _ record: SlotRecord) throws {
 
 ## What is settled (all verified at time of writing)
 
-- **Verification**: clean build at 0 warnings / 0 errors; 75 tests across 8
+- **Verification**: clean build at 0 warnings / 0 errors; 99 tests across 11
   suites green across ALL targets — runtime tests against real LMDB
   environments (atomicity, rollback, read-only enforcement, child
   commit-into-parent, child abort leaves parent usable, child sees parent's
   uncommitted writes, helper composition, cursor injection, bare dispatch
-  threads), 4 strict expansion fixtures
-  freezing the body-macro output, a 6-test transaction-relationship suite
-  pinning engine defaults, the MDB_db (12) and MDB_cursor (10)
-  protocol-extension bridge suites driven through RAW Database/Cursor handles,
-  a usage-pattern demo suite, and functional-interop tests driven by raw
+  threads), 6 strict expansion fixtures
+  freezing the body-macro output (including verb lowering in all three modes
+  and a user-`setEntry`-untouched marker-gate fixture), a 6-test
+  transaction-relationship suite pinning engine defaults, the MDB_db (12) and
+  MDB_cursor (10) protocol-extension bridge suites driven through RAW
+  Database/Cursor handles, typed-companion (6), verb marker-gating safety (4),
+  and a usage-pattern demo suite, plus functional-interop tests driven by raw
   CLMDB (no QuickLMDB types involved).
 - **Modes**: `.readWrite` (commit once, abort exactly once on error),
   `.readOnly` (never commits, aborts on exit), `.readWriteChild` (requires a
@@ -233,12 +235,14 @@ bodies behind the same 19 functions without touching the member API.
 - **`cursor ( tx: tx)`**: calls that were trailing-closure-only get
   re-parenthesized; the serialized spacing is cosmetic and deterministic (frozen
   into a fixture) but not hand-beautiful. A candidate for later polish.
-- **Call attribution is by name list** over `loadEntry/setEntry/containsEntry/
-  deleteEntry/deleteAllEntries/cursor/dbStatistics/dbFlags/
-  deleteDatabase`. A user function with one of these names inside a boundary
-  would be rewritten. No opt-out attribute yet; the contract is documented.
-  the planned verb vocabulary (`#store`/`#load`/`#delete`/`#contains`, see the
-  Planned section) is the agreed principled replacement for new code.
+- **Call attribution is marker-gated (verb macros), not a name list — shipped in
+  16.1.0.** the name-list `TXInjectionRewriter`/`txOperationNames` are deleted;
+  the boundary lowers ONLY the freestanding verbs (`#store`/`#load`/`#delete`/
+  `#contains`/`#cursor`/`#clear`) and emits every other line byte-identical. A
+  user function named `setEntry` is unreachable-by-rewrite by construction
+  (pinned by both an expansion fixture and a runtime test). a plain operation
+  call inside a boundary must now carry `tx:` explicitly or fail to compile —
+  the loud, intended signal.
 - **Write-inside-`readOnly` is a runtime `EACCES`** from LMDB (asserted in
   tests), not a compile-time error. A body-scan lint later could diagnose it.
 - **DB-level `containsEntry(key:value:)` was REMOVED, not pinned**: the value
@@ -267,13 +271,11 @@ bodies behind the same 19 functions without touching the member API.
   shelf until `borrowing`/`consuming` accessors ship — at which point the
   registry story could be revisited if macro-in-body ever feels too clever.
 
-## Planned: the operation-verb macro vocabulary (AGREED DIRECTION — not yet implemented)
+## SHIPPED (16.1.0): the operation-verb macro vocabulary
 
-The call-site form shown above (plain `setEntry`/`loadEntry` calls during the
-v16 work) is the stepping stone, not the destination. the agreed direction —
-and the designated follow-on to this v16 base — makes every DB statement inside
-a boundary a **freestanding verb macro**, lowered by the same `@MDB_transact`
-body macro:
+Implemented in 16.1.0 and no longer a plan. the call sites shown in the v16
+work became **freestanding verb macros**, lowered by the `@MDB_transact` body
+macro via marker-gated attribution:
 
 ```swift
 @MDB_transact(.readWrite)
@@ -292,44 +294,45 @@ public func appendEvent(_ acct: AccountKey, _ event: EventID, parent: borrowing 
 }
 ```
 
-The architecture of the plan:
+What shipped, exactly:
 
-- **`#store` / `#load` / `#delete` / `#contains` are context-consuming
-  macros**: used OUTSIDE a boundary, their own expansion is a compile-time
-  diagnostic (`must only appear inside an @MDB_transact body`); used INSIDE one,
-  the body macro consumes the verb call and emits the tx-bearing operation call
-  (`#store(t, key:, value:)` → `t.setEntry(key:, value:, flags: [], tx: tx)`,
-  `#load(t, key:)` → `t.load(key:, tx: tx)`). the diagnostic is the payoff no
-  method call can give: boundary-only misuse becomes a compile error, where
-  today forgetting `tx:` compiles and crashes at runtime.
-- **the typed handle makes the verbs type-complete with no `as:`**:
-  `Database.Strict<K,V>` already carries both types statically, so companion
-  methods `load(key:) -> V?`, `store(key:value:flags: = [])`, `delete(key:)`,
-  `contains(key:)` (all `tx:`-bearing) are added alongside. the raw `Database`
-  handle keeps `loadEntry(key:as:tx:)` for value-raw call sites.
+- **`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear` are
+  context-consuming freestanding macros**: used OUTSIDE a boundary, their own
+  expansion is a compile-time diagnostic (`must only appear inside an
+  @MDB_transact body`); used INSIDE one, the body macro consumes the verb call
+  and lowers it to the tx-bearing operation form. the diagnostic is the payoff
+  no method call can give: boundary-only misuse is a compile error, and a plain
+  operation call inside a boundary must carry `tx:` explicitly or fail to
+  compile.
+- **the typed handle makes the verbs type-complete with no `as:`/`flags:`**:
+  the companions `load(key:tx:)`, `store(key:value:flags: = [], tx:)`,
+  `delete(key:tx:)`, `contains(key:tx:)` (plus dupsort `delete(key:value:tx:)`)
+  live ONCE on `extension MDB_db` (protocol-extension members), inherited by
+  every handle. the raw `Database` handle keeps `loadEntry(key:as:tx:)`.
+- **`#contains(db, key:, value:)` lowers to the CURSOR's GET_BOTH path** — a
+  DB-level pair check would be a silent no-op and was already removed.
 - **UNCHANGED by the evolution**: the relationship matrix, explicit
   `.readWriteChild(parent:)`, forced `.noTLS`, the zero-ambient contract, the
   nested-write deadlock rule, raw/manual transactions, cursor closures.
-- the verbs give the body macro a **principled attribution signal**,
-  superseding the name-list rewrite for new code (see the call-attribution
-  imperfection below).
+- verbs give the body macro a **marker-gated attribution signal**; the
+  name-list rewrite is deleted (see the (now-resolved) imperfection above).
 
-The full inner-transaction vocabulary (one verb per tx-requiring entry point):
+The shipped inner-transaction vocabulary (one verb per tx-requiring entry point):
 
-| tx-requiring API call             | verb form                              | phase |
-|-----------------------------------|----------------------------------------|-------|
-| `setEntry(key:value:flags:tx:)`   | `#store(db, key:, value:, flags: = [])` | 1    |
-| `loadEntry(key:as:tx:)`           | `#load(db, key:)` · raw: `#load(db, key:, as: V.self)` | 1 |
-| `containsEntry(key:tx:)`          | `#contains(db, key:)`                   | 1    |
-| `cursor` pair check               | `#contains(db, key:, value:)` lowers to the CURSOR's GET_BOTH path | 1 |
-| `deleteEntry(key:tx:)`            | `#delete(db, key:)`                     | 1    |
-| `deleteEntry(key:value:tx:)`      | `#delete(db, key:, value:)` (dupsort)   | 1  |
-| `cursor(tx:_:)`                   | `#cursor(db) { cursor in … }`           | 1    |
-| `deleteAllEntries(tx:)`           | `#clear(db)`                            | 1    |
-| `reserveEntry(key:reservedSize:flags:tx:_:)` | `#reserve(db, key:, size:, flags:) { buffer in … }` | 2 |
-| `dbStatistics(tx:)`               | `#stats(db)` → `MDB_stat`               | 2    |
-| `deleteDatabase(tx:)`             | `#drop(db)` (consumes the handle)       | 3    |
+| tx-requiring API call             | verb form                              | status |
+|-----------------------------------|----------------------------------------|--------|
+| `setEntry(key:value:flags:tx:)`   | `#store(db, key:, value:, flags: = [])` | shipped (16.1.0) |
+| `loadEntry(key:as:tx:)`           | `#load(db, key:)` · raw: `#load(db, key:, as: V.self)` | shipped |
+| `containsEntry(key:tx:)`          | `#contains(db, key:)`                   | shipped |
+| `cursor` pair check               | `#contains(db, key:, value:)` (GET_BOTH) | shipped |
+| `deleteEntry(key:tx:)`            | `#delete(db, key:)`                     | shipped |
+| `deleteEntry(key:value:tx:)`      | `#delete(db, key:, value:)` (dupsort)   | shipped |
+| `cursor(tx:_:)`                   | `#cursor(db) { cursor in … }`           | shipped |
+| `deleteAllEntries(tx:)`           | `#clear(db)`                            | shipped |
+| `dbStatistics(tx:)`               | `#stats(db)` → `MDB_stat`               | phase 2 (not built) |
+| `deleteDatabase(tx:)`             | `#drop(db)` (consumes the handle)       | phase 3 (not built) |
 | `dbFlags(tx:)`                    | skipped — flags are compile-time on typed handles | — |
+| `reserveEntry`                    | deliberately ABSENT (see below)         | — |
 
 (deliberately ABSENT: `reserveEntry`/`MDB_RESERVE` — write-without-initialize
 support was dropped outright; the reserve footguns (uninitialized stores,
@@ -341,24 +344,27 @@ deliberately NOT verb candidates: cursor OPERATIONS (`opSet`/`opNext`/dup ops/
 `dbName`/`dbHandle`/`dbEnvironment` (tx-free metadata), `Environment.sync`/
 `readerCheck`, and the `Transaction` lifecycle (`commit`/`abort`/`reset`/`renew`
 belong to the boundary itself). `#cursor` keeps its trailing-closure,
-non-escaping form; the body macro lowers it exactly as it lowers
-`cursor(tx:)` today (already in the attribution name list).
+non-escaping form.
 
-Implementing this is the top backlog item; picky details (exact lowering,
-naming, expansion fixtures) are deferred until then.
+Remaining from the verb milestone: phase-2/3 verbs (`#stats`, `#drop`), and
+the expansion polish items below. the SPI/consumer canaries and DocC symbol
+coverage remain on the backlog.
 
 ## Backlog / next candidates
 
-- **AGREED NEXT DIRECTION — the operation-verb macro vocabulary**:
-  implement the phase-1 verbs `#store` / `#load` / `#delete` / `#contains` /
-  `#cursor` / `#clear` as context-consuming verb macros (plus `#stats` /
-  `#drop` in later phases — see the Planned section table), the
-  `@MDB_transact` body-macro lowering, the typed-handle companions
-  (`load(key:)`, `store(key:value:flags: = [])`, `delete(key:)`,
-  `contains(key:)`), the outside-a-boundary diagnostic, and strict expansion
-  fixtures for the verbs inside all three boundary modes.
+- **SHIPPED in 16.1.0 — the operation-verb macro vocabulary** (see the SHIPPED
+  section above). Remaining phase-2/3 verbs: `#stats` (dbStatistics) and
+  `#drop` (deleteDatabase).
+- **THE DESIGNED FOLLOW-ON — `@MDB_transact_span`**: the cross-environment
+  spanning boundary (see `.hermes/plans/2026-09-08_143157-span-boundary-macro.md`):
+  one app method coordinating K environments, verbs routed by receiver base
+  name, all members abort on body throw, commit-pair in declared order. builds
+  directly on the verb-lowering machinery just shipped.
+- **`@MDB_app` container macro** (span's companion): environment inventory
+  (property name → core) for span routing + diagnostics.
 - Expansion polish (the `cursor ( tx:)` spacing; parameter trivia).
-- Call-attribution opt-out + cross-env diagnostic.
+- Cross-env diagnostic for the span try to catch (`#store(calendar.events …)`
+  with a stray `tx:` from another environment).
 - `.readOnly` write lint (macro-level body scan).
 - DocC for the two macros and the transaction-boundary article (docc catalog
   currently carries a prose section; symbol docs for the macros pending).

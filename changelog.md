@@ -1,3 +1,12 @@
+# 16.1.0
+
+- **Marker-gated verb vocabulary inside `@MDB_transact` boundaries.** the verb macros `#store`, `#load`, `#delete`, `#contains`, `#cursor`, `#clear` are now the only auto-`tx:` surface inside a boundary. the body macro lowers exactly the freestanding verb calls (matched by macro name, nothing else) to their tx-bearing operation form and emits every other line byte-identical — the name-list `tx:` injection is deleted, so a plain `setEntry`/`loadEntry`/`cursor(...)` call inside a boundary must carry `tx:` explicitly or it fails to compile. this is a **breaking change** for the v16.0.0 preview shape: boundary bodies written with omit-`tx:` method calls must migrate to verbs (or pass `tx: tx`).
+  - verb use OUTSIDE a boundary is a compile-time diagnostic (`must only appear inside an @MDB_transact body`).
+  - the pair form `#contains(db, key:, value:)` lowers to the cursor's real `MDB_GET_BOTH` path (a database-level pair check is a silent no-op by key).
+  - `#load(db, key:, as:)` remains for raw `MDB_val` handles; typed handles need no `as:`.
+- Added typed-handle companions the verbs lower to: `load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)` on `MDB_db` (one copy inherited by every handle), plus the dupsort pair `delete(key:value:tx:)` on `MDB_db_dupsort`.
+- Updated docs: the transaction-boundary README + DocC sections now describe the verb contract; examples migrated to verbs.
+
 # 16.0.0
 
 - Added the `@MDB_transact` and `@MDB_environment` macros.

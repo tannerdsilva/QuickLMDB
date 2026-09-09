@@ -17,14 +17,11 @@ import QuickLMDB
 //
 // the injected `tx` name is the composition contract: hand it to plain helpers that
 // take `tx: borrowing Transaction`, or to a `.readWriteChild` boundary as `parent:`.
-// operation call sites inside a boundary may omit `tx:` — the expansion appends it.
-//
-// NOTE — planned evolution (agreed direction, not yet shipped): the operation lines
-// below (setEntry/loadEntry) are the v16 base form; the forward architecture replaces
-// them with verb macros (#store / #load / #delete / #contains) lowered by the same
-// body macro, with typed-handle companions (load(key:), store(key:value:flags: = []))
-// so no `as:`/`flags: []` is needed. see README "Planned evolution" and the v16
-// vision journal. this file intentionally stays on the current call-site form.
+// operation call sites inside a boundary use the VERB vocabulary (#store / #load /
+// #delete / #contains / #cursor / #clear), lowered by the body macro to the
+// tx-bearing calls; plain operation calls must carry `tx:` explicitly or fail to
+// compile (marker-gated attribution — shipped 16.1.0). this file demonstrates the
+// shipped verb form.
 
 @MDB_environment(file: "demo.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
 public struct DemoCore: Sendable {
@@ -44,7 +41,7 @@ extension DemoCore {
 	// 2. read-only boundary: own read txn, aborted on exit — never commits
 	@MDB_transact(.readOnly)
 	public func fetch(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? #load(primary, key: key)
+		return #load(primary, key: key)
 	}
 
 	// 3. helper composition: the injected `tx` is passed to a plain helper whose
@@ -92,7 +89,7 @@ extension DemoCore {
 
 	@MDB_transact(.readOnly)
 	public func currentValue(_ key: borrowing TestKey) throws -> TestValue? {
-		return try? #load(primary, key: key)
+		return #load(primary, key: key)
 	}
 
 	// 7. sibling WRITE inside a READ: legal; it commits independently and the outer

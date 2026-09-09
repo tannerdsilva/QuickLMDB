@@ -100,7 +100,7 @@ extension CalendarCore {
 	// 2. readOnly top-level: never commits.
 	@MDB_transact(.readOnly)
 	public func eventOn(_ day: borrowing DayKey) throws -> EventID? {
-		return try? #load(events, key: day)
+		return #load(events, key: day)
 	}
 
 	// 3. child boundary: merges into the calling boundary's write on commit.
@@ -129,7 +129,7 @@ extension CalendarCore {
 	//    data before committing".
 	@MDB_transact(.readOnly)
 	public func committedEvent(on day: DayKey) throws -> EventID? {
-		return try? #load(events, key: day)
+		return #load(events, key: day)
 	}
 
 	@MDB_transact(.readWrite)
@@ -228,7 +228,7 @@ extension ContactCore {
 	// 12. readOnly top-level.
 	@MDB_transact(.readOnly)
 	public func lastSyncFor(_ id: ContactID) throws -> Timestamp? {
-		return try? #load(lastSync, key: id)
+		return #load(lastSync, key: id)
 	}
 
 	// 13. sibling WRITE inside a READ: the inner write commits independently and the
