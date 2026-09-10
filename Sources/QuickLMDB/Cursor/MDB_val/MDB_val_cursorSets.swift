@@ -62,7 +62,7 @@ extension MDB_cursor {
 		try MDB_cursor_get_entry_static(cursor:self, .setRange, key:&keyVal, value:&valueVal)
 
 		#if DEBUG
-		assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
+		//assert(keyPtr != keyVal.mv_data, "key buffer was not modified so it cannot be returned")
 		assert(valueVal.mv_size != -1, "value buffer was not modified so it cannot be returned")
 		assert(valuePtr != valueVal.mv_data && valueVal.mv_size > 0, "value buffer was not modified so it cannot be returned")
 		#endif

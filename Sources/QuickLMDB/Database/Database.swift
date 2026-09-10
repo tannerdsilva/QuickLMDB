@@ -138,7 +138,7 @@ extension Database {
 	}
 
 	@MDB_db_strict_impl()
-	public struct DupFixed<KeyType:RAW_staticbuff & MDB_comparable, ValueType:RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
+	public struct DupFixed<KeyType:RAW_staticbuff & MDB_comparable & RAW_decodable & RAW_encodable, ValueType:RAW_staticbuff & MDB_comparable & RAW_decodable & RAW_encodable>:Sendable, MDB_db_dupfixed {
 		/// the key type that the database uses.
 		/// 	- must be MDB_comparable
 		/// 	- must be static length
