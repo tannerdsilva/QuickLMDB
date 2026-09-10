@@ -2,12 +2,22 @@ import Testing
 import Foundation
 import QuickLMDB
 
-// runtime verification for the typed-handle companions that the verb-macro
-// vocabulary lowers to (see Source/QuickLMDB/Database/DBTypedConvenience.swift):
+// runtime verification for the typed-handle companions the boundary dialect
+// lowers to (see Source/QuickLMDB/Database/DBTypedConvenience.swift):
 //   store(key:value:flags:tx:) / load(key:tx:) / delete(key:tx:) /
 //   delete(key:value:tx:) (dupsort) / contains(key:tx:)
 // the companions are protocol-extension members of MDB_db, so they apply to
 // every typed handle (Strict/DupSort/DupFixed) plus the raw Database.
+
+extension TestCore {
+	/// commits a value through a raw write transaction (the legacy boundary
+	/// method of the same name was shed with the old @MDB_transact surface)
+	func writePrimary(_ key: TestKey, _ value: TestValue) throws {
+		let tx = try Transaction(env: env, readOnly: false)
+		try primary.setEntry(key: key, value: value, flags: [], tx: tx)
+		try tx.commit()
+	}
+}
 
 @Suite("MDB_db typed companions (verb-lowering surface)")
 struct TypedCompanionTests {

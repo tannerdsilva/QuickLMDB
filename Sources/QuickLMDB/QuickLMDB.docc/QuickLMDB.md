@@ -1,6 +1,6 @@
 # ``QuickLMDB``
 
-QuickLMDB is designed to be a easy, efficient, and uncompromising integration of the LMDB library. QuickLMDB does not hide access to the underlying LMDB core, allowing you to directly utilize the core LMDB API at any time. Likewise, QuickLMDB makes it very easy to write high-level code that is simultaneously memory-safe and high-performance. 
+QuickLMDB is designed to be a easy, efficient, and uncompromising integration of the LMDB library. QuickLMDB does not hide access to the underlying LMDB core, allowing you to directly utilize the core LMDB API at any time. Likewise, QuickLMDB makes it very easy to write high-level code that is simultaneously memory-safe and high-performance.
 
 ### Why QuickLMDB?
 
@@ -12,16 +12,16 @@ QuickLMDB is designed to be a easy, efficient, and uncompromising integration of
 
 The basic object relationship for QuickLMDB is as follows:
 
-- ``QuickLMDB/Environment`` is the foundation of QuickLMDB, as it is in the LMDB core. Environments are created with a system path. 
+- ``QuickLMDB/Environment`` is the foundation of QuickLMDB, as it is in the LMDB core. Environments are created with a system path.
 
 	- ``QuickLMDB/Environment``s create ``QuickLMDB/Transaction``s
-	
+
 	- ``QuickLMDB/Environment`` can open ``QuickLMDB/Database``s under the existence of a ``QuickLMDB/Transaction``
-	
+
 		- ``QuickLMDB/Database`` can store and retreive key/value pairs
 
 	- A ``QuickLMDB/Transaction`` may open child transactions, in certain contexts
-	
+
 	- ``QuickLMDB/Database`` can open ``QuickLMDB/Cursor`` under the existence of a ``QuickLMDB/Transaction``
 
 ## Notes on API
@@ -32,7 +32,7 @@ Here are a few notes about the QuickLMDB API design. Keeping these notes in mind
 
 This is the native serialization and deserialization protocol for QuickLMDB.
 
-- Required when using ``QuickLMDB/Database`` (for convenience). 
+- Required when using ``QuickLMDB/Database`` (for convenience).
 
 - Optional when using ``QuickLMDB/Cursor`` (allowing for zero-copy access to your data).
 
@@ -42,7 +42,7 @@ This is the native serialization and deserialization protocol for QuickLMDB.
 
 ### Database struct
 
-In the spirit of the core LMDB API, QuickLMDB's ``QuickLMDB/Database`` struct is designed to be approachable and convenient. 
+In the spirit of the core LMDB API, QuickLMDB's ``QuickLMDB/Database`` struct is designed to be approachable and convenient.
 
 - Handles serialization on your behalf with ``QuickLMDB/MDB_convertible`` protocol. Standardized serialization eliminates the need for redundant code, and as a result, reduces the risk of bugs.
 
@@ -59,7 +59,7 @@ QuickLMDB's ``QuickLMDB/Cursor`` class also follows the spirit of the underlying
 	- When reading entries, this allows the developer to chose when to deserialize a given data entry.
 
 	- Serialization and deserialization of returned `MDB_val` can occur with a single line of code.
-	
+
 - Conforms to Swift's `Sequence` protocol, allowing a cursor to be used in a loop with a single line of code.
 
 ### Lifecycle management
@@ -68,22 +68,19 @@ QuickLMDB has reasonable default behavior when managing the lifecycle of ``Quick
 
 - A transaction created directly (``QuickLMDB/Transaction/init(env:readOnly:)``) is closed explicitly by calling ``QuickLMDB/Transaction/commit()`` or ``QuickLMDB/Transaction/abort()``. as a safety net, the deinit of a transaction that was never closed aborts it.
 
-- An ``QuickLMDB/MDB_transact(_:)`` boundary commits its transaction exactly once when the body returns normally, and aborts exactly once when the body throws.
+- An ``QuickLMDB/MDB_transact(_:environments:)`` boundary closes its transactions exactly once: on success a `.readOnly` boundary aborts every one (a read leaf never commits) and a `.readWrite` boundary commits every one; on a thrown body it aborts every one.
 
 - At any time, a developer may call ``QuickLMDB/Transaction/commit()``, ``QuickLMDB/Transaction/abort()``, ``QuickLMDB/Transaction/reset()``, or ``QuickLMDB/Transaction/renew()`` to force their own behavior on a transaction.
 
 ## Transaction boundaries with macros
 
-QuickLMDB ships two macros that organize transactions into method boundaries with no ambient state of any kind.
+QuickLMDB organizes the transaction layer into **method boundaries** with no ambient state of any kind (no task-local, no thread-local, no registry). the current architecture is a single boundary dialect:
 
-### ``QuickLMDB/MDB_transact(_:)`` — attached body macro
+- ``QuickLMDB/MDB_transact(_:environments:)`` — attached **body + peer**. the body scrapes the method and replaces it with a SHELL (one `tx_<E>` per listed environment, the wrapped-sibling call, and the mode-driven close); the peer emits the WRAPPED SIBLING that carries the real body.
+- ``QuickLMDB/MDB_transacted(_:)`` — the Design-B join marker: inside a boundary it is rewritten into a call to the callee's wrapped sibling, threading this boundary's transaction.
+- ``QuickLMDB/MDB_entry_load(_:database:key:)`` / ``QuickLMDB/MDB_entry_store(_:database:key:value:)`` — the trailing verbs, lowered inside a boundary.
 
-`@MDB_transact(.readWrite)` (or `.readOnly`, or `.readWriteChild`) makes the annotated method a transaction boundary. the expansion:
-
-1. opens the boundary transaction (`Transaction(env: self.env, ...)`) as a `let tx`,
-2. wraps the original body in a local function that receives `tx` as an explicit `borrowing` parameter,
-3. lowers the freestanding verb macros — `#store`, `#load`, `#delete`, `#contains`, `#cursor`, `#clear` — to their tx-bearing calls, threading `tx`; every other line is emitted byte-identical (**marker gating**: a user function named like an operation can never be reached by the rewriter),
-4. commits once on success and aborts exactly once if the body throws.
+### ``QuickLMDB/MDB_transact(_:environments:)`` — attached body + peer
 
 ```swift
 @MDB_environment(file: "booking.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
@@ -92,69 +89,59 @@ public struct BookingCore: Sendable {
     public let sheets: Database.Strict<SlotKey, SlotRecord>
 }
 
-extension BookingCore {
-    @MDB_transact(.readWrite)
-    public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
-        try #store(sheets, key: key, value: record)
+enum BookingApp {
+    static let booking = BookingCore.open(at: "...")
+
+    @MDB_transact(.readWrite, environments: booking)
+    static func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
+        try #MDB_entry_store(environment: booking, database: booking.sheets, key: key, value: record)
     }
 
-    @MDB_transact(.readOnly)
-    public func nearestSlot(to date: SlotKey) throws -> SlotRecord? {
-        var found: SlotRecord? = nil
-        #cursor(sheets) { cursor in
-            if let first = try? cursor.opSetRange(key: date).value {
-                found = first
-            }
-        }
-        return found
+    @MDB_transact(.readOnly, environments: booking)
+    static func slotOn(_ day: SlotKey) throws -> SlotRecord? {
+        #MDB_entry_load(environment: booking, database: booking.sheets, key: day)
     }
 }
 ```
 
-The verb vocabulary: `#store(db, key:, value:, flags: = [])`, `#load(db, key:)` (and `#load(db, key:, as:)` on raw ``QuickLMDB/MDB_val`` handles), `#delete(db, key:)` (and `#delete(db, key:, value:)` on duplicate-bearing tables), `#contains(db, key:)` (the `key:, value:` pair form lowers to the cursor's real ``MDB_GET_BOTH`` path — a database-level pair check would be a silent no-op), `#cursor(db) { cursor in ... }`, `#clear(db)`, `#stats(db)` (metadata read), and `#drop(db)` (deleteDatabase — destructive and handle-consuming; receiver must be a locally-owned raw ``QuickLMDB/Database``, never a stored `self.X` table). Each verb used **outside** a boundary is a compile-time diagnostic.
+- **modes** (``QuickLMDB/MDB_transact_mode``): `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. child/relationship composition is NOT a mode — composition is joining (below).
+- **`environments:`** lists the `@MDB_environment` cores that transact within the method; one `tx_<E>` per core, derived from its name. attribute arguments are evaluated at type scope, so the cores must be attribute-reachable (e.g. static stored properties).
+- **marker gating (the rawdog principle):** only the trailing verbs and the join marker are rewritten; every other line is emitted byte-identical. a plain operation call inside a boundary is untouched — cursors, dup iteration, and zero-copy reads work directly with the injected `tx_<E>` name.
+- the trailing verbs used **outside** a boundary, and ``MDB_transacted(_:)`` written anywhere but inside one, are compile-time diagnostics.
+- the annotated method must be `throws` (the boundary can fail to open or close) and must not be `async`.
 
-The injected name `tx` exists for ONE composition purpose: passing it as `parent:` to a ``QuickLMDB/MDB_transact(_:)`` `.readWriteChild` boundary. reusable write logic is a `.readWriteChild` boundary — its mode lives in its own attribute, and calling it with `parent: tx` merges it into the caller's view; reusable read logic is a `.readOnly` boundary (`func nearestSlot(to date: SlotKey) throws -> SlotRecord?`). there is deliberately no plain-helper-with-`tx:` pattern: a helper that does DB work declares its mode in its boundary attribute rather than leaking it through a transaction parameter. `.readWriteChild` requires a parent transaction parameter: `func commitBatch(_ items: [Item], parent: borrowing Transaction) throws`.
+### Composition is JOINING
 
-The annotated method must be `throws` (the boundary can fail to open or commit) and must not be `async`; non-verb operation calls inside the boundary must carry an explicit `tx:` argument (they are left byte-identical by the marker gate).
+`#MDB_transacted(callee(args))` is rewritten into `callee(args, tx_<E>: tx_<E>, …)` — the callee JOINS this boundary's transaction instead of opening its own:
+
+- joined reads see this boundary's own uncommitted state (the new "child view");
+- joined writes land in ONE transaction — **atomic by construction** (a thrown joined write rolls back the whole boundary);
+- a *sibling* read — the last committed state, independent of this boundary — is a plain call (`slotOn(day)` opens its own read transaction);
+- the equal-env-set contract: the rewrite passes the caller's full tx label set, so the callee's wrapped sibling must declare exactly those labels (a single-env helper called from a multi-env boundary does not compile — loud and named at the call site).
 
 ### ``QuickLMDB/MDB_environment(file:flags:maxReaders:maxDBs:mode:)`` — schema assembly
 
-Generates a `static func open(at:mapHeadroom:)` that creates the directory as needed, sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported).
+Generates a `static func open(at:mapHeadroom:)` that creates the directory as needed, sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported). `.noTLS` is forced on every environment (reader slots bind to the transaction object, making Swift task-based concurrency safe and enabling sibling reads).
 
 ### Self-scoped committed reads
 
 Verification reads ("what is the last committed state") carry no transaction ceremony. ``QuickLMDB/MDB_db`` protocol-extension members `readCommitted(key:)`, `containsCommitted(key:)`, and (on dupsort databases) `readCommittedDups(key:)` each open their own read-only transaction, perform the read, and close it internally. they are deliberately NOT boundary verbs — a verb's contract is boundary participation, the opposite of a self-scoped verification read — so they are members, not macros.
 
-Both macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:flags:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
+### Multi-environment boundaries
 
-The typed-handle companions the verbs lower to (`load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)`, plus the dupsort pair `delete(key:value:tx:)`) are protocol-extension members of ``QuickLMDB/MDB_db``, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them. the raw ``QuickLMDB/MDB_val`` tier keeps `loadEntry(key:as:tx:)` for value-raw call sites.
-
-### ``QuickLMDB/MDB_app(_:)`` + ``QuickLMDB/MDB_transact_span(_:)`` — cross-environment boundaries
-
-Apps that own MORE than one ``QuickLMDB/Environment`` can coordinate all of them behind one method. ``MDB_app(_:)`` marks the struct as an environment **container** (its stored ``MDB_environment`` cores become the routing inventory), and ``MDB_transact_span(_:)`` opens ONE top-level transaction per core up front, aborts ALL of them on any body throw, and commits the write members back-to-back in first-touch/declaration order on success (read members simply close).
+The same boundary coordinates MORE than one environment — list every core that needs to transact:
 
 ```swift
-@MDB_app
-public struct HybridApp {
-    public var calendar: CalendarCore
-    public var contacts: ContactCore
-
-    @MDB_transact_span
-    public func scheduleMeeting(_ event: EventID, on day: DayKey,
-                                invitees: [ContactID], at timestamp: Timestamp) throws {
-        try #store(calendar.events, key: day, value: event)
-        for invitee in invitees {
-            try #store(calendar.invitees, key: event, value: invitee)
-            try #store(contacts.lastSync, key: invitee, value: timestamp)
-        }
-    }
+@MDB_transact(.readWrite, environments: calendar, contacts)
+static func scheduleAndMarkSync(_ event: EventID, on day: DayKey,
+                                contact: ContactID, at timestamp: Timestamp) throws {
+    try #MDB_entry_store(environment: calendar, database: calendar.events, key: day, value: event)
+    try #MDB_entry_store(environment: contacts, database: contacts.lastSync, key: contact, value: timestamp)
 }
 ```
 
-- the **bare form infers everything from the verbs**: environments = the verb receivers' base names, modes = any write verb (`#store`/`#delete`/`#clear`) marks a core read-write (read-only access alone marks it read-only), commit order = first-touch order.
-- ``MDB_app(_:)`` also generates a container-level `open(at:mapHeadroom:)`: it creates the base directory and one subdirectory per core (named after the stored property), then opens every core through its own generated ``MDB_environment`` `open(at:)`. a container opens with one call and no per-env path plumbing.
-- the **override form** forces modes/order: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])` names cores by their stored property as strings (naked `.readWrite(calendar)` cannot type-check — attribute arguments are evaluated on the type level, outside instance scope).
-- injected names are `tx_<core>` (e.g. `tx_calendar`) — the composition contract for handing a routed member transaction to a ``QuickLMDB/MDB_transact(_:)`` `.readWriteChild(parent:)` boundary so it merges into the member and commits with the span.
-- the span requires `@MDB_app` on its containing type (gated at expansion).
+one transaction per listed core, all opened up front, ALL aborted on any body throw (nothing lands), write members committed back-to-back. **honest ceiling:** cross-environment commits are best-effort — a crash between the adjacent commit calls can still split the pair. cross-env atomicity is impossible. (within ONE environment, joined writes are fully atomic — the single transaction.)
 
-**Honest ceiling:** cross-environment commits are best-effort. opening all members up front means a body throw aborts ALL of them (nothing lands), but a crash between the two adjacent commit calls can still split the pair. cross-env atomicity is impossible — the span narrows the window to the commit pair itself, it does not fake atomicity. reader-side consistency across the pair (never straddling the commit window) is a separate post-v1 primitive.
+All macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
+
+The typed-handle companions the verbs lower to (`load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)`, plus the dupsort pair `delete(key:value:tx:)`) are protocol-extension members of ``QuickLMDB/MDB_db``, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them. the raw ``QuickLMDB/MDB_val`` tier keeps `loadEntry(key:as:tx:)` for value-raw call sites. The raw ``QuickLMDB/Transaction`` surface stays public for code that deliberately manages its own transactions.

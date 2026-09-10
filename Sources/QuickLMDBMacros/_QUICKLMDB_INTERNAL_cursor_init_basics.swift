@@ -2,7 +2,6 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
-import SwiftParser
 
 /// this macro needs to exist beceause the implemented functions cannot be marked as borrowing when used as a member of a protocol
 internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {

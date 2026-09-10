@@ -1,220 +1,381 @@
+import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
-import SwiftDiagnostics
-import SwiftParser
 
-// @MDB_transact(.readWrite) / @MDB_transact(.readOnly) / @MDB_transact(.readWriteChild)
+// the boundary dialect (v16-iterated design) on the REAL engine (noncopyable
+// Transaction, @MDB_environment cores).
 //
-// attached BODY macro: rewrites the annotated method's body in place so the method itself
-// is a transaction boundary, with no ambient storage of any kind (no task-local, no
-// thread-local, no registry). the expansion:
+// @MDB_transact: attached BODY + PEER.
+//   BODY — scrapes the user's body, replaces it with a SHELL that opens
+//          `tx_<E> = try Transaction(env: <E>.env, readOnly: <mode>)` per listed
+//          environment, calls the WRAPPED SIBLING with those transactions, and
+//          closes every one: `.readOnly` aborts on throw AND on success (a read
+//          leaf never commits); `.readWrite` aborts on throw and COMMITS on
+//          success.
+//   PEER — emits the WRAPPED SIBLING (overload, same base name): the author's
+//          parameters plus `tx_<E>: borrowing Transaction` per environment,
+//          whose body is the scraped body with the trailing verbs (#MDB_entry_load,
+//          #MDB_entry_store) lowered and every #MDB_transacted(...) marker rewritten to
+//          a JOINED call (Design B: one transaction across the composed call —
+//          atomic for writes).
 //
-//   1. injects a local `let tx = try Transaction(env: self.env, ...)` owning the scope,
-//   2. wraps the original body in a nested local function `__mdb_body(_ tx: borrowing
-//      Transaction)` so the transaction is passed by explicit borrow (never captured),
-//   3. lowers freestanding VERB calls (#store / #load / #delete / #contains / #cursor /
-//      #clear) to the tx-bearing operation form. every other line is emitted
-//      byte-identical — marker-gated attribution (a user function named `setEntry`
-//      is unreachable-by-rewrite by construction),
-//   4. commits once on success, aborts exactly once on any thrown error, and returns the
-//      body's captured result.
+// ownership shape is the proven v16 formulation: the transactions flow into
+// the sibling as `borrowing` parameters; the shell owns the lifecycle
+// (consuming abort on the throw path; abort or commit on the success path).
 //
-// wrapping in a nested function means function-level `return`s inside the original body
-// return from the nested function unmodified — no return-rewriting is needed, and returns
-// inside inner closures (e.g. cursor handlers) are untouched by construction.
-//
-// contract:
-//   - the method must be marked `throws` (the boundary can fail to open or commit).
-//   - async methods are rejected (a transaction must never cross an await).
-//   - the enclosing type must have a stored `env` property of type `Environment`.
-//   - `.readWriteChild` requires a `parent: borrowing Transaction` parameter, which the
-//     expansion uses as the child's parent.
-//   - the name `tx` exists for ONE composition purpose: passing as `parent:` to a
-//     `.readWriteChild` boundary. reusable write logic is a `.readWriteChild`
-//     boundary (its mode lives in its own attribute); reusable read logic is a
-//     `.readOnly` boundary. there is deliberately no plain-helper-with-`tx:`
-//     pattern: a helper that does DB work declares its mode as a boundary, not
-//     via a transaction parameter the caller must already know.
-//
-// the underlying C wrapper layer is untouched: the expansion only adds ownership of an
-// `Environment` transaction and forwards calls through the existing public protocol API.
+// modes: `.readOnly` and `.readWrite` (the ratified MDB_transact_mode pair).
+// `.readWriteChild` is rejected: relationship composition is designed
+// separately — Design-B joining already composes calls into ONE transaction.
 
-internal struct MDB_transact_macro: BodyMacro {
+internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
-	private enum MacroError:Swift.Error, CustomStringConvertible {
-		case notAFunction
-		case missingMode
-		case invalidMode(String)
-		case asyncNotSupported
-		case mustBeThrowing
-		case typedThrowsUnsupported
-		case txNameCollision
-		case childNeedsParent
-		case neverReturnUnsupported
+    // - MARK: attribute parsing
 
-		var description:String {
-			switch self {
-				case .notAFunction:
-					return "@MDB_transact can only be applied to a function"
-				case .missingMode:
-					return "@MDB_transact requires a mode argument (e.g. @MDB_transact(.readWrite))"
-				case .invalidMode(let mode):
-					return "unknown @MDB_transact mode '\(mode)'. expected .readWrite, .readOnly, or .readWriteChild"
-				case .asyncNotSupported:
-					return "@MDB_transact does not support async methods - a transaction must not cross an await"
-				case .mustBeThrowing:
-					return "@MDB_transact requires the method to be marked `throws` - the boundary can fail to open, commit, or abort"
-				case .typedThrowsUnsupported:
-					return "@MDB_transact requires an untyped `throws` - the boundary rethrows the body's error, so a typed throws clause cannot be represented"
-				case .txNameCollision:
-					return "@MDB_transact injects the name `tx` into the method body for the boundary transaction - the method must not declare a parameter named `tx`"
-				case .childNeedsParent:
-					return "@MDB_transact(.readWriteChild) requires a `parent: borrowing Transaction` parameter on the method"
-				case .neverReturnUnsupported:
-					return "@MDB_transact does not support `-> Never` return types"
-			}
-		}
-	}
+    private struct EnvSpec {
+        let base: String   // calendarEnv -> derived name tx_calendarEnv
+        let expr: String   // the argument as written, spliced into `Transaction(env: <expr>.env, ...)`
+    }
 
-	/// the single-env route: every verb threads the boundary's one injected `tx`.
-	/// (the span boundary uses a per-core route instead — see MDB_transact_span.)
-	private static let singleEnvRoute: MDB_verbLowering.Route = { _ in "tx" }
+    private struct ParsedMode {
+        let envs: [EnvSpec]
+        let isReadWrite: Bool
+    }
 
-	// - MARK: mode parsing
+    private enum Failure: Swift.Error, CustomStringConvertible {
+        case notAFunction
+        case noMode
+        case childNotDesigned(String)
+        case unknownMode(String)
+        case noEnvironments
+        case envNotName(String)
 
-	private enum Mode {
-		case readWrite
-		case readOnly
-		case readWriteChild
-	}
+        var description: String {
+            switch self {
+            case .notAFunction:
+                return "@MDB_transact can only be applied to a function"
+            case .noMode:
+                return "@MDB_transact requires a mode argument"
+            case .childNotDesigned(let mode):
+                return "@MDB_transact cannot accept '\(mode)': relationship (child) composition is designed separately — Design-B #MDB_transacted joining already composes calls into one transaction"
+            case .unknownMode(let mode):
+                return "@MDB_transact: unknown mode '\(mode)' — expected .readOnly or .readWrite"
+            case .noEnvironments:
+                return "@MDB_transact requires at least one environment in `environments:`"
+            case .envNotName(let expr):
+                return "@MDB_transact cannot derive a transaction name from environment argument '\(expr)' — use a plain variable name"
+            }
+        }
+    }
 
-	private static func parseMode(from node:AttributeSyntax) throws -> Mode {
-		guard let argList = node.arguments?.as(LabeledExprListSyntax.self), let firstExpr = argList.first?.expression else {
-			throw MacroError.missingMode
-		}
-		guard let member = firstExpr.as(MemberAccessExprSyntax.self) else {
-			throw MacroError.missingMode
-		}
-		switch member.declName.baseName.text {
-			case "readWrite": return .readWrite
-			case "readOnly": return .readOnly
-			case "readWriteChild": return .readWriteChild
-			default: throw MacroError.invalidMode(member.declName.baseName.text)
-		}
-	}
+    /// base identifier of an environment argument: `calendarEnv` → "calendarEnv",
+    /// `Demo.calendarEnv` → "calendarEnv"
+    private static func baseName(of expression: ExprSyntax) -> String? {
+        if let ref = expression.as(DeclReferenceExprSyntax.self) {
+            return ref.baseName.text
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self) {
+            return member.declName.baseName.text
+        }
+        return nil
+    }
 
-	// - MARK: body macro entry point
+    /// the variadic `environments:` flattens into the argument list and only
+    /// the FIRST element keeps the label (verified in the spike). position is
+    /// the anchor: index 0 = mode, everything after = an environment.
+    private static func parse(_ node: AttributeSyntax) throws -> ParsedMode {
+        guard let argList = node.arguments?.as(LabeledExprListSyntax.self), !argList.isEmpty else {
+            throw Failure.noMode
+        }
+        var envs: [EnvSpec] = []
+        var isReadWrite = false
+        for (index, arg) in argList.enumerated() {
+            if index == 0 {
+                let modeText = arg.expression.trimmedDescription
+                switch modeText {
+                case ".readOnly", "MDB_transact_mode.readOnly":
+                    isReadWrite = false
+                case ".readWrite", "MDB_transact_mode.readWrite":
+                    isReadWrite = true
+                case ".readWriteChild", "MDB_transact_mode.readWriteChild":
+                    throw Failure.childNotDesigned(modeText)
+                default:
+                    throw Failure.unknownMode(modeText)
+                }
+            } else {
+                let exprText = arg.expression.trimmedDescription
+                guard let base = baseName(of: arg.expression) else {
+                    throw Failure.envNotName(exprText)
+                }
+                envs.append(EnvSpec(base: base, expr: exprText))
+            }
+        }
+        guard !envs.isEmpty else { throw Failure.noEnvironments }
+        return ParsedMode(envs: envs, isReadWrite: isReadWrite)
+    }
 
-	static func expansion(of node:AttributeSyntax, providingBodyFor declaration:some DeclSyntaxProtocol & WithOptionalCodeBlockSyntax, in context:some MacroExpansionContext) throws -> [CodeBlockItemSyntax] {
-		let mode = try parseMode(from:node)
+    // - MARK: BodyMacro — the shell
 
-		guard let fn = declaration.as(FunctionDeclSyntax.self) else {
-			throw MacroError.notAFunction
-		}
-		if fn.signature.effectSpecifiers?.asyncSpecifier != nil {
-			throw MacroError.asyncNotSupported
-		}
-		guard fn.signature.effectSpecifiers?.throwsClause != nil else {
-			throw MacroError.mustBeThrowing
-		}
-		if let throwsClause = fn.signature.effectSpecifiers?.throwsClause, throwsClause.type != nil {
-			throw MacroError.typedThrowsUnsupported
-		}
+    static func expansion(
+        of node: AttributeSyntax,
+        providingBodyFor declaration: some DeclSyntaxProtocol & WithOptionalCodeBlockSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> [CodeBlockItemSyntax] {
+        guard let fn = declaration.as(FunctionDeclSyntax.self) else { throw Failure.notAFunction }
+        let parsed = try parse(node)
+        let envs = parsed.envs
+        let isReadWrite = parsed.isReadWrite
 
-		let params = fn.signature.parameterClause.parameters
-		if params.contains(where: { $0.firstName.text == "tx" || $0.secondName?.text == "tx" }) {
-			throw MacroError.txNameCollision
-		}
-		if mode == .readWriteChild {
-			guard params.contains(where: { $0.firstName.text == "parent" || $0.secondName?.text == "parent" }) else {
-				throw MacroError.childNeedsParent
-			}
-		}
-		let retClause = fn.signature.returnClause
-		if let retClause, retClause.type.trimmedDescription == "Never" {
-			throw MacroError.neverReturnUnsupported
-		}
-		let retTypeText:String? = fn.signature.returnClause?.type.trimmedDescription
-		let hasReturnValue = retTypeText != nil
+        let params = fn.signature.parameterClause.parameters
+        let name = fn.name.text
+        let isThrowing = fn.signature.effectSpecifiers?.throwsClause != nil
+        let retText = fn.signature.returnClause?.type.trimmedDescription
 
-		// -- nested function: same parameters as the method + the borrowed boundary transaction
-		//    (param descriptions include their trailing separator comma — strip it before joining)
-		var nestedParams:[String] = params.map { p in
-			let s = p.trimmedDescription
-			return s.hasSuffix(",") ? String(s.dropLast()) : s
-		}
-		nestedParams.append("_ tx: borrowing Transaction")
-		let nestedParamClause = "(\(nestedParams.joined(separator:", ")))"
-		var throwsAndReturns = " throws"
-		if let fnReturnClause = fn.signature.returnClause {
-			throwsAndReturns += " " + fnReturnClause.trimmedDescription
-		}
+        // the shell's call into the wrapped sibling: the author's arguments by
+        // their original labels, then one `tx_<E>: tx_<E>` per environment
+        // (overload resolution selects the sibling — only it has these params)
+        var callArgs: [String] = []
+        for p in params {
+            if p.firstName.text == "_" {
+                callArgs.append(p.secondName?.text ?? "")
+            } else if let second = p.secondName {
+                callArgs.append("\(p.firstName.text): \(second.text)")
+            } else {
+                callArgs.append("\(p.firstName.text): \(p.firstName.text)")
+            }
+        }
+        for e in envs { callArgs.append("tx_\(e.base): tx_\(e.base)") }
+        let call = "\(name)(\(callArgs.joined(separator: ", ")))"
+        // abort lines carry the SAME source indent as `throw error` below so
+        // BasicFormat normalizes the whole catch block to one level
+        let abortLines = envs.map { "    tx_\($0.base).abort()" }.joined(separator: "\n")
 
-		// -- call arguments for __mdb_body(...)
-		var callArgs:[String] = []
-		for param in params {
-			if param.firstName.text == "_" {
-				callArgs.append(param.secondName?.text ?? "")
-			} else if let second = param.secondName {
-				callArgs.append("\(param.firstName.text): \(second.text)")
-			} else {
-				callArgs.append("\(param.firstName.text): \(param.firstName.text)")
-			}
-		}
-		var bodyCallArgs = callArgs
-		bodyCallArgs.append("tx")
-		let bodyCall = "__mdb_body(\(bodyCallArgs.joined(separator:", ")))"
+        var items: [CodeBlockItemSyntax] = []
+        for e in envs {
+            let readOnly = isReadWrite ? "false" : "true"
+            items.append(CodeBlockItemSyntax(stringLiteral: "let tx_\(e.base) = try Transaction(env: \(e.expr).env, readOnly: \(readOnly))"))
+        }
 
-		// -- transform the original body: lower verb calls to tx-bearing form
-		let rewriter = MDB_verbLowering.Rewriter(route:singleEnvRoute)
-		let originalStatements = fn.body?.statements ?? CodeBlockItemListSyntax([])
-		let transformedItems = rewriter.visit(originalStatements)
-		let bodyText = transformedItems.map { $0.trimmedDescription }.joined(separator:"\n")
+        if let retText {
+            items.append(CodeBlockItemSyntax(stringLiteral: "let __mdb_output: \(retText)"))
+            if isThrowing {
+                items.append(CodeBlockItemSyntax(stringLiteral: """
+                do {
+                    __mdb_output = try \(call)
+                } catch let error {
+                \(abortLines)
+                    throw error
+                }
+                """))
+            } else {
+                items.append(CodeBlockItemSyntax(stringLiteral: "__mdb_output = \(call)"))
+            }
+            // success path: readOnly aborts every tx; readWrite COMMITS every tx
+            if isReadWrite {
+                for e in envs { items.append(CodeBlockItemSyntax(stringLiteral: "try tx_\(e.base).commit()")) }
+            } else {
+                // one ITEM per abort: a joined multi-line string lets BasicFormat
+                // re-indent the continuation lines differently from the first
+                for e in envs { items.append(CodeBlockItemSyntax(stringLiteral: "tx_\(e.base).abort()")) }
+            }
+            items.append(CodeBlockItemSyntax(stringLiteral: "return __mdb_output"))
+        } else {
+            if isThrowing {
+                items.append(CodeBlockItemSyntax(stringLiteral: """
+                do {
+                    try \(call)
+                } catch let error {
+                \(abortLines)
+                    throw error
+                }
+                """))
+            } else {
+                items.append(CodeBlockItemSyntax(stringLiteral: call))
+            }
+            if isReadWrite {
+                for e in envs { items.append(CodeBlockItemSyntax(stringLiteral: "try tx_\(e.base).commit()")) }
+            } else {
+                for e in envs { items.append(CodeBlockItemSyntax(stringLiteral: "tx_\(e.base).abort()")) }
+            }
+        }
+        return items
+    }
 
-		// -- transaction opening line per mode
-		let openLine:String
-		switch mode {
-			case .readWrite:
-				openLine = "let tx = try Transaction(env: self.env, readOnly: false)"
-			case .readOnly:
-				openLine = "let tx = try Transaction(env: self.env, readOnly: true)"
-			case .readWriteChild:
-				openLine = "let tx = try Transaction(env: self.env, readOnly: false, parent: parent)"
-		}
+    // - MARK: PeerMacro — the wrapped sibling (the implementation)
 
-		// -- nested function declaration, body injected as parsed text
-		let nestedFuncText = "func __mdb_body\(nestedParamClause)\(throwsAndReturns) {\n\(bodyText)\n}"
+    static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        guard let fn = declaration.as(FunctionDeclSyntax.self) else { throw Failure.notAFunction }
+        // the BODY role is only invoked for functions, so for function-target
+        // validation failures the body's single diagnostic already speaks —
+        // this peer must not double-report. return no sibling silently.
+        let parsed: ParsedMode
+        do {
+            parsed = try parse(node)
+        } catch {
+            return []
+        }
+        let envs = parsed.envs
 
-		var items:[CodeBlockItemSyntax] = []
-		items.append(CodeBlockItemSyntax(stringLiteral: openLine))
-		items.append(CodeBlockItemSyntax(stringLiteral: nestedFuncText))
-		if let retTypeText {
-			items.append(CodeBlockItemSyntax(stringLiteral: "let __mdb_output: \(retTypeText)"))
-		}
-		// the do/catch boundary is a SINGLE statement item (control flow must not be
-		// assembled from separate top-level code block items)
-		var doCatchLines:[String] = []
-		doCatchLines.append("do {")
-		if hasReturnValue {
-			doCatchLines.append("    __mdb_output = try \(bodyCall)")
-		} else {
-			doCatchLines.append("    try \(bodyCall)")
-		}
-		doCatchLines.append("} catch let error {")
-		doCatchLines.append("    tx.abort()")
-		doCatchLines.append("    throw error")
-		doCatchLines.append("}")
-		items.append(CodeBlockItemSyntax(stringLiteral: doCatchLines.joined(separator:"\n")))
-		switch mode {
-			case .readOnly:
-				items.append(CodeBlockItemSyntax(stringLiteral: "tx.abort()"))
-			default:
-				items.append(CodeBlockItemSyntax(stringLiteral: "try tx.commit()"))
-		}
-		if hasReturnValue {
-			items.append(CodeBlockItemSyntax(stringLiteral: "return __mdb_output"))
-		}
-		return items
-	}
+        // the author's parameters + one `tx_<E>: borrowing Transaction` each.
+        // `borrowing` is the v16-proven shape: the transaction flows in by
+        // explicit borrow (never captured); the CALLER owns the lifecycle.
+        var paramStrs: [String] = []
+        for p in fn.signature.parameterClause.parameters {
+            var s = p.trimmedDescription
+            if s.hasSuffix(",") { s = String(s.dropLast()) }
+            paramStrs.append(s)
+        }
+        for e in envs { paramStrs.append("tx_\(e.base): borrowing Transaction") }
+
+        let modifiers = fn.modifiers.trimmedDescription
+        let modifierPrefix = modifiers.isEmpty ? "" : modifiers + " "
+        let name = fn.name.text
+        var effects = ""
+        if fn.signature.effectSpecifiers?.throwsClause != nil { effects += " throws" }
+        let ret = fn.signature.returnClause.map { " \($0.trimmedDescription)" } ?? ""
+
+        // scrape the author's body: lower the trailing verbs and consume every
+        // #MDB_transacted(...) marker (Design B join)
+        let body = fn.body?.statements ?? CodeBlockItemListSyntax([])
+        let rewriter = SiblingRewriter(envs: envs)
+        let rewritten = rewriter.visit(body)
+        let bodyText = rewritten.map { $0.trimmedDescription }.joined(separator: "\n")
+
+        let decl = "\(modifierPrefix)func \(name)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret) {\n\(bodyText)\n}"
+        return [DeclSyntax(stringLiteral: decl)]
+    }
+
+    // - MARK: the sibling-body rewriter
+
+    private final class SiblingRewriter: SyntaxRewriter {
+        let envs: [EnvSpec]
+
+        init(envs: [EnvSpec]) {
+            self.envs = envs
+        }
+
+        override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
+            // children first, so a nested macro is processed before this node folds
+            let processed = super.visit(node)
+            let expansion = processed.cast(MacroExpansionExprSyntax.self)
+            switch expansion.macroName.text {
+            case "MDB_entry_load":
+                return lowerQLoad(expansion) ?? ExprSyntax(expansion)
+            case "MDB_entry_store":
+                return lowerQStore(expansion) ?? ExprSyntax(expansion)
+            case "MDB_transacted":
+                return rewriteJoined(expansion) ?? ExprSyntax(expansion)
+            default:
+                return ExprSyntax(expansion)
+            }
+        }
+
+        private func arg(_ node: MacroExpansionExprSyntax, _ label: String) -> LabeledExprSyntax? {
+            node.arguments.first { $0.label?.text == label }
+        }
+
+        /// #MDB_entry_load(environment: E, database: D, key: K) -> D.load(key: K, tx: tx_<E>)
+        private func lowerQLoad(_ node: MacroExpansionExprSyntax) -> ExprSyntax? {
+            guard let env = arg(node, "environment"),
+                  let db = arg(node, "database"),
+                  let key = arg(node, "key"),
+                  let base = MDB_transact_macro.baseName(of: env.expression) else { return nil }
+            return ExprSyntax(stringLiteral:
+                "\(db.expression.trimmedDescription).load(key: \(key.expression.trimmedDescription), tx: tx_\(base))")
+        }
+
+        /// #MDB_entry_store(environment: E, database: D, key: K, value: V) -> D.store(key: K, value: V, tx: tx_<E>)
+        private func lowerQStore(_ node: MacroExpansionExprSyntax) -> ExprSyntax? {
+            guard let env = arg(node, "environment"),
+                  let db = arg(node, "database"),
+                  let key = arg(node, "key"),
+                  let value = arg(node, "value"),
+                  let base = MDB_transact_macro.baseName(of: env.expression) else { return nil }
+            return ExprSyntax(stringLiteral:
+                "\(db.expression.trimmedDescription).store(key: \(key.expression.trimmedDescription), value: \(value.expression.trimmedDescription), tx: tx_\(base))")
+        }
+
+        /// #MDB_transacted(callee(args)) -> callee(args, tx_<E>: tx_<E>, ...)
+        /// Design B: route into the callee's WRAPPED SIBLING with THIS
+        /// boundary's transaction values. the callee's sibling must declare
+        /// exactly these tx labels — the equal-env-set contract is enforced by
+        /// the type checker (extra/missing argument at the call site).
+        private func rewriteJoined(_ node: MacroExpansionExprSyntax) -> ExprSyntax? {
+            guard let call = node.arguments.first?.expression.as(FunctionCallExprSyntax.self) else { return nil }
+            var parts: [String] = []
+            for argument in call.arguments {
+                var s = argument.trimmedDescription
+                if s.hasSuffix(",") { s = String(s.dropLast()) }
+                parts.append(s)
+            }
+            for e in envs { parts.append("tx_\(e.base): tx_\(e.base)") }
+            return ExprSyntax(stringLiteral:
+                "\(call.calledExpression.trimmedDescription)(\(parts.joined(separator: ", ")))")
+        }
+    }
+}
+
+// - MARK: standalone expansions (outside a boundary)
+
+private struct BoundaryDiagnostic: DiagnosticMessage {
+    let id: String
+    let text: String
+    var message: String { text }
+    var diagnosticID: MessageID { MessageID(domain: "QuickLMDB", id: id) }
+    var severity: DiagnosticSeverity { .error }
+}
+
+/// Design-B marker, standalone: there is no boundary transaction to join.
+internal struct MDB_transacted_macro: ExpressionMacro {
+    static func expansion(
+        of node: some FreestandingMacroExpansionSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> ExprSyntax {
+        context.diagnose(Diagnostic(
+            node: Syntax(node),
+            message: BoundaryDiagnostic(
+                id: "transactedOutsideBoundary",
+                text: "#MDB_transacted must appear inside an @MDB_transact body — the boundary rewrites it to join its transactions"
+            )
+        ))
+        return "nil"
+    }
+}
+
+/// trailing read verb, standalone: no boundary to lower it.
+internal struct MDB_entry_load_macro: ExpressionMacro {
+    static func expansion(
+        of node: some FreestandingMacroExpansionSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> ExprSyntax {
+        context.diagnose(Diagnostic(
+            node: Syntax(node),
+            message: BoundaryDiagnostic(
+                id: "MDB_entry_loadOutsideBoundary",
+                text: "#MDB_entry_load must appear inside an @MDB_transact body — the boundary lowers it to the tx-bearing load"
+            )
+        ))
+        return "nil"
+    }
+}
+
+/// trailing write verb, standalone: no boundary to lower it.
+internal struct MDB_entry_store_macro: ExpressionMacro {
+    static func expansion(
+        of node: some FreestandingMacroExpansionSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> ExprSyntax {
+        context.diagnose(Diagnostic(
+            node: Syntax(node),
+            message: BoundaryDiagnostic(
+                id: "MDB_entry_storeOutsideBoundary",
+                text: "#MDB_entry_store must appear inside an @MDB_transact body — the boundary lowers it to the tx-bearing store"
+            )
+        ))
+        return "nil"
+    }
 }

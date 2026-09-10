@@ -1,3 +1,33 @@
+# Unreleased
+
+- **the transaction layer is now the boundary dialect.** the legacy v16
+  transactional surface was removed: the mode-only `@MDB_transact` (nested
+  `__mdb_body` form), `@MDB_transact_span`, `@MDB_app`, `MDB_span_member`,
+  `MDB_environment_container`, and the receiver-based verb vocabulary
+  (`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear`/`#stats`/`#drop`
+  with `tx` injection). the new surface, under the final ratified names:
+  - `@MDB_transact(_ mode: MDB_transact_mode, environments:)` — attached body +
+    peer. `.readOnly` aborts on throw and success (a read leaf never commits);
+    `.readWrite` aborts on throw and COMMITS on success. one `tx_<E>` per listed
+    environment; the peer emits the wrapped sibling (`tx_<E>: borrowing
+    Transaction`). `.readWriteChild` is not a mode — Design-B joining composes.
+  - `#MDB_transacted(call)` — the join marker: rewritten inside a boundary into
+    the callee's wrapped sibling, threading this boundary's transaction (one
+    transaction across the composed call; joined reads see the boundary's own
+    uncommitted state). standalone use is a compile-time diagnostic.
+  - `#MDB_entry_load(environment:database:key:)` /
+    `#MDB_entry_store(environment:database:key:value:)` — trailing verbs lowered
+    inside a boundary to `database.load(key:tx_<E>)` /
+    `database.store(key:value:tx_<E>)`; `try` belongs at the verb.
+  - `MDB_transact_mode` trimmed to `.readOnly` / `.readWrite`.
+  - `MDB_db_flags` made fully public (`reverseKey`, `dupSort`, `dupFixed`,
+    `reverseDup`, `integerKey`, `integerDup`, `create`).
+- **schema layer: `@MDB_table(name:flags:)`** on `Database.X` stored properties
+  inside an `@MDB_environment` core — explicit table-name override and extra
+  db flags (comparators stay type-derived via `MDB_comparable`). zero
+  attributes = identity; the environment scan validates names and
+  flags-vs-type conflicts with friendly diagnostics.
+
 # 16.1.0
 
 - **Marker-gated verb vocabulary inside `@MDB_transact` boundaries.** the verb macros `#store`, `#load`, `#delete`, `#contains`, `#cursor`, `#clear`, `#stats`, `#drop` are now the only auto-`tx:` surface inside a boundary. the body macro lowers exactly the freestanding verb calls (matched by macro name, nothing else) to their tx-bearing operation form and emits every other line byte-identical — the name-list `tx:` injection is deleted, so a plain `setEntry`/`loadEntry`/`cursor(...)` call inside a boundary must carry `tx:` explicitly or it fails to compile. this is a **breaking change** for the v16.0.0 preview shape: boundary bodies written with omit-`tx:` method calls must migrate to verbs (or pass `tx: tx`).

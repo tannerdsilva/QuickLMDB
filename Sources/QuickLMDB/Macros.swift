@@ -5,52 +5,37 @@ import SystemPackage
 public macro MDB_comparable() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_comparable_macro")
 
 @attached(member,		names:			named(compareEntryValues(_:_:)),
-										named(compareEntryKeys(_:_:)),
-										named(containsEntry(key:)),
-										named(opSetRange(returning:key:)),
-										named(opSet(returning:key:)),
-										named(opGetCurrent(returning:)),
-										named(opGetBoth(returning:key:value:)),
-										named(opGetBothRange(returning:key:value:)),
-										named(opSetKey(returning:key:)),
-										named(setEntry(key:value:flags:)),
-										named(containsEntry(key:value:)))
+									named(compareEntryKeys(_:_:)),
+									named(containsEntry(key:)),
+									named(opSetRange(returning:key:)),
+									named(opSet(returning:key:)),
+									named(opGetCurrent(returning:)),
+									named(opGetBoth(returning:key:value:)),
+									named(opGetBothRange(returning:key:value:)),
+									named(opSetKey(returning:key:)),
+									named(setEntry(key:value:flags:)),
+									named(containsEntry(key:value:)))
 internal macro MDB_cursor_RAW_access_members() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_encodable_impl")
 
 @attached(member,		names:			arbitrary)
 internal macro MDB_cursor_basics() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_init_basics_impl")
 
-/// the transaction mode for the ``MDB_transact(_:)`` macro.
-/// - ``MDB_transact_mode/readWrite`` makes the method a read/write transaction boundary: the body commits once on success and aborts exactly once if any operation throws.
-/// - ``MDB_transact_mode/readOnly`` makes the method a read-only transaction boundary: the transaction aborts on exit and never commits.
-/// - ``MDB_transact_mode/readWriteChild`` makes the method a child transaction of a `parent: borrowing Transaction` parameter on the method; committing the child merges it into the parent.
+/// the operation mode for the ``MDB_transact(_:environments:)`` macro.
+/// - ``MDB_transact_mode/readOnly`` makes the boundary a read-only transaction boundary: it opens read transactions, never commits, and aborts every one on throw and on success (a read leaf).
+/// - ``MDB_transact_mode/readWrite`` makes the boundary a read/write transaction boundary: it opens write transactions, aborts every one on throw, and COMMITS each on success.
+///
+/// the mode enum is the ratified pair. child/relationship composition is not a
+/// mode here — Design-B joining (``MDB_transacted(_:)``) composes calls into ONE
+/// transaction instead (see ``MDB_transact(_:environments:)``).
 public enum MDB_transact_mode:Sendable {
-	case readWrite
 	case readOnly
-	case readWriteChild
+	case readWrite
 }
-
-/// makes the annotated method a transaction boundary.
-///
-/// this is an attached *body* macro: it rewrites the method's body in place so that the
-/// method itself owns its transaction scope, with no task-local or thread-local storage
-/// of any kind. call sites of QuickLMDB operations inside the body may omit the `tx:`
-/// argument — the expansion appends `tx: tx`, where `tx` is the boundary transaction that
-/// the expansion injects as a `let`. the same name can be passed on to helper functions
-/// that take `tx: borrowing Transaction`.
-///
-/// the annotated method must be `throws` (the boundary can fail to open or commit) and
-/// must not be `async`. `.readWriteChild` requires a `parent: borrowing Transaction`
-/// parameter. operation call sites that already carry an explicit `tx:` argument are left
-/// untouched.
-@attached(body)
-public macro MDB_transact(_ mode:MDB_transact_mode) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_transact_macro")
 
 /// schema assembly for an environment struct: generates a `static func open(at:mapHeadroom:)`
 /// that sizes the memory map, opens the environment, and opens every `Database.X` table in
-/// one setup write-transaction (table names are derived from the property names). the
-/// generated struct also conforms to ``MDB_environment`` (marking it as an environment core
-/// for ``MDB_app`` containers).
+/// one setup write-transaction. the generated struct also conforms to ``MDB_environment``,
+/// which is what ``MDB_transact(_:environments:)`` accepts in its `environments:` list.
 ///
 /// - Parameters:
 ///   - file: the name of the environment file (appended to the base path).
@@ -80,127 +65,92 @@ internal macro MDB_db_strict_impl() = #externalMacro(module:"QuickLMDBMacros", t
 internal macro MDB_cursor_dupfixed() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_dupfixed_impl")
 
 @attached(member,		names:			named(opGetBoth(returning:key:value:)),
-										named(opGetBothRange(returning:key:value:)),
-										named(opFirstDup(returning:)),
-										named(opLastDup(returning:)),
-										named(opNextNoDup(returning:)),
-										named(opNextDup(returning:)),
-										named(opPreviousDup(returning:)),
-										named(opPreviousNoDup(returning:)))
+									named(opGetBothRange(returning:key:value:)),
+									named(opFirstDup(returning:)),
+									named(opLastDup(returning:)),
+									named(opNextNoDup(returning:)),
+									named(opNextDup(returning:)),
+									named(opPreviousDup(returning:)),
+									named(opPreviousNoDup(returning:)))
 internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_dupsort_impl")
 
-// - MARK: verb vocabulary (freestanding expression macros)
+// - MARK: the boundary dialect (the current transaction architecture)
 
-// the verb macros are the marker-gated call surface inside transaction
-// boundaries. each boundary macro (MDB_transact, and the later span boundary)
-// CONSUMES the verb calls in the body and lowers them to the tx-bearing
-// operation call; this standalone declaration is the fallback for use OUTSIDE
-// a boundary, where the shared implementation always emits a diagnostic.
-// the boundary macro expands before these standalone expansions, so inside a
-// boundary the fallback is never reachable by construction (see
-// swift-macro-development references/verb-macro-consumption-architecture.md).
+// the legacy transactional surface — the mode-only `@MDB_transact` (nested
+// `__mdb_body` form), `@MDB_transact_span`, `@MDB_app`, and the receiver-based
+// verb vocabulary — was SHED in the phase-2 removal; see the archive section
+// of v16 vision.md. the boundary dialect below is the only transaction layer:
+// `@MDB_transact` (attached body + peer), the `#MDB_transacted` join marker,
+// and the `#MDB_entry_load` / `#MDB_entry_store` trailing verbs.
 
-/// stores `value` under `key` in `db`. only meaningful inside a transaction
-/// boundary (``MDB_transact``); used elsewhere this is a compile-time error.
-@freestanding(expression)
-public macro store(_ db: Any, key: Any, value: Any, flags: QuickLMDB.Operation.Flags = []) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// loads the value for `key` from `db`. typed handles infer the value type;
-/// raw ``MDB_val`` handles pass `as:` for the value type.
-/// only meaningful inside a transaction boundary; used elsewhere this is a
-/// compile-time error.
-@freestanding(expression)
-public macro load(_ db: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-@freestanding(expression)
-public macro load(_ db: Any, key: Any, as: Any.Type) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// deletes the entry for `key` (or the exact `key`/`value` pairing on
-/// duplicate-bearing databases). only meaningful inside a transaction
-/// boundary; used elsewhere this is a compile-time error.
-@freestanding(expression)
-public macro delete(_ db: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-@freestanding(expression)
-public macro delete(_ db: Any, key: Any, value: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// checks whether `key` (or the exact `key`/`value` pairing, lowered to the
-/// cursor GET_BOTH path) exists in `db`. only meaningful inside a transaction
-/// boundary; used elsewhere this is a compile-time error.
-@freestanding(expression)
-public macro contains(_ db: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-@freestanding(expression)
-public macro contains(_ db: Any, key: Any, value: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// opens a cursor over `db` for the duration of the trailing closure. only
-/// meaningful inside a transaction boundary; used elsewhere this is a
-/// compile-time error.
-@freestanding(expression)
-public macro cursor(_ db: Any, _ body: (Any) -> Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// removes every entry from `db`. only meaningful inside a transaction
-/// boundary; used elsewhere this is a compile-time error.
-@freestanding(expression)
-public macro clear(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// returns the statistics for `db` as an `MDB_stat` (a read — never marks a
-/// span member write). only meaningful inside a transaction boundary; used
-/// elsewhere this is a compile-time error.
-@freestanding(expression)
-public macro stats(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// deletes `db` and all of its contents from the environment. `deleteDatabase`
-/// CONSUMES the handle, so the receiver must be a handle the body owns (a local
-/// raw `Database`, not a stored `self.X` table) and cannot be used afterwards.
-/// only meaningful inside a transaction boundary; used elsewhere this is a
-/// compile-time error.
-@freestanding(expression)
-public macro drop(_ db: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
-
-/// marks a struct as an environment CONTAINER: its stored `@MDB_environment` cores
-/// become the environment inventory that ``MDB_transact_span(_:)`` routes to.
-/// generates the `MDB_environment_container` conformance, the
-/// `mdb_environment_property_names` inventory, and a container-level
-/// `open(at:mapHeadroom:)` that creates each core's subdirectory and opens every
-/// core in one call.
-@attached(member, names: named(mdb_environment_property_names), named(open(at:mapHeadroom:)))
-@attached(extension, conformances: MDB_environment_container)
-public macro MDB_app() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_app_macro")
-
-/// per-core mode override for ``MDB_transact_span(_:)``. only used when the bare
-/// inference forms are not what you want — forcing a mode or pinning commit order.
+/// makes the annotated method a transaction boundary across one or more
+/// `@MDB_environment` cores.
 ///
-/// the core is named by its STORED PROPERTY name as a string: `.readWrite("calendar")`.
-/// (a naked `.readWrite(calendar)` cannot type-check: attribute arguments are
-/// evaluated on the type level, where instance stored properties are not in scope.)
-public enum MDB_span_member {
-	/// this environment core participates as a read/write member (commits with the span).
-	case readWrite(String)
-	/// this environment core participates as a read-only member (never commits; aborts on close).
-	case readOnly(String)
-}
-
-/// makes the annotated method a transaction boundary across MULTIPLE `@MDB_environment`
-/// cores (an `@MDB_app` container). one top-level transaction per participating core
-/// is opened up front; a thrown body aborts ALL of them; on success the write members
-/// commit back-to-back in first-touch (or declaration) order while read-only members
-/// just close. cross-environment commits are best-effort (LMDB commits are
-/// per-environment); the span narrows the window to the adjacent commit calls.
+/// attached BODY + PEER macro. the body SCRAPES the method's body and replaces
+/// it with a SHELL: opens `tx_<E> = try Transaction(env: <E>.env, readOnly: <mode>)`
+/// per listed environment, calls the WRAPPED SIBLING with those transactions,
+/// and closes every one — a read only boundary aborts on throw AND on success
+/// (a read leaf never commits); a `.readWrite` boundary aborts on throw and
+/// COMMITS on success. the peer emits the WRAPPED SIBLING: the same signature
+/// plus one `tx_<E>: borrowing Transaction` parameter per environment, whose
+/// body is the scraped body with the trailing verbs lowered and every
+/// ``MDB_transacted(_:)`` call rewritten to join this boundary's transaction
+/// (Design B — one transaction across the composed call, atomic for writes).
 ///
-/// BARE form: `@MDB_transact_span` infers the participating cores, their modes, and
-/// their commit order from the freestanding verb calls in the body — receiver base
-/// names are the cores; any write verb (`#store`/`#delete`/`#clear`) marks a core
-/// read-write; read-only access alone marks it read-only.
+/// the mode is ``MDB_transact_mode`` — `.readOnly` and `.readWrite` are the
+/// approved operating modes on this boundary. `.readWriteChild` is not a mode:
+/// relationship composition is designed separately — Design-B joining already
+/// composes calls into ONE transaction.
 ///
-/// OVERRIDE form: `@MDB_transact_span([.readWrite("calendar"), .readOnly("contacts")])`
-/// forces modes and order explicitly. cores are named by their stored property
-/// names as strings (naked `.readWrite(calendar)` cannot type-check — attribute
-/// arguments are evaluated on the type level, outside instance scope).
-///
-/// injected names are `tx_<core>` (e.g. `tx_calendar`) — the documented composition
-/// contract for handing a routed member transaction to a `.readWriteChild(parent:)`
-/// boundary. same marker-gated verb lowering as ``MDB_transact(_:)``: only the
-/// freestanding verbs are rewritten; every other line is byte-identical.
+/// the `environments:` variadic receives environment cores by their stored
+/// property names — attribute arguments are evaluated at type scope, so the
+/// cores must be attribute-reachable (e.g. static stored properties).
 @attached(body)
-public macro MDB_transact_span(_ members: [MDB_span_member]? = nil) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_transact_span_macro")
+@attached(peer, names: overloaded)
+public macro MDB_transact(_ mode: MDB_transact_mode, environments: any MDB_environment...) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_transact_macro")
+
+/// the call marker for ``MDB_transact(_:environments:)``-wrapped functions
+/// (Design B). inside a boundary the call is rewritten to the callee's
+/// WRAPPED SIBLING, threading this boundary's transactions — the callee joins
+/// the boundary (one transaction across the composed call, atomic for writes;
+/// joined reads see this boundary's own uncommitted state). written anywhere
+/// else, this is a compile-time diagnostic.
+@freestanding(expression)
+public macro MDB_transacted<T>(_ call: T) -> T = #externalMacro(module:"QuickLMDBMacros", type:"MDB_transacted_macro")
+
+/// trailing verb: reads `key` through `database`'s environment's transaction.
+/// only meaningful inside an ``MDB_transact(_:environments:)`` body, which
+/// lowers it to `database.load(key:tx:)`; used elsewhere it is a compile-time
+/// diagnostic.
+@freestanding(expression)
+public macro MDB_entry_load(_ environment: Any, database: Any, key: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_entry_load_macro")
+
+/// trailing verb: stores `value` under `key` in `database`'s environment's
+/// transaction. only meaningful inside an ``MDB_transact(_:environments:)``
+/// body, which lowers it to `database.store(key:value:tx:)`; used elsewhere it
+/// is a compile-time diagnostic. writing on a `.readOnly` boundary's
+/// transaction surfaces as the engine's access violation at runtime (the
+/// read-only write lint is a later pass).
+@freestanding(expression)
+public macro MDB_entry_store(_ environment: Any, database: Any, key: Any, value: Any) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_entry_store_macro")
+
+// - MARK: schema layer — table declaration
+
+/// per-table declaration inside an ``MDB_environment(_:file:flags:maxReaders:maxDBs:mode:)``
+/// core, attached to a `Database.X` stored property. the environment scan
+/// consumes this attribute when it opens the tables in the setup transaction.
+///
+/// - Parameters:
+///   - name: the LMDB table name. defaults to the property name (derived) —
+///     the explicit override is for when the Swift property name is not the
+///     on-disk table name you want.
+///   - flags: extra ``MDB_db_flags`` the declared Swift type cannot express,
+///     e.g. `.reverseKey`/`.reverseDup`, or `.dupSort`/`.dupFixed` on a raw
+///     ``Database`` handle. the typed subtype (Strict/DupSort/DupFixed) and its
+///     comparators come from the key/value types (``MDB_comparable``) — never
+///     from this macro.
+///
+/// zero attributes = the default case: a bare `Database.X` property needs no
+/// decoration and behaves byte-identically to today.
+@attached(peer, names: arbitrary)
+public macro MDB_table(name: Swift.String? = nil, flags: [QuickLMDB.MDB_db_flags] = []) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_table_macro")

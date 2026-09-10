@@ -1,6 +1,5 @@
 import SwiftCompilerPlugin
 import SwiftSyntaxMacros
-import SwiftParser
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -17,8 +16,9 @@ struct QuickLMDBMacros:CompilerPlugin {
 		_QUICKLMDB_INTERNAL_cursor_dupsort_impl.self,
 		MDB_environment_macro.self,
 		MDB_transact_macro.self,
-		MDB_verb_error_macro.self,
-		MDB_app_macro.self,
-		MDB_transact_span_macro.self
+		MDB_transacted_macro.self,
+		MDB_entry_load_macro.self,
+		MDB_entry_store_macro.self,
+		MDB_table_macro.self
 	]
 }

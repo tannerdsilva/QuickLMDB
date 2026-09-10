@@ -2,7 +2,6 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
-import SwiftParser
 
 // @MDB_environment(file:flags:maxReaders:maxDBs:mode:)
 //
@@ -21,18 +20,27 @@ import SwiftParser
 // Swift's task-based concurrency — where a task may migrate between threads — safe, and
 // what permits multiple live read transactions on a thread (sibling reads) at all.
 //
-// this macro is purely schema assembly — it contains no transaction logic. transaction
-// boundaries are owned by `@MDB_transact` (an attached body macro) on the methods of the
-// struct. the C wrapper layer is untouched; the generated code uses the existing public
-// `Environment`, `Transaction`, and `Database.*` API (plus the underscored file-size
-// probe in `QuickLMDB._MDBEnvironmentSupport`).
+// this macro is purely schema assembly — it contains no transaction logic.
+// transaction boundaries are owned by `@MDB_transact` (attached body + peer)
+// on the methods of a container holding one or more of these cores. the C
+// wrapper layer is untouched; the generated code uses the existing public
+// `Environment`, `Transaction`, and `Database.*` API (plus the underscored
+// file-size probe in `QuickLMDB._MDBEnvironmentSupport`).
 //
 // contract: the struct's stored properties must be exactly `env` plus `Database.X` tables.
 // plain `Database` (raw MDB_val) tables are supported.
+//
+// per-table configuration: a `@MDB_table(name:flags:)` attribute on a table
+// property is consumed here — an explicit table-name override and extra
+// creation flags the declared type cannot express (the typed subtype and its
+// comparators stay type-derived). everything is validated up front, with
+// friendly diagnostics for name validity/uniqueness and flags-vs-type
+// conflicts, per the "no missed opportunities" mandate.
 
 internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 
-	// marks every @MDB_environment struct as an environment core for @MDB_app containers
+	// marks every @MDB_environment struct as an environment core — the type
+	// `@MDB_transact(_:environments:)` accepts in its environments variadic
 	static func expansion(of node: SwiftSyntax.AttributeSyntax, attachedTo declaration: some SwiftSyntax.DeclGroupSyntax, providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.ExtensionDeclSyntax] {
 		return [try ExtensionDeclSyntax("""
 			extension \(type):MDB_environment {}
@@ -43,6 +51,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		case notAStruct
 		case missingEnv
 		case missingFileArg
+		case invalidTableName(String)
+		case duplicateTableName(String)
+		case flagTypeConflict(String, String)
 
 		var description:String {
 			switch self {
@@ -52,13 +63,22 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 					return "@MDB_environment requires the struct to have a stored property named `env` of type `Environment`"
 				case .missingFileArg:
 					return "@MDB_environment requires a `file:` argument naming the environment file (e.g. @MDB_environment(file: \"store.mdb\"))"
+				case .invalidTableName(let name):
+					return "@MDB_table(name: \"\(name)\") is not a valid LMDB table name — the name must be a non-empty string without NUL characters"
+				case .duplicateTableName(let name):
+					return "two tables resolve to the same LMDB table name \"\(name)\" — table names must be unique within an environment"
+				case .flagTypeConflict(let prop, let flag):
+					return "@MDB_table(flags: [.\(flag)]) on '\(prop)' contradicts its declared type — the dup-sort flags are expressed by the typed subtype (Strict/DupSort/DupFixed), not by this attribute"
 			}
 		}
 	}
 
-	private struct ParsedTable {
-		var name:String
+	private struct ResolvedTable {
+		let property:String              // the stored property name (local + Self init label)
+		var name:String                  // the resolved LMDB table name (property name unless overridden)
 		let type:String
+		var extraFlags:String?    // the `flags:` array expression as written, or nil
+		var flagCases:Set<String> // member-case names for conflict validation
 	}
 
 	static func expansion(of node:AttributeSyntax, providingMembersOf declaration:some DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some MacroExpansionContext) throws -> [DeclSyntax] {
@@ -92,9 +112,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			throw MacroError.missingFileArg
 		}
 
-		// -- scan stored properties: env + tables
+		// -- scan stored properties: env + tables (consuming @MDB_table)
 		var hasEnv = false
-		var tables:[ParsedTable] = []
+		var tables:[ResolvedTable] = []
 		for member in structDecl.memberBlock.members {
 			guard let prop = member.decl.as(VariableDeclSyntax.self) else {
 				continue
@@ -121,11 +141,25 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 				isTable = false
 			}
 			if isTable {
-				tables.append(ParsedTable(name:propName, type:typeText))
+				tables.append(try resolveTable(propertyName:propName, typeText:typeText, attributes:prop.attributes))
 			}
 		}
 		guard hasEnv else {
 			throw MacroError.missingEnv
+		}
+
+		// -- validated schema invariants (the "no missed opportunities" surface)
+		var resolvedNames:Set<String> = []
+		for table in tables {
+			if resolvedNames.contains(table.name) {
+				throw MacroError.duplicateTableName(table.name)
+			}
+			resolvedNames.insert(table.name)
+			// dup-sort flags on a non-dup typed handle contradict the declared type
+			if table.type.contains("Strict") && !table.flagCases.isDisjoint(with:["dupSort", "dupFixed"]) {
+				let badFlag = table.flagCases.contains("dupSort") ? "dupSort" : "dupFixed"
+				throw MacroError.flagTypeConflict(table.property, badFlag)
+			}
 		}
 
 		// -- build the open(at:) factory
@@ -143,16 +177,64 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		lines.append("    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union(\(flagsArg)), mapSize: Int(fileSize + mapHeadroom), maxReaders: \(maxReadersArg), maxDBs: \(maxDBsArg), mode: \(modeArg))")
 		lines.append("    let setupTX = try Transaction(env: env, readOnly: false)")
 		for table in tables {
-			lines.append("    let \(table.name) = try \(table.type)(env: env, name: \"\(table.name)\", flags: [.create], tx: setupTX)")
+			let flagsText = table.extraFlags.map { "QuickLMDB.MDB_db_flags([.create]).union(\($0))" } ?? "[.create]"
+			lines.append("    let \(table.property) = try \(table.type)(env: env, name: \"\(table.name)\", flags: \(flagsText), tx: setupTX)")
 		}
 		lines.append("    try setupTX.commit()")
 		var initArgs:[String] = ["env: env"]
 		for table in tables {
-			initArgs.append("\(table.name): \(table.name)")
+			initArgs.append("\(table.property): \(table.property)")
 		}
 		lines.append("    return Self(\(initArgs.joined(separator:", ")))")
 		lines.append("}")
 
 		return lines.map { DeclSyntax(stringLiteral: $0) }
+	}
+
+	// -- @MDB_table consumption
+
+	/// the table's effective schema: derived defaults when no attribute present
+	/// (name = property name, no extra flags); the explicit `name:`/`flags:`
+	/// overrides plus their validation otherwise.
+	private static func resolveTable(propertyName:String, typeText:String, attributes:AttributeListSyntax) throws -> ResolvedTable {
+		guard let attrList = attributes.first(where: { attr in
+			(attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription) == "MDB_table"
+		}), let attr = attrList.as(AttributeSyntax.self) else {
+			return ResolvedTable(property:propertyName, name:propertyName, type:typeText, extraFlags:nil, flagCases:[])
+		}
+		var nameOverride:String? = nil
+		var extraFlags:String? = nil
+		var flagCases:Set<String> = []
+		if let argList = attr.arguments?.as(LabeledExprListSyntax.self) {
+			for arg in argList {
+				guard let label = arg.label?.text else { continue }
+				switch label {
+					case "name":
+						let content: String
+						if let lit = arg.expression.as(StringLiteralExprSyntax.self),
+						   let seg = lit.segments.first?.as(StringSegmentSyntax.self) {
+							content = seg.content.text
+						} else {
+							content = arg.expression.trimmedDescription
+						}
+						guard content.isEmpty == false, content.contains("\u{0}") == false else {
+							throw MacroError.invalidTableName(content)
+						}
+						nameOverride = content
+					case "flags":
+						extraFlags = arg.expression.trimmedDescription
+						if let array = arg.expression.as(ArrayExprSyntax.self) {
+							for element in array.elements {
+								if let member = element.expression.as(MemberAccessExprSyntax.self) {
+									flagCases.insert(member.declName.baseName.text)
+								}
+							}
+						}
+					default:
+						break
+				}
+			}
+		}
+		return ResolvedTable(property:propertyName, name:nameOverride ?? propertyName, type:typeText, extraFlags:extraFlags, flagCases:flagCases)
 	}
 }

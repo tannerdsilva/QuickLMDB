@@ -17,8 +17,7 @@ let package = Package(
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", "0.9.26"..<"0.9.31"),
 		.package(url:"https://github.com/tannerdsilva/rawdog.git", "22.0.0"..<"23.0.0"),
 		.package(url:"https://github.com/apple/swift-system.git", "1.0.0"..<"2.0.0"),
-		.package(url:"https://github.com/apple/swift-syntax.git", "603.0.0"..<"604.0.0"),
-		.package(url:"https://github.com/apple/swift-log.git", "1.0.0"..<"2.0.0")
+		.package(url:"https://github.com/apple/swift-syntax.git", "603.0.0"..<"604.0.0")
     ],
 	targets: [
 		.target(
@@ -42,11 +41,9 @@ let package = Package(
 			dependencies:[
 				.product(name:"SwiftSyntax", package:"swift-syntax"),
 				.product(name:"SwiftSyntaxMacros", package:"swift-syntax"),
-				.product(name:"SwiftOperators", package:"swift-syntax"),
-				.product(name:"SwiftParser", package:"swift-syntax"),
-				.product(name:"SwiftParserDiagnostics", package:"swift-syntax"),
+				.product(name:"SwiftSyntaxBuilder", package:"swift-syntax"),
+				.product(name:"SwiftDiagnostics", package:"swift-syntax"),
 				.product(name:"SwiftCompilerPlugin", package:"swift-syntax"),
-				.product(name:"Logging", package:"swift-log")
 			]
 		),
 		.testTarget(

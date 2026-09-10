@@ -27,7 +27,7 @@ public struct Transaction:~Copyable {
 		self.init(_tx_handle:startHandle!, _isConsumerOwned:true, _didClose:false)
 	}
 	
-	// init with parent [LOGGED]
+	// init with parent
 	@available(*, noasync)
 	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws(LMDBError) {
 		var startHandle:OpaquePointer? = nil

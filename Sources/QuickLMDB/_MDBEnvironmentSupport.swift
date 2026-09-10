@@ -5,13 +5,13 @@ import Darwin
 import Glibc
 #endif
 
-// tiny macro support surface for `@MDB_environment` and `@MDB_app`'s generated
-// `open(at:)` factories. contains no transaction logic — just the stat-based
-// file-size probe and directory creation that the generated schema/container
-// opens need (Foundation-free, so generated consumer code has no import
-// requirements beyond the Swift standard library).
+// tiny macro support surface for `@MDB_environment`'s generated `open(at:)`
+// factory. contains no transaction logic — just the stat-based file-size probe
+// and directory creation that the generated schema open needs (Foundation-free,
+// so generated consumer code has no import requirements beyond the Swift
+// standard library).
 
-/// the macro support surface for `@MDB_environment` and `@MDB_app`.
+/// the macro support surface for `@MDB_environment`.
 /// - note: underscored public names are not user-facing API; they exist only so
 ///   macro-generated code in the consuming module can reference them.
 public enum _MDBEnvironmentSupport {

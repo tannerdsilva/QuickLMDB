@@ -1,23 +1,18 @@
 import CLMDB
 import RAW
 
-// typed-handle companions for the verb-macro vocabulary. each member is the
-// type-complete form of the tx-bearing requirement it calls — the value type
-// rides on the handle itself, so call sites need no `as:` and no `flags: []`.
+// typed-handle companions for the boundary-dialect verbs: the type-complete
+// tx-bearing members the trailing verbs lower to, and the explicit-tx surface
+// available directly inside a `@MDB_transact` body (cursors, dup iteration,
+// raw reads) via the injected `tx_<E>` name.
 //
-// these are the exact surfaces the boundary macros lower verbs to:
-//   #store(db, key:, value:)        -> db.store(    key:, value:, tx:)
-//   #load(db, key:)                 -> db.load(     key:, tx:)
-//   #delete(db, key:)               -> db.delete(   key:, tx:)
-//   #delete(db, key:, value:)       -> db.delete(   key:, value:, tx:)   (dupsort)
-//   #contains(db, key:)             -> db.contains( key:, tx:)
-//   #clear(db)                      -> db.deleteAllEntries(tx:)
-//   #cursor(db) { c in ... }        -> db.cursor(tx:) { c in ... }
+// the boundary dialect lowers these:
+//   #MDB_entry_load(   env:, db:, key:)            -> db.load(    key:, tx:)
+//   #MDB_entry_store(  env:, db:, key:, value:)    -> db.store(   key:, value:, tx:)
 //
 // deliberately ABSENT: a DB-level `contains(key:value:)` pair check. mdb_get
 // resolves by key only, so a pair form would be a silent no-op (answered true
-// for any existing key); the pair check is cursor-only (real MDB_GET_BOTH),
-// which is what `#contains(db, key:, value:)` lowers to.
+// for any existing key); the pair check is cursor-only (real MDB_GET_BOTH).
 
 extension MDB_db {
 
