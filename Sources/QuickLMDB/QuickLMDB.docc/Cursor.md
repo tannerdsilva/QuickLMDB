@@ -7,17 +7,17 @@ Enables complex navigation and traversal of ``QuickLMDB/Database`` contents.
 A ``Cursor`` can be created by calling ``QuickLMDB/Database/cursor(tx:)`` on a given ``QuickLMDB/Database`` object. This must be done under the existence of an active Transaction.
 
 ```
-// Open a transaction from your environment, configured as apropriate.
-try someEnvironment.transact(readOnly:false) { thisTransaction in
+// Open a write transaction from your environment (mode lives in the type).
+let thisTransaction = try Transaction<Write>(env: someEnvironment)
 
-	// Open a database with the newly opened transaction.
-	let myDatabase = try someEnvironment.openDatabase(named:nil, tx:thisTransaction)
+// Open a database with the transaction.
+let myDatabase = try someEnvironment.openDatabase(named:nil, flags: [], tx:thisTransaction)
 
-	// Create a cursor from the database and transaction.
-	let myCursor = try myDatabase.cursor(tx:thisTransaction)
-	
-	// Any interactions with the cursor should happen here.
-}
+// Create a cursor from the database and transaction.
+let myCursor = try myDatabase.cursor(tx:thisTransaction)
+
+// Any interactions with the cursor should happen here.
+try thisTransaction.commit()
 ```
 
 ## Considerations

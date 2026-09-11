@@ -20,8 +20,10 @@ public protocol MDB_db {
 	/// the cursor type that this database will use for traversing its contents
 	associatedtype MDB_db_cursor_type:MDB_cursor where MDB_db_cursor_type.MDB_cursor_dbtype == Self
 
-	/// create a new database from the specified environment
-	init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws
+	/// create a new database from the specified environment.
+	/// creating a handle may mutate the environment (name registration, typed
+	/// comparators), so it requires a WRITE transaction.
+	init(env:borrowing Environment, name:String?, flags:MDB_db_flags, tx:borrowing Transaction<Write>) throws
 	
 	/// returns the lmdb environment of the database instance.
 	borrowing func dbEnvironment() -> Environment
@@ -42,7 +44,7 @@ public protocol MDB_db {
 	/// - NOTE: this function will throw a fatal error if the cursor could not be opened before calling the handler block.
 	/// - returns: the return value of the handler block
 	@available(*, noasync)
-	borrowing func cursor<R, E>(tx:borrowing Transaction, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(E) -> R where E:Swift.Error
+	borrowing func cursor<R, E, M>(tx:borrowing Transaction<M>, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(E) -> R where E:Swift.Error, M:TransactionMode
 
 	// reading entries in the database
 	/// retrieve an entry from the database. if ``Database/Flags/dupSort`` is set and multiple entries exist for the specified key, the first entry will be returned
@@ -53,80 +55,80 @@ public protocol MDB_db {
 	/// - throws: a corresponding ``LMDBError.notFound`` if the key does not exist, or other ``LMDBError`` for more obscure circumstances.
 	///	- returns: the decoded value type.
 	@available(*, noasync)
-	borrowing func loadEntry(key:MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction) throws -> MDB_db_val_type
+	borrowing func loadEntry<M:TransactionMode>(key:MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction<M>) throws -> MDB_db_val_type
 	
 	/// check if an entry key exists in the database
 	/// - parameters:
-	/// 	- key: a pointer to the type that conveys the key to search for. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
-	/// 	- tx: a pointer to the lmdb transaction that will be used to check for the entry.
+	///		- key: a pointer to the type that conveys the key to search for. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
+	///		- tx: a pointer to the lmdb transaction that will be used to check for the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be found.
 	/// - returns: true if an entry exists, false if it does not.
 	@available(*, noasync)
-	borrowing func containsEntry(key:MDB_db_key_type, tx:borrowing Transaction) throws -> Bool
+	borrowing func containsEntry<M:TransactionMode>(key:MDB_db_key_type, tx:borrowing Transaction<M>) throws -> Bool
 	
 	// writing entries to the database
 	/// assign an entry to the database. flags can be used to modify the behavior of the entry assignment as needed
 	/// - parameters:
-	/// 	- key: a pointer to the type that conveys the key that will be set in the database. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
-	/// 	- value: a pointer to the type that conveys the value that will be set in the database. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
-	/// 	- flags: the flags that will be used when assigning the entry in the database.
-	/// 	- tx: a pointer to the lmdb transaction that will be used to set the entry.
+	///		- key: a pointer to the type that conveys the key that will be set in the database. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
+	///		- value: a pointer to the type that conveys the value that will be set in the database. this function reserves the right to modify the value pointed to by this pointer. contents of the pointed value should not be handled after this function is called.
+	///		- flags: the flags that will be used when assigning the entry in the database.
+	///		- tx: a pointer to the lmdb transaction that will be used to set the entry.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be set. the particular set of errors that can be thrown are dependent on the database and environment flags being used, as well as the operation flags.
 	@available(*, noasync)
-	borrowing func setEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction) throws
+	borrowing func setEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction<Write>) throws
 
 	// remove entries from the database.
 	/// remove all entries matching a specified key from the database
 	/// - parameters:
-	/// 	- key: the key that will be removed from the database.
-	/// 	- tx: the transaction to use for the entry removal.
+	///		- key: the key that will be removed from the database.
+	///		- tx: the transaction to use for the entry removal.
 	@available(*, noasync)
-	borrowing func deleteEntry(key:MDB_db_key_type, tx:borrowing Transaction) throws
+	borrowing func deleteEntry(key:MDB_db_key_type, tx:borrowing Transaction<Write>) throws
 
 	/// remove a specific key and value pairing from the database
 	/// - parameters:
-	/// 	- key: the key that will be removed from the database.
-	/// 	- value: the value that will be removed from the database.
-	/// 	- tx: the transaction to use for the entry removal.
+	///		- key: the key that will be removed from the database.
+	///		- value: the value that will be removed from the database.
+	///		- tx: the transaction to use for the entry removal.
 	/// - note: despite this function requiring inout parameters, the passed values are not mutated. they are treated as read-only values.
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
 	@available(*, noasync)
-	borrowing func deleteEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws
+	borrowing func deleteEntry(key:MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction<Write>) throws
 
 	/// remove all entries from the database
 	/// - parameters:
-	/// 	- tx: the transaction to use for the entry removal.
+	///		- tx: the transaction to use for the entry removal.
 	/// - throws: a corresponding ``LMDBError`` if the entries could not be removed.
 	@available(*, noasync)
-	borrowing func deleteAllEntries(tx:borrowing Transaction) throws
-	
+	borrowing func deleteAllEntries(tx:borrowing Transaction<Write>) throws
+
 	/// deletes the database (and all of its contents) from the environment
 	/// - parameters:
-	/// 	- tx: the transaction to use for the database removal
+	///		- tx: the transaction to use for the database removal
 	/// - throws: a corresponding ``LMDBError`` if the database could not be deleted.
 	@available(*, noasync)
-	consuming func deleteDatabase(tx:borrowing Transaction) throws
+	consuming func deleteDatabase(tx:borrowing Transaction<Write>) throws
 
 	// metadata
 	/// returns the statistics for the database
 	/// - parameters:
-	/// 	- tx: the transaction to use for the statistics retrieval.
+	///		- tx: the transaction to use for the statistics retrieval.
 	/// - throws: a corresponding ``LMDBError`` if the statistics could not be retrieved.
 	@available(*, noasync)
-	borrowing func dbStatistics(tx:borrowing Transaction) throws -> MDB_stat
-	
+	borrowing func dbStatistics<M:TransactionMode>(tx:borrowing Transaction<M>) throws -> MDB_stat
+
 	/// returns the flags that were used when opening the database
 	/// - parameters:
-	/// 	- tx: the transaction to use for the flags retrieval.
+	///		- tx: the transaction to use for the flags retrieval.
 	/// - throws: a corresponding ``LMDBError`` if the flags could not be retrieved.
 	@available(*, noasync)
-	borrowing func dbFlags(tx:borrowing Transaction) throws -> MDB_db_flags
+	borrowing func dbFlags<M:TransactionMode>(tx:borrowing Transaction<M>) throws -> MDB_db_flags
 }
 
 extension MDB_db {
 	// default entry for all MDB_db implementations where `loadEntry` is called but the value type is not specified. in this case, the value type is assumed to be `MDB_db_val_type`
 	@available(*, noasync)
-	public borrowing func loadEntry(key keyVal:borrowing MDB_db_key_type, tx:borrowing Transaction) throws -> MDB_db_val_type {
+	public borrowing func loadEntry<M:TransactionMode>(key keyVal:borrowing MDB_db_key_type, tx:borrowing Transaction<M>) throws -> MDB_db_val_type {
 		return try loadEntry(key:keyVal, as:MDB_db_val_type.self, tx:tx)
 	}
 }

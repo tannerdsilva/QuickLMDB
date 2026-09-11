@@ -92,6 +92,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		var maxReadersArg = "32"
 		var maxDBsArg = "8"
 		var modeArg = "[.ownerReadWriteExecute, .groupRead, .otherRead]"
+		var versionArg:String? = nil   // nil = the version attribute was NOT written (legacy exact file name)
 		if let argList = node.arguments?.as(LabeledExprListSyntax.self) {
 			for arg in argList {
 				guard let label = arg.label?.text else {
@@ -100,6 +101,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 				let value = arg.expression.trimmedDescription
 				switch label {
 					case "file": fileArg = value
+					case "version": versionArg = value
 					case "flags": flagsArg = value
 					case "maxReaders": maxReadersArg = value
 					case "maxDBs": maxDBsArg = value
@@ -172,10 +174,19 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
 		lines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)")
 		lines.append("    let slash = basePath.hasSuffix(\"/\") ? \"\" : \"/\"")
-		lines.append("    let targetPath = basePath + slash + \(fileArg)")
+		if let versionArg {
+			// versioned environment files: the schema version rides in the
+			// FILE NAME (`<stem>-v<N>.mdb`) — engaged by writing the version
+			// attribute. bump the version to ship a fresh file + stream the
+			// old one; the old file stays untouched and readable by older
+			// binaries (no sentinel, no in-place migration).
+			lines.append("    let targetPath = basePath + slash + (\(fileArg).hasSuffix(\".mdb\") ? String(\(fileArg).dropLast(4)) + \"-v\(versionArg)\" + \".mdb\" : \(fileArg) + \"-v\(versionArg)\")")
+		} else {
+			lines.append("    let targetPath = basePath + slash + \(fileArg)")
+		}
 		lines.append("    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)")
 		lines.append("    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union(\(flagsArg)), mapSize: Int(fileSize + mapHeadroom), maxReaders: \(maxReadersArg), maxDBs: \(maxDBsArg), mode: \(modeArg))")
-		lines.append("    let setupTX = try Transaction(env: env, readOnly: false)")
+		lines.append("    let setupTX = try Transaction<Write>(env: env)")
 		for table in tables {
 			let flagsText = table.extraFlags.map { "QuickLMDB.MDB_db_flags([.create]).union(\($0))" } ?? "[.create]"
 			lines.append("    let \(table.property) = try \(table.type)(env: env, name: \"\(table.name)\", flags: \(flagsText), tx: setupTX)")

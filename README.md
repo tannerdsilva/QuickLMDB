@@ -8,37 +8,36 @@ QuickLMDB is designed to be a easy, efficient, and uncompromising integration of
 
 ## Transaction boundaries with macros
 
-QuickLMDB organizes the transaction layer into **method boundaries** with no ambient state of any kind (no task-local, no thread-local, no registry). A boundary is an attached **body + peer** macro: the body scrapes the method and replaces it with a shell that opens one transaction per listed environment and closes each (abort on throw; abort for `.readOnly`, commit for `.readWrite` on success); the peer emits a wrapped sibling that carries the real body. Inside the body, **trailing verb macros** are lowered to their tx-bearing calls and the `#MDB_transacted` marker joins another boundary's call onto *this* boundary's transaction.
+QuickLMDB organizes the transaction layer into **method boundaries** with no ambient state of any kind (no task-local, no thread-local, no registry). Every environment is its own `@MDB_environment` **type**, and a boundary is an INSTANCE method on that type: `@MDB_transact(_ mode:)` turns the method into a transactional unit whose transactions are opened, committed, and aborted for it. The authored surface carries NO transaction vocabulary — no `tx:` parameters, no environment lists, no entry suffixes.
+
+Inside a boundary body you write the **typed verb family** — the exact database operations (`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear`/`#stats`/`#drop`), where the first argument is the environment TYPE and `database:` is a `KeyPath` to a `Database.X` handle, so the key/value types are compiler-checked against the table itself. The boundary lowers each verb to the tx-bearing operation.
 
 ```swift
 @MDB_environment(file: "booking.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
 public struct BookingCore: Sendable {
     public let env: Environment
     public let sheets: Database.Strict<SlotKey, SlotRecord>
-}
 
-enum BookingApp {
-    // attribute arguments are evaluated at type scope: the cores must be
-    // attribute-reachable, so they are static stored properties opened through
-    // the non-throwing lazy factory (an unopenable path crashes on first use).
-    static let booking: BookingCore = { try! BookingCore.open(at: "<data-path>") }()
-
-    @MDB_transact(.readWrite, environments: booking)
-    static func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
-        try #MDB_entry_store(environment: booking, database: booking.sheets, key: key, value: record)
+    @MDB_transact(.readWrite)
+    public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
+        try #store(BookingCore.self, database: \.sheets, key: key, value: record)
     }
 
-    @MDB_transact(.readOnly, environments: booking)
-    static func slotOn(_ day: SlotKey) throws -> SlotRecord? {
-        #MDB_entry_load(environment: booking, database: booking.sheets, key: day)
+    @MDB_transact(.readOnly)
+    public func slotOn(_ day: SlotKey) throws -> SlotRecord? {
+        #load(BookingCore.self, database: \.sheets, key: day)
     }
 }
+
+let booking = try BookingCore.open(at: "<data-path>")
+try booking.addBooking(key, record)
+let record = try booking.slotOn(day)
 ```
 
-- **`@MDB_transact(_ mode: MDB_transact_mode, environments: ...)`** — the boundary. `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. the `environments:` variadic lists the `@MDB_environment` cores that transact within the method — one `tx_<E>` per core, derived from its name (attribute arguments are evaluated at type scope, so the cores must be attribute-reachable, e.g. static stored properties).
-- **Marker gating (the rawdog principle):** only the freestanding verbs (`#MDB_entry_load`, `#MDB_entry_store`) and the `#MDB_transacted(...)` join marker are rewritten; every other line is emitted byte-identical. a plain operation call inside a boundary is untouched — the raw surface (cursors, zero-copy reads, dup iteration) works directly with the injected `tx_<E>` name.
-- Using a verb or the marker **outside** a boundary is a compile-time diagnostic.
-- **Composition is JOINING, not nesting.** `#MDB_transacted(callee(args))` is rewritten into `callee(args, tx_<E>: tx_<E>, …)` — the callee runs on *this* boundary's transaction. joined reads see this boundary's own uncommitted state; joined writes land in ONE transaction, **atomic by construction** (a thrown joined write rolls back the whole boundary). a *sibling* read — the last committed state, independent of this boundary — is a plain call `eventOn(day)`.
+- **`@MDB_transact(_ mode: MDB_transact_mode)`** — the boundary, on an instance method of an `@MDB_environment` type. `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. The environment set is **inferred from the verbs** — every environment type a verb references must be `self` or a typed parameter of the method. A multi-environment boundary just takes the other cores as typed parameters.
+- **The typed verbs** (`#store(E.self, database: \.table, key:…, value:…)`) — compiler-typed end to end: `E` names the environment, the `KeyPath` names the table on that type, and key/value/return types flow from the table's own generics. A call inside a boundary is lowered to `instance[keyPath: \.table].<op>(…, tx:)`; used outside a boundary it is a compile-time diagnostic.
+- **Composition is JOINING, not nesting.** `#MDB_transacted(callee(args))` is rewritten into the callee's sibling with `tx_<E>` threading — the callee runs on *this* boundary's transaction. joined reads see this boundary's own uncommitted state; joined writes land in ONE transaction, **atomic by construction** (a thrown joined write rolls back the whole boundary). a *sibling* read — the last committed state, independent of this boundary — is a plain call `eventOn(day)`.
+- **THE JOIN / SIBLING RULE (deadlock warning):** a bare call to a `.readWrite` boundary inside a live boundary opens a SECOND write transaction, which BLOCKS on LMDB's writer mutex until the outer commits — and the outer can't commit while it blocks: a **DEADLOCK**. composition inside a boundary is spelled with `#MDB_transacted(...)`, always. a bare call to a `.readOnly` boundary inside a boundary is a safe *sibling read* (its own fresh read transaction, committed state only).
 
 ## Self-scoped committed reads
 
@@ -54,23 +53,24 @@ these are NOT boundary verbs: a verb's contract is boundary participation, the o
 
 ## Multi-environment boundaries
 
-The same boundary coordinates MORE than one environment — list every core that needs to transact:
+The same boundary coordinates MORE than one environment — the other cores flow in as **typed parameters**:
 
 ```swift
-enum ClubApp {
-    static let calendar: ClubCalendarCore = ...
-    static let contacts: ClubContactsCore = ...
+public struct ClubCalendarCore: Sendable { … }   // @MDB_environment: events, invitees
+public struct ClubContactsCore: Sendable { … }    // @MDB_environment: lastSync
 
-    @MDB_transact(.readWrite, environments: calendar, contacts)
-    static func scheduleAndMarkSync(_ event: EventID, on day: DayKey,
-                                    contact: ContactID, at timestamp: Timestamp) throws {
-        try #MDB_entry_store(environment: calendar, database: calendar.events, key: day, value: event)
-        try #MDB_entry_store(environment: contacts, database: contacts.lastSync, key: contact, value: timestamp)
+extension ClubCalendarCore {
+    @MDB_transact(.readWrite)
+    public func scheduleAndMarkSync(_ event: EventID, on day: DayKey,
+                                    contact: ContactID, at timestamp: Timestamp,
+                                    contacts: ClubContactsCore) throws {
+        try #store(ClubCalendarCore.self, database: \.events, key: day, value: event)
+        try #store(ClubContactsCore.self, database: \.lastSync, key: contact, value: timestamp)
     }
 }
 ```
 
-one transaction per listed core, all aborted on any body throw (nothing lands), write members committed back-to-back. **honest ceiling:** cross-environment commits are best-effort — a crash between the adjacent commit calls can still split the pair. cross-env atomicity is impossible. (within ONE environment, joined writes are fully atomic — the single transaction.)
+one transaction per referenced environment, all aborted on any body throw (nothing lands), write members committed back-to-back. **honest ceiling:** cross-environment commits are best-effort — a crash between the adjacent commit calls can still split the pair. cross-env atomicity is impossible. (within ONE environment, joined writes are fully atomic — the single transaction.)
 
 ## Transaction relationships
 

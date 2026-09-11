@@ -16,7 +16,7 @@ extension MDB_cursor_dupsort {
 extension MDB_cursor {
 	/// get the current entry from the database
 	@available(*, noasync)
-	public borrowing func setEntry(key:consuming MDB_val, value:consuming MDB_val, flags:consuming Operation.Flags) throws(LMDBError) {
+	public borrowing func setEntry(key:consuming MDB_val, value:consuming MDB_val, flags:consuming Operation.Flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 		return try MDB_cursor_set_entry(cursor:self.cursorHandle(), key:key, value:value, flags:flags.rawValue)
 	}
 	
@@ -34,7 +34,7 @@ extension MDB_cursor {
 
 	/// delete the current entry from the database
 	@available(*, noasync)
-	public borrowing func deleteCurrentEntry(flags:consuming Operation.Flags) throws(LMDBError) {
+	public borrowing func deleteCurrentEntry(flags:consuming Operation.Flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 		return try MDB_cursor_delete_current_entry(cursor:self.cursorHandle(), flags:flags.rawValue)
 	}
 

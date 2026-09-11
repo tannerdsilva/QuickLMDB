@@ -15,10 +15,6 @@ import Foundation
 private let schemaMacros: [String: Macro.Type] = [
 	"MDB_environment": MDB_environment_macro.self,
 	"MDB_table": MDB_table_macro.self,
-	"MDB_transact": MDB_transact_macro.self,
-	"MDB_transacted": MDB_transacted_macro.self,
-	"MDB_entry_load": MDB_entry_load_macro.self,
-	"MDB_entry_store": MDB_entry_store_macro.self,
 ]
 
 // NOTE: the schema fixtures use seeded file.expand paths below rather than
@@ -102,7 +98,7 @@ struct TableSchemaExpansionTests {
 			
 			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 16, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead])
 			
-			    let setupTX = try Transaction(env: env, readOnly: false)
+			    let setupTX = try Transaction<Write>(env: env)
 			
 			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
 			
@@ -155,7 +151,7 @@ struct TableSchemaExpansionTests {
 			
 			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 16, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead])
 			
-			    let setupTX = try Transaction(env: env, readOnly: false)
+			    let setupTX = try Transaction<Write>(env: env)
 			
 			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "event_log", flags: QuickLMDB.MDB_db_flags([.create]).union([.reverseKey]), tx: setupTX)
 			
@@ -259,6 +255,55 @@ struct TableConsumptionTests {
 			}
 			""",
 			["@MDB_table(flags: [.dupSort]) on 'events' contradicts its declared type — the dup-sort flags are expressed by the typed subtype (Strict/DupSort/DupFixed), not by this attribute"]
+		)
+	}
+
+	@Test func versionedEnvironmentDerivesTheFileSuffix() {
+		// writing `version:` derives the on-disk name `<stem>-v<N>.mdb`;
+		// a bare core keeps its exact file name (pinned by the bare fixture
+		// above). byte-frozen oracle (actual expansion spliced from the dump).
+		assertSchemaExpansion(
+			"""
+			@MDB_environment(file: "test.mdb", version: 2, flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+			}
+			""",
+			expanded: """
+			
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+			
+			    @available(*, noasync)
+			
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+			
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			
+			    let slash = basePath.hasSuffix("/") ? "" : "/"
+			
+			    let targetPath = basePath + slash + ("test.mdb".hasSuffix(".mdb") ? String("test.mdb".dropLast(4)) + "-v2" + ".mdb" : "test.mdb" + "-v2")
+			
+			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
+			
+			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 16, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead])
+			
+			    let setupTX = try Transaction<Write>(env: env)
+			
+			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
+			
+			        try setupTX.commit()
+			
+			        return Self(env: env, events: events)
+			
+			    }
+			}
+			
+			extension Core: MDB_environment {
+			}
+			"""
 		)
 	}
 }

@@ -15,7 +15,7 @@ struct EngineSmokeTests {
 		let key = TestKey(RAW_native: 1)
 		let value = TestValue(RAW_native: 42)
 
-		let write = try Transaction(env: core.env, readOnly: false)
+		let write = try Transaction<Write>(env: core.env)
 		try core.primary.setEntry(key: key, value: value, flags: [], tx: write)
 		try write.commit()
 
@@ -30,7 +30,7 @@ struct EngineSmokeTests {
 		let key = TestKey(RAW_native: 2)
 
 		do {
-			let unclosed = try Transaction(env: core.env, readOnly: false)
+			let unclosed = try Transaction<Write>(env: core.env)
 			try core.primary.setEntry(key: key, value: TestValue(RAW_native: 7), flags: [], tx: unclosed)
 			// no commit/abort: the deinit safety net aborts it
 		}

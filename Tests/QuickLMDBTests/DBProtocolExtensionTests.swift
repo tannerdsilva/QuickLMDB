@@ -20,7 +20,7 @@ struct DBProtocolExtensionTests {
 	// a core plus a raw MDB_val database handle (plain or dupsort)
 	private func rawCore(_ name:String = "rawproto", flags:MDB_db_flags = [.create]) throws -> (TestCore, Database) {
 		let core = try TestHelpers.makeCore()
-		let tx = try Transaction(env:core.env, readOnly:false)
+		let tx = try Transaction<Write>(env:core.env)
 		let db = try Database(env:core.env, name:name, flags:flags, tx:tx)
 		try tx.commit()
 		return (core, db)
@@ -177,7 +177,7 @@ struct DBProtocolExtensionTests {
 
 	@Test func dbFlagsReported() throws {
 		let (core, plainDB) = try rawCore("flagsplain", flags:[.create])
-		let setup = try Transaction(env:core.env, readOnly:false)
+		let setup = try Transaction<Write>(env:core.env)
 		let dupDB = try Database(env:core.env, name:"flagsdup", flags:[.create, .dupSort], tx:setup)
 		try setup.commit()
 		try withWriteTxn(core.env) { tx in
@@ -199,7 +199,7 @@ struct DBProtocolExtensionTests {
 				}
 			}
 		}
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		let entry = try db.cursor(tx:rtx) { cursor in
 			return try cursor.opFirst(returning:(key:MDB_val, value:MDB_val).self)
 		}
@@ -220,7 +220,7 @@ struct DBProtocolExtensionTests {
 			}
 		}
 		// a reversed key order must be visible through a cursor scan
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		var seen:[UInt8] = []
 		db.cursor(tx:rtx) { cursor in
 			for (k, _) in cursor {

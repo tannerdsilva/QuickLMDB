@@ -9,17 +9,14 @@ A ``Database`` can be created (or retrieved) by calling ``QuickLMDB/Environment/
 Example:
 
 ```
-// Assuming an environment variable exists named "someEnvironment". See Environment documentation for details.
-let someEnvironment = Environment(...)
+// open a write transaction (mode lives in the type)
+let someTransaction = try Transaction<Write>(env: someEnvironment)
 
-// Open a transaction for your environment, configured as apropriate
-try someEnvironment.transact(readOnly:false) { someTransaction in
-	
-	// Open a database named "my database". Specify flags as needed.
-	let database = try someEnvironment.openDatabase(named:"my database", flags:[.create], tx:someTransaction)
-	
-	// Any interactions with the database should happen here.
-}
+// open a database named "my database". specify flags as needed.
+let database = try someEnvironment.openDatabase(named: "my database", flags: [.create], tx: someTransaction)
+
+// any interactions with the database should happen here.
+try someTransaction.commit()
 ```
 
 ## Considerations

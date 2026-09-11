@@ -1,32 +1,51 @@
 # Unreleased
 
-- **the transaction layer is now the boundary dialect.** the legacy v16
-  transactional surface was removed: the mode-only `@MDB_transact` (nested
-  `__mdb_body` form), `@MDB_transact_span`, `@MDB_app`, `MDB_span_member`,
-  `MDB_environment_container`, and the receiver-based verb vocabulary
-  (`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear`/`#stats`/`#drop`
-  with `tx` injection). the new surface, under the final ratified names:
-  - `@MDB_transact(_ mode: MDB_transact_mode, environments:)` — attached body +
-    peer. `.readOnly` aborts on throw and success (a read leaf never commits);
-    `.readWrite` aborts on throw and COMMITS on success. one `tx_<E>` per listed
-    environment; the peer emits the wrapped sibling (`tx_<E>: borrowing
-    Transaction`). `.readWriteChild` is not a mode — Design-B joining composes.
-  - `#MDB_transacted(call)` — the join marker: rewritten inside a boundary into
-    the callee's wrapped sibling, threading this boundary's transaction (one
+- **the transaction layer is now the typed-environment dialect** (breaking).
+  every environment is its own `@MDB_environment` type, and transaction
+  boundaries are INSTANCE methods on those types. there is no transaction
+  vocabulary on the authored surface:
+  - `@MDB_transact(_ mode: MDB_transact_mode)` — attached body + peer on an
+    instance method. `.readOnly` aborts on throw and on success (a read leaf
+    never commits); `.readWrite` aborts on throw and COMMITS on success. the
+    environment set is INFERRED from the typed verb calls in the body: every
+    environment a verb references must be `self` or a typed parameter of the
+    method. the method becomes a shell (opens/closes its own transactions);
+    the peer emits an INVISIBLE sibling that carries `tx_<E>: borrowing
+    Transaction<…>` per environment (read-only siblings are mode-generic so
+    write boundaries can join reads). the method must be `throws`, not
+    `async`, and instance. a boundary whose body references no environment is
+    a diagnostic.
+  - **the typed verb family** — `#store`, `#load`, `#delete`,
+    `#contains`, `#cursor`, `#clear`, `#stats`, `#drop` — the database
+    operations, typed end to end: `#store(E.self, database: \.table,
+    key:…, value:…)` where `E` is the environment type, `database:` is a
+    `KeyPath<E, Database…>`, and key/value/return types bind through the
+    table's own generics. inside a boundary they lower to the tx-bearing
+    operation on `instance[keyPath: \.table]`; outside a boundary they are
+    compile-time diagnostics.
+  - `#MDB_transacted(call)` — the join marker: rewritten inside a boundary
+    into the callee's sibling, threading this boundary's transactions (one
     transaction across the composed call; joined reads see the boundary's own
-    uncommitted state). standalone use is a compile-time diagnostic.
-  - `#MDB_entry_load(environment:database:key:)` /
-    `#MDB_entry_store(environment:database:key:value:)` — trailing verbs lowered
-    inside a boundary to `database.load(key:tx_<E>)` /
-    `database.store(key:value:tx_<E>)`; `try` belongs at the verb.
-  - `MDB_transact_mode` trimmed to `.readOnly` / `.readWrite`.
-  - `MDB_db_flags` made fully public (`reverseKey`, `dupSort`, `dupFixed`,
-    `reverseDup`, `integerKey`, `integerDup`, `create`).
-- **schema layer: `@MDB_table(name:flags:)`** on `Database.X` stored properties
-  inside an `@MDB_environment` core — explicit table-name override and extra
-  db flags (comparators stay type-derived via `MDB_comparable`). zero
-  attributes = identity; the environment scan validates names and
-  flags-vs-type conflicts with friendly diagnostics.
+    uncommitted state; a thrown joined write rolls back the whole boundary).
+    the callee must reference the same environment-type set (the equal-env-set
+    contract, enforced by the rewrite). standalone use is a compile-time
+    diagnostic.
+  - `Transaction<M>` capability typing (mode in the type): `commit()` exists
+    only on `Transaction<Write>`; reads are generic over the mode; cursor
+    write operations carry a `tx: Transaction<Write>` capability proof.
+    writing on a read transaction is a type-checker error — the read-only
+    write lint is retired as a runtime concept.
+  - **`@MDB_layout`** — the multi-environment ARRANGEMENT helper: opens N
+    `@MDB_environment` cores at `<base>/<name>` in one call plus a
+    `mdb_core_names` inventory. no per-core factories, no statics, no baked
+    path.
+  - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` and
+    `@MDB_table(name:flags:)` unchanged in role (schema assembly + per-table
+    declaration); `version:` on `@MDB_environment` derives
+    `<stem>-v<N>.mdb` when written (opt-in, fresh-file migration).
+  - the prior `environments:` attribute form, the `#MDB_entry_load`/
+    `#MDB_entry_store` trailing verbs, the provider-style container, and
+    per-core `Root` shells are REMOVED by this change.
 
 # 16.1.0
 

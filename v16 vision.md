@@ -5,10 +5,21 @@ consolidates the earlier `v16 vision` journal and the clean-slate iterated
 design journal into one record, then adds the schema-layer roadmap
 (environments + databases: their declarations and initializations).
 
-**Status:** the tree carries ONE transaction layer — the boundary dialect —
-ratified, ported, and verified on the real engine. the schema layer below is a
-PLANNED roadmap pending ratification. nothing in this document is final until
-it survives discussion; the working design series lives here.
+**Status (2026-09-11):** the tree carries the **typed-environment
+transaction layer** — every environment is its own `@MDB_environment` type;
+`@MDB_transact` makes INSTANCE methods on those types transactional units with
+no transaction vocabulary on the authored surface; the typed verb family
+(`#store(E.self, database: \.table, key:…)`) carries the environment type and
+a KeyPath to the table; the environment set is inferred from the verbs;
+multi-environment boundaries take the other cores as typed parameters;
+`#MDB_transacted` is the join marker; `@MDB_layout` is the arrangement helper
+(open + inventory). sections 1–3 below describe the PRIOR "boundary dialect"
+and schema-roadmap shapes and are HISTORICAL — the typed-environment layer
+superseded the `environments:` attribute form, the trailing
+`#MDB_entry_load`/`#MDB_entry_store` verbs, the per-core `Root` shells, and
+the layout's `_mdb_open_*` factory/static design. the operating principles
+(compile-time-first, zero ambient state, explicit composition by joining,
+derived defaults) still hold; `Transaction<M>` capability typing is ratified.
 
 ---
 

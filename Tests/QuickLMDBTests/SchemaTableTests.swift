@@ -29,11 +29,11 @@ struct SchemaTableTests {
 		// the renamed/flagged table is fully functional (raw tx round-trip)
 		let key = TestKey(RAW_native: 1)
 		let value = TestValue(RAW_native: 10)
-		let write = try Transaction(env: core.env, readOnly: false)
+		let write = try Transaction<Write>(env: core.env)
 		try core.events.setEntry(key: key, value: value, flags: [], tx: write)
 		try write.commit()
 
-		let read = try Transaction(env: core.env, readOnly: true)
+		let read = try Transaction<Read>(env: core.env)
 		let loaded = core.events.load(key: key, tx: read)
 		read.abort()
 		#expect(loaded == value)

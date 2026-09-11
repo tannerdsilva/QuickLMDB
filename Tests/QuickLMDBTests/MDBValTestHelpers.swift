@@ -26,8 +26,8 @@ func isMDBErr(_ error:Error, _ expected:LMDBError) -> Bool {
 }
 
 // run `body` on a write transaction, committing on success / aborting on throw
-func withWriteTxn(_ env:Environment, _ body:(borrowing Transaction) throws -> Void) throws {
-	let tx = try Transaction(env:env, readOnly:false)
+func withWriteTxn(_ env:Environment, _ body:(borrowing Transaction<Write>) throws -> Void) throws {
+	let tx = try Transaction<Write>(env:env)
 	do {
 		try body(tx)
 	} catch let error {

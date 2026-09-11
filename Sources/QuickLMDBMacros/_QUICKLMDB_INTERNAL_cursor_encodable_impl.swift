@@ -81,10 +81,10 @@ internal struct _QUICKLMDB_INTERNAL_cursor_encodable_impl:MemberMacro {
 			"""),
 			DeclSyntax("""
 				@available(*, noasync)
-				public borrowing func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws(LMDBError) {
+				public borrowing func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 					return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
 						try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
-							try setEntry(key:keyVal, value:valueVal, flags:flags)
+							try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
 						}
 					}
 				}

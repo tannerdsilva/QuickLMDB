@@ -7,13 +7,11 @@ Class that allows for ``QuickLMDB/Transaction``s to be made with ``QuickLMDB/Dat
 An ``Environment`` can be created by calling ``QuickLMDB/Environment/init(path:flags:mapSize:maxReaders:maxDBs:mode:)``
 
 ```
-// An example environment with the noSubDir flag
+// an example environment with the noSubDir flag
 let someEnvironment = try Environment(path: somePath, flags: [.noSubDir], maxDBs: 64)
 
-//Opening a transaction within the environment
-try someEnvironment.transact(readOnly: false) { thisTransaction in 
+// opening a transaction within the environment (mode lives in the type)
+let someTransaction = try Transaction<Write>(env: someEnvironment)
 
-    //use thisTransaction to manage data in the environment
-
-}
-```
+// use someTransaction to manage data in the environment
+try someTransaction.commit()

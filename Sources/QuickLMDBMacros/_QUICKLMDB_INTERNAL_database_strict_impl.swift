@@ -8,7 +8,7 @@ internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
 	static func expansion(of node:SwiftSyntax.AttributeSyntax, providingMembersOf declaration:some SwiftSyntax.DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
 		return [
 			DeclSyntax("""
-				public borrowing func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) {
+				public borrowing func setEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:consuming Operation.Flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 					try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
 						try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
 							try MDB_db_set_entry(db:self.dbHandle(), key:keyVal, value:valueVal, flags:flags.rawValue, tx:tx.txHandle())
@@ -17,7 +17,7 @@ internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func deleteEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws(LMDBError) {
+				public borrowing func deleteEntry(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction<Write>) throws(LMDBError) {
 					return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
 						return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) in
 							try deleteEntry(key:keyVal, value:valueVal, tx:tx)
@@ -26,21 +26,21 @@ internal struct _QUICKLMDB_INTERNAL_database_strict_impl:MemberMacro {
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func deleteEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws(LMDBError) {
+				public borrowing func deleteEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction<Write>) throws(LMDBError) {
 					return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
 						return try deleteEntry(key:keyVal, tx:tx)
 					}
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func loadEntry(key:borrowing MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction) throws(LMDBError) -> MDB_db_val_type {
+				public borrowing func loadEntry<M:TransactionMode>(key:borrowing MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction<M>) throws(LMDBError) -> MDB_db_val_type {
 					return try key.MDB_access({ (keyVal:MDB_val) throws(LMDBError) in 
 						return MDB_db_val_type(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))!
 					})
 				}
 			"""),
 			DeclSyntax("""
-				public borrowing func containsEntry(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws(LMDBError) -> Bool {
+				public borrowing func containsEntry<M:TransactionMode>(key:borrowing MDB_db_key_type, tx:borrowing Transaction<M>) throws(LMDBError) -> Bool {
 					return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
 						return try containsEntry(key:keyVal, tx:tx)
 					}

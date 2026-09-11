@@ -10,6 +10,10 @@ import RAW
 //   #MDB_entry_load(   env:, db:, key:)            -> db.load(    key:, tx:)
 //   #MDB_entry_store(  env:, db:, key:, value:)    -> db.store(   key:, value:, tx:)
 //
+// capability typing: reads take any transaction mode (write txns read); the
+// write companions (`store`/`delete`) take `Transaction<Write>` only — writing
+// on a read transaction is a type-checker error.
+//
 // deliberately ABSENT: a DB-level `contains(key:value:)` pair check. mdb_get
 // resolves by key only, so a pair form would be a silent no-op (answered true
 // for any existing key); the pair check is cursor-only (real MDB_GET_BOTH).
@@ -19,11 +23,11 @@ extension MDB_db {
 	/// typed load — the value type rides on the handle; a missing key returns nil.
 	/// - parameters:
 	/// 	- key: the key to look up.
-	/// 	- tx: the transaction to read through.
+	/// 	- tx: the transaction to read through (any mode — a write transaction reads).
 	/// - returns: the stored value, or nil if the key does not exist (or any
 	///   other error occurs — see ``loadEntry(key:as:tx:)`` for the typed form).
 	@available(*, noasync)
-	public borrowing func load(key:borrowing MDB_db_key_type, tx:borrowing Transaction) -> MDB_db_val_type? {
+	public borrowing func load<M:TransactionMode>(key:borrowing MDB_db_key_type, tx:borrowing Transaction<M>) -> MDB_db_val_type? {
 		return try? loadEntry(key:key, as:MDB_db_val_type.self, tx:tx)
 	}
 
@@ -32,30 +36,30 @@ extension MDB_db {
 	/// 	- key: the key to write.
 	/// 	- value: the value to write.
 	/// 	- flags: operation flags (defaults to none).
-	/// 	- tx: the transaction to write through.
+	/// 	- tx: the transaction to write through (WRITE transactions only).
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be set.
 	@available(*, noasync)
-	public borrowing func store(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags = [], tx:borrowing Transaction) throws {
+	public borrowing func store(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, flags:Operation.Flags = [], tx:borrowing Transaction<Write>) throws {
 		try setEntry(key:key, value:value, flags:flags, tx:tx)
 	}
 
 	/// typed delete — removes every entry matching the key.
 	/// - parameters:
 	/// 	- key: the key to remove.
-	/// 	- tx: the transaction to write through.
+	/// 	- tx: the transaction to write through (WRITE transactions only).
 	/// - throws: a corresponding ``LMDBError`` if the entry could not be removed.
 	@available(*, noasync)
-	public borrowing func delete(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws {
+	public borrowing func delete(key:borrowing MDB_db_key_type, tx:borrowing Transaction<Write>) throws {
 		try deleteEntry(key:key, tx:tx)
 	}
 
 	/// typed containment — true when at least one entry exists for the key.
 	/// - parameters:
 	/// 	- key: the key to check.
-	/// 	- tx: the transaction to read through.
+	/// 	- tx: the transaction to read through (any mode).
 	/// - returns: true if an entry exists, false if not.
 	@available(*, noasync)
-	public borrowing func contains(key:borrowing MDB_db_key_type, tx:borrowing Transaction) throws -> Bool {
+	public borrowing func contains<M:TransactionMode>(key:borrowing MDB_db_key_type, tx:borrowing Transaction<M>) throws -> Bool {
 		return try containsEntry(key:key, tx:tx)
 	}
 }
@@ -78,7 +82,7 @@ extension MDB_db {
 	@available(*, noasync)
 	public borrowing func readCommitted(key:borrowing MDB_db_key_type) throws -> MDB_db_val_type? {
 		// only the transaction creation can throw; the typed load is non-throwing
-		let tx = try Transaction(env:self.dbEnvironment(), readOnly:true)
+		let tx = try Transaction<Read>(env:self.dbEnvironment())
 		let result = self.load(key:key, tx:tx)
 		tx.abort()
 		return result
@@ -90,7 +94,7 @@ extension MDB_db {
 	/// - returns: true if an entry exists in the committed state, false if not.
 	@available(*, noasync)
 	public borrowing func containsCommitted(key:borrowing MDB_db_key_type) throws -> Bool {
-		let tx = try Transaction(env:self.dbEnvironment(), readOnly:true)
+		let tx = try Transaction<Read>(env:self.dbEnvironment())
 		do {
 			let result = try self.contains(key:key, tx:tx)
 			tx.abort()
@@ -111,7 +115,7 @@ extension MDB_db_dupsort {
 	/// - returns: every duplicate stored for `key`, in key order.
 	@available(*, noasync)
 	public borrowing func readCommittedDups(key:borrowing MDB_db_key_type) throws -> [MDB_db_val_type] {
-		let tx = try Transaction(env:self.dbEnvironment(), readOnly:true)
+		let tx = try Transaction<Read>(env:self.dbEnvironment())
 		do {
 			var result:[MDB_db_val_type] = []
 			if try self.contains(key:key, tx:tx) {
@@ -140,10 +144,10 @@ extension MDB_db_dupsort {
 	/// - parameters:
 	/// 	- key: the key of the pairing to remove.
 	/// 	- value: the value of the pairing to remove.
-	/// 	- tx: the transaction to write through.
+	/// 	- tx: the transaction to write through (WRITE transactions only).
 	/// - throws: a corresponding ``LMDBError`` if the pairing could not be removed.
 	@available(*, noasync)
-	public borrowing func delete(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction) throws {
+	public borrowing func delete(key:borrowing MDB_db_key_type, value:consuming MDB_db_val_type, tx:borrowing Transaction<Write>) throws {
 		try deleteEntry(key:key, value:value, tx:tx)
 	}
 }

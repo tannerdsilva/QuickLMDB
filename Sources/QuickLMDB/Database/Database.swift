@@ -32,7 +32,7 @@ public struct Database:Sendable, MDB_db_basic {
 	/// 	- flags: the flags that will be used when opening the database.
 	///		- tx: a pointer to the transaction that will be used to open the database.
 	@available(*, noasync)
-    public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+    public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 		self._db_env = copy env
 		self._db_name = name_in
 		var dbHandle = MDB_dbi()
@@ -78,7 +78,7 @@ extension Database {
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
 		@available(*, noasync)
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 			flags.update(with:.dupSort)
 			
 			self._db_env = copy env
@@ -132,7 +132,7 @@ extension Database {
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: borrows a transaction that will be used to complete the database initialization.
 		@available(*, noasync)
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 			// configure the correct flags before consuming the variable
 			flags.update(with:.dupFixed)
 			flags.update(with:.dupSort)
@@ -186,7 +186,7 @@ extension Database {
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
 		@available(*, noasync)
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 			
 			self._db_env = copy env
 			self._db_name = name

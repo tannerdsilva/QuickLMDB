@@ -13,7 +13,7 @@ extension TestCore {
 	/// commits a value through a raw write transaction (the legacy boundary
 	/// method of the same name was shed with the old @MDB_transact surface)
 	func writePrimary(_ key: TestKey, _ value: TestValue) throws {
-		let tx = try Transaction(env: env, readOnly: false)
+		let tx = try Transaction<Write>(env: env)
 		try primary.setEntry(key: key, value: value, flags: [], tx: tx)
 		try tx.commit()
 	}
@@ -33,11 +33,11 @@ struct TypedCompanionTests {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 1)
 		let value = TestValue(RAW_native: 100)
-		let write = try Transaction(env:core.env, readOnly:false)
+		let write = try Transaction<Write>(env:core.env)
 		try core.primary.store(key:key, value:value, tx:write)
 		try write.commit()
 
-		let read = try Transaction(env:core.env, readOnly:true)
+		let read = try Transaction<Read>(env:core.env)
 		let loaded = core.primary.load(key:key, tx:read)
 		read.abort()
 		#expect(loaded == value)
@@ -45,7 +45,7 @@ struct TypedCompanionTests {
 
 	@Test func loadMissingKeyReturnsNil() throws {
 		let core = try makeCore()
-		let read = try Transaction(env:core.env, readOnly:true)
+		let read = try Transaction<Read>(env:core.env)
 		let loaded = core.primary.load(key:TestKey(RAW_native: 2), tx:read)
 		read.abort()
 		#expect(loaded == nil)
@@ -57,7 +57,7 @@ struct TypedCompanionTests {
 		try core.writePrimary(key, TestValue(RAW_native: 300))
 		#expect(try core.primary.readCommitted(key:key) == TestValue(RAW_native: 300))
 
-		let write = try Transaction(env:core.env, readOnly:false)
+		let write = try Transaction<Write>(env:core.env)
 		try core.primary.delete(key:key, tx:write)
 		try write.commit()
 
@@ -67,14 +67,14 @@ struct TypedCompanionTests {
 	@Test func containsReflectsPresence() throws {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 4)
-		let read = try Transaction(env:core.env, readOnly:true)
+		let read = try Transaction<Read>(env:core.env)
 		let firstResult = try core.primary.contains(key:key, tx:read)
 		#expect(firstResult == false)
 		read.abort()
 
 		try core.writePrimary(key, TestValue(RAW_native: 400))
 
-		let read2 = try Transaction(env:core.env, readOnly:true)
+		let read2 = try Transaction<Read>(env:core.env)
 		let secondResult = try core.primary.contains(key:key, tx:read2)
 		#expect(secondResult == true)
 		read2.abort()
@@ -83,12 +83,12 @@ struct TypedCompanionTests {
 	@Test func storeHonorsNoOverwriteFlag() throws {
 		let core = try makeCore()
 		let key = TestKey(RAW_native: 5)
-		let write = try Transaction(env:core.env, readOnly:false)
+		let write = try Transaction<Write>(env:core.env)
 		try core.primary.store(key:key, value:TestValue(RAW_native: 500), tx:write)
 		try write.commit()
 
 		// the same key with .noOverwrite must reject as keyExists (default flags would overwrite)
-		let write2 = try Transaction(env:core.env, readOnly:false)
+		let write2 = try Transaction<Write>(env:core.env)
 		do {
 			try core.primary.store(key:key, value:TestValue(RAW_native: 501), flags:[.noOverwrite], tx:write2)
 			Issue.record("expected .noOverwrite on an existing key to throw keyExists")
@@ -105,20 +105,20 @@ struct TypedCompanionTests {
 		let valueB = TestValue(RAW_native: 602)
 
 		// two dups under one key
-		let write = try Transaction(env:core.env, readOnly:false)
+		let write = try Transaction<Write>(env:core.env)
 		try core.secondary.store(key:key, value:valueA, tx:write)
 		try core.secondary.store(key:key, value:valueB, tx:write)
 		try write.commit()
 
 		// delete exactly one pairing
-		let write2 = try Transaction(env:core.env, readOnly:false)
+		let write2 = try Transaction<Write>(env:core.env)
 		try core.secondary.delete(key:key, value:valueA, tx:write2)
 		try write2.commit()
 
 		// the other dup survives; the deleted one is gone. the pair check is
 		// cursor-only (real MDB_GET_BOTH — the DB-level pair contains was removed
 		// as a silent no-op), so assert through the cursor.
-		let read = try Transaction(env:core.env, readOnly:true)
+		let read = try Transaction<Read>(env:core.env)
 		var pairFound = false
 		try core.secondary.cursor(tx:read) { cursor in
 			pairFound = try cursor.containsEntry(key:key, value:valueB)
@@ -142,7 +142,7 @@ struct TypedCompanionTests {
 		#expect(try core.primary.containsCommitted(key:TestKey(RAW_native: 99)) == false)
 
 		// readCommittedDups: dupsort table, absent key -> empty
-		let writeTX = try Transaction(env:core.env, readOnly:false)
+		let writeTX = try Transaction<Write>(env:core.env)
 		try core.secondary.store(key:key, value:TestValue(RAW_native: 701), tx:writeTX)
 		try writeTX.commit()
 		#expect(try core.secondary.readCommittedDups(key:key) == [TestValue(RAW_native: 701)])

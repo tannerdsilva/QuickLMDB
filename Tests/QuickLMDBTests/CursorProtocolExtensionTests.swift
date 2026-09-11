@@ -15,7 +15,7 @@ struct CursorProtocolExtensionTests {
 	// a core plus a raw raw-value cursor-capable database handle
 	private func seededCore(_ name:String = "rawcursor") throws -> (TestCore, Database) {
 		let core = try TestHelpers.makeCore()
-		let tx = try Transaction(env:core.env, readOnly:false)
+		let tx = try Transaction<Write>(env:core.env)
 		let db = try Database(env:core.env, name:name, flags:[.create], tx:tx)
 		try tx.commit()
 		return (core, db)
@@ -38,7 +38,7 @@ struct CursorProtocolExtensionTests {
 	@Test func opFirstLastNextPreviousWalk() throws {
 		let (core, db) = try seededCore()
 		try seedRaw(db, core.env, [(1, 10), (2, 20), (3, 30)])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		try db.cursor(tx:rtx) { c in
 			var e = try c.opFirst(returning:(key:MDB_val, value:MDB_val).self)
 			#expect(mdbValBytes(e.key) == [1])
@@ -62,7 +62,7 @@ struct CursorProtocolExtensionTests {
 
 	@Test func opFirstOnEmptyThrowsNotFound() throws {
 		let (core, db) = try seededCore("empty")
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		db.cursor(tx:rtx) { c in
 			do {
 				let _ = try c.opFirst(returning:(key:MDB_val, value:MDB_val).self)
@@ -82,7 +82,7 @@ struct CursorProtocolExtensionTests {
 	@Test func opSetAndOpSetKeyPositionExactly() throws {
 		let (core, db) = try seededCore("setpos")
 		try seedRaw(db, core.env, [(0x55, 0xAA)])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		try db.cursor(tx:rtx) { c in
 			try withMDBVal([0x55]) { key in
 				let value = try c.opSet(returning:MDB_val.self, key:key)
@@ -109,7 +109,7 @@ struct CursorProtocolExtensionTests {
 	@Test func opSetRangeFindsNearestKey() throws {
 		let (core, db) = try seededCore("range")
 		try seedRaw(db, core.env, [(10, 1), (20, 2), (30, 3)])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		try db.cursor(tx:rtx) { c in
 			try withMDBVal([15]) { key in
 				let pair = try c.opSetRange(returning:(key:MDB_val, value:MDB_val).self, key:key)
@@ -130,7 +130,7 @@ struct CursorProtocolExtensionTests {
 	@Test func opGetCurrentAfterPositioning() throws {
 		let (core, db) = try seededCore("current")
 		try seedRaw(db, core.env, [(1, 10), (2, 20)])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		try db.cursor(tx:rtx) { c in
 			let _ = try c.opFirst(returning:(key:MDB_val, value:MDB_val).self)
 			let pair = try c.opGetCurrent(returning:(key:MDB_val, value:MDB_val).self)
@@ -142,7 +142,7 @@ struct CursorProtocolExtensionTests {
 	@Test func noArgConvenienceReturnsTypedPair() throws {
 		let (core, db) = try seededCore("convenience")
 		try seedRaw(db, core.env, [(7, 70)])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		let pair = try db.cursor(tx:rtx) { c in
 			return try c.opFirst()   // the no-arg convenience (MDB_db_key_type/MDB_db_val_type)
 		}
@@ -154,15 +154,15 @@ struct CursorProtocolExtensionTests {
 
 	@Test func cursorSetEntryAndDeleteCurrent() throws {
 		let (core, db) = try seededCore("cwrite")
-		let wt = try Transaction(env:core.env, readOnly:false)
+		let wt = try Transaction<Write>(env:core.env)
 		try db.cursor(tx:wt) { c in
 			try withMDBVal([0x70]) { key in
 				try withMDBVal([0x71]) { value in
-					try c.setEntry(key:key, value:value, flags:[])
+					try c.setEntry(key:key, value:value, flags:[], tx: wt)
 				}
 				let present = try c.containsEntry(key:key)
 				#expect(present == true)
-				try c.deleteCurrentEntry(flags:[])
+				try c.deleteCurrentEntry(flags:[], tx: wt)
 				let absent = try c.containsEntry(key:key)
 				#expect(absent == false)
 			}
@@ -183,7 +183,7 @@ struct CursorProtocolExtensionTests {
 		let core = try TestHelpers.makeCore()
 		try seedDups(core, key: 1, values: [10, 20, 30])
 		try seedDups(core, key: 2, values: [99])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		try core.secondary.cursor(tx:rtx) { c in
 			let _ = try c.opSetKey(returning:(key:TestKey, value:TestValue).self, key:TestKey(RAW_native: 1))
 			let count = try c.dupCount()
@@ -215,7 +215,7 @@ struct CursorProtocolExtensionTests {
 	@Test func containsEntryKeyValueAndGetBothOnDups() throws {
 		let core = try TestHelpers.makeCore()
 		try seedDups(core, key: 1, values: [10, 20])
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		try core.secondary.cursor(tx:rtx) { c in
 			let _ = try c.opSetKey(returning:(key:TestKey, value:TestValue).self, key:TestKey(RAW_native: 1))
 			let present = try c.containsEntry(key:TestKey(RAW_native: 1), value:TestValue(RAW_native: 20))
@@ -238,11 +238,11 @@ struct CursorProtocolExtensionTests {
 
 	@Test func compareEntryKeysAndValues() throws {
 		let core = try TestHelpers.makeCore()
-		let setup = try Transaction(env:core.env, readOnly:false)
+		let setup = try Transaction<Write>(env:core.env)
 		// mdb_dcmp requires a dupsort database (plain DBs have no dup comparator)
 		let db = try Database(env:core.env, name:"cmp", flags:[.create, .dupSort], tx:setup)
 		try setup.commit()
-		let rtx = try Transaction(env:core.env, readOnly:true)
+		let rtx = try Transaction<Read>(env:core.env)
 		db.cursor(tx:rtx) { c in
 			withMDBVal([3]) { lhs in
 				withMDBVal([5]) { rhs in

@@ -37,7 +37,7 @@ internal struct _QUICKLMDB_INTERNAL_cursor_init_basics_impl:MemberMacro {
 			DeclSyntax("""
 				/// opens a new cursor instance from a given database and transaction pairing.
 				@available(*, noasync)
-				public init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws(LMDBError) {
+				public init<M:TransactionMode>(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction<M>) throws(LMDBError) {
 					var buildCursor:OpaquePointer? = nil
 					let openCursorResult = mdb_cursor_open(tx.txHandle(), db.dbHandle(), &buildCursor)
 					guard openCursorResult == MDB_SUCCESS else {
