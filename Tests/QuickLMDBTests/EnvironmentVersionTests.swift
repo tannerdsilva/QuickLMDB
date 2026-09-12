@@ -66,36 +66,51 @@ struct EnvironmentVersionTests {
 	@Test func bumpingTheVersionShipsAFreshFile() throws {
 		// the fresh-file semantic that makes the convention trustable: v2 NEVER
 		// sees v1's data (different file by construction), and v1 stays readable
-		// after v2 starts writing
+		// after v2 starts writing. each phase is SCOPED so the environment
+		// handle is released before the next open — reopening the same .mdb
+		// while the old handle is still live is undefined LMDB behavior
+		// (passes on macOS by platform accident, fails with EINVAL on Linux).
 		let dir = VersionPaths.freshDir("fresh")
 
 		// v1: write then read back
 		let k1 = TestKey(RAW_native: 1)
 		let v1 = TestValue(RAW_native: 100)
-		var c1 = try VersionOneCore.open(at: dir)
-		var tx = try Transaction<Write>(env: c1.env)
-		try c1.primary.store(key: k1, value: v1, tx: tx)
-		try tx.commit()
-		let firstRead = try c1.primary.readCommitted(key: k1)
+		let firstRead: TestValue?
+		do {
+			let c1 = try VersionOneCore.open(at: dir)
+			let tx = try Transaction<Write>(env: c1.env)
+			try c1.primary.store(key: k1, value: v1, tx: tx)
+			try tx.commit()
+			firstRead = try c1.primary.readCommitted(key: k1)
+		}
 		#expect(firstRead == v1)
 
 		// v2 (fresh file): the old key is ABSENT, and the new version can write
 		let k2 = TestKey(RAW_native: 2)
 		let v2 = TestValue(RAW_native: 200)
-		let c2 = try VersionTwoCore.open(at: dir)
-		tx = try Transaction<Write>(env: c2.env)
-		try c2.primary.store(key: k2, value: v2, tx: tx)
-		try tx.commit()
-		let absentOld = try c2.primary.readCommitted(key: k1)
+		let freshRead: TestValue?
+		let absentOld: TestValue?
+		do {
+			let c2 = try VersionTwoCore.open(at: dir)
+			let tx = try Transaction<Write>(env: c2.env)
+			try c2.primary.store(key: k2, value: v2, tx: tx)
+			try tx.commit()
+			absentOld = try c2.primary.readCommitted(key: k1)
+			freshRead = try c2.primary.readCommitted(key: k2)
+		}
 		#expect(absentOld == nil, "the new version must open a FRESH file — old data is absent by construction")
-		let freshRead = try c2.primary.readCommitted(key: k2)
 		#expect(freshRead == v2)
 
-		// v1 remains untouched after v2 wrote to ITS file
-		c1 = try VersionOneCore.open(at: dir)
-		let backV1 = try c1.primary.readCommitted(key: k1)
+		// v1 remains untouched after v2 wrote to ITS file — REOPENED cleanly
+		// now that the first v1 handle is out of scope
+		let backV1: TestValue?
+		let backV1B: TestValue?
+		do {
+			let c1 = try VersionOneCore.open(at: dir)
+			backV1 = try c1.primary.readCommitted(key: k1)
+			backV1B = try c1.primary.readCommitted(key: k2)
+		}
 		#expect(backV1 == v1, "v1's file must stay readable and untouched after v2 wrote")
-		let backV1B = try c1.primary.readCommitted(key: k2)
 		#expect(backV1B == nil)
 	}
 }

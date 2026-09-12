@@ -57,8 +57,8 @@ struct MDBlayoutExpansionTests {
 			
 			    @available(*, noasync)
 			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
-			        let calendar = try CalendarCore.open(at: basePath + "/" + "calendar")
-			        let contacts = try ContactsCore.open(at: basePath + "/" + "contacts")
+			        let calendar = try CalendarCore.open(at: basePath + "/" + "calendar", mapHeadroom: mapHeadroom)
+			        let contacts = try ContactsCore.open(at: basePath + "/" + "contacts", mapHeadroom: mapHeadroom)
 			        return Self(calendar: calendar, contacts: contacts)
 			    }
 			}

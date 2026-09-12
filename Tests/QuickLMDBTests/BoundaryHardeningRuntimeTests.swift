@@ -74,6 +74,17 @@ extension HardenedCore {
 		#load(HardenedCore.self, database: \.primary, key: GenericKey(tag: 9))
 	}
 
+	// the READ-ONLY generic boundary is the harder sibling merge —
+	// `<P, M:TransactionMode>` — which pricedb's bulk loaders exercise
+	// (`bulkLoadDirectPricesVX<P>`) but the suite had only pinned the
+	// readWrite form (`<P>`). reads are generic over the mode, so writing
+	// boundaries can join this one.
+	@MDB_transact(.readOnly)
+	func echoReadOnly<P>(_ meta: P, key: GenericKey) throws -> P where P: PricedbProtocol {
+		_ = #load(HardenedCore.self, database: \.primary, key: key)
+		return meta
+	}
+
 	@MDB_transact(.readWrite)
 	func bump(_ counter: inout UInt64) throws {
 		try #store(HardenedCore.self, database: \.primary, key: GenericKey(tag: counter + 1), value: TestValue(RAW_native: 1))
@@ -94,6 +105,14 @@ struct BoundaryHardeningRuntimeTests {
 		let echo = try core.install(GenericKey(tag: 9), key: GenericKey(tag: 9), TestValue(RAW_native: 99))
 		#expect(echo.tag == 9)
 		#expect(try core.loadLogical() == TestValue(RAW_native: 99))
+	}
+
+	@Test func readOnlyGenericBoundaryMergesTheModeGeneric() throws {
+		let core = try freshCore()
+		// `<P, M:TransactionMode>` sibling (mode-generic read) — the shape
+		// pricedb's bulk loaders depend on
+		let echoed = try core.echoReadOnly(GenericKey(tag: 5), key: GenericKey(tag: 9))
+		#expect(echoed.tag == 5)
 	}
 
 	@Test func inoutBoundaryThreadsTheAmpersand() throws {

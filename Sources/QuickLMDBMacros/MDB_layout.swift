@@ -81,7 +81,7 @@ internal struct MDB_layout_macro: MemberMacro {
 		openLines.append("@available(*, noasync)")
 		openLines.append("\(mods)static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
 		for core in cores {
-			openLines.append("    let \(core.name) = try \(core.type).open(at: basePath + \"/\" + \"\(core.name)\")")
+			openLines.append("    let \(core.name) = try \(core.type).open(at: basePath + \"/\" + \"\(core.name)\", mapHeadroom: mapHeadroom)")
 		}
 		let initArgs = cores.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
 		openLines.append("    return Self(\(initArgs))")
