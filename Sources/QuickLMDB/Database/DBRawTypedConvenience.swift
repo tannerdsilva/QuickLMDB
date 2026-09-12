@@ -61,4 +61,20 @@ extension Database {
 			return decoded
 		}
 	}
+
+	/// typed raw delete. the key bytes are materialized inside this call — no
+	/// `MDB_val` ever escapes. a missing key throws ``LMDBError/notFound``
+	/// (same contract as the typed handles).
+	/// - parameters:
+	/// 	- key: the key to delete (any `RAW_accessible`).
+	/// 	- tx: the transaction to delete through (WRITE transactions only).
+	/// - throws: a corresponding ``LMDBError`` if the entry could not be deleted.
+	@available(*, noasync)
+	public borrowing func deleteEntry<K: RAW_accessible>(key: K, tx: borrowing Transaction<Write>) throws {
+		let keyBytes: [UInt8] = key.RAW_access_immutable(UnsafeBufferPointer<UInt8>.self, { Array($0) })
+		try keyBytes.withUnsafeBytes { keyBuf in
+			let keyVal = MDB_val(mv_size: keyBuf.count, mv_data: UnsafeMutableRawPointer(mutating: keyBuf.baseAddress!))
+			try deleteEntry(key: keyVal, tx: tx)
+		}
+	}
 }

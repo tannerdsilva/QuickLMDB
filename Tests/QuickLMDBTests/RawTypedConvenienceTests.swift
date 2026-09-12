@@ -70,4 +70,26 @@ struct RawTypedConvenienceTests {
 		}
 		read.abort()
 	}
+
+	@Test func typedDeleteRemovesTheEntry() throws {
+		let core = try freshCore()
+		let key = TestKey(RAW_native: 23)
+		let value = TestValue(RAW_native: 230)
+
+		var write = try Transaction<Write>(env: core.env)
+		try core.metadata.setEntry(key: key, value: value, flags: [], tx: write)
+		try write.commit()
+
+		// delete through the typed convenience
+		write = try Transaction<Write>(env: core.env)
+		try core.metadata.deleteEntry(key: key, tx: write)
+		try write.commit()
+
+		// the entry is gone — and deleting it again throws notFound
+		let read = try Transaction<Read>(env: core.env)
+		#expect(throws: LMDBError.self) {
+			_ = try core.metadata.loadEntry(key: key, as: TestValue.self, tx: read)
+		}
+		read.abort()
+	}
 }
