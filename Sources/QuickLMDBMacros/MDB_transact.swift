@@ -278,15 +278,19 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		let retText = fn.signature.returnClause?.type.trimmedDescription
 
 		// the shell's call into the sibling: the author's arguments by their
-		// original labels, then one `tx_<E>: tx_<E>` per inferred environment
+		// original labels, then one `tx_<E>: tx_<E>` per inferred environment.
+		// INOUT parameters must be re-prefixed with `&` — the sibling takes
+		// them by reference and the caller owns the storage.
 		var callArgs: [String] = []
 		for p in params {
+			let isInout = p.type.trimmedDescription.hasPrefix("inout ")
+			let ampersand = isInout ? "&" : ""
 			if p.firstName.text == "_" {
-				callArgs.append(p.secondName?.text ?? "")
+				callArgs.append("\(ampersand)\(p.secondName?.text ?? "")")
 			} else if let second = p.secondName {
-				callArgs.append("\(p.firstName.text): \(second.text)")
+				callArgs.append("\(p.firstName.text): \(ampersand)\(second.text)")
 			} else {
-				callArgs.append("\(p.firstName.text): \(p.firstName.text)")
+				callArgs.append("\(p.firstName.text): \(ampersand)\(p.firstName.text)")
 			}
 		}
 		for r in resolutions { callArgs.append("\(r.label): \(r.label)") }
@@ -383,9 +387,21 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		// attributes must precede modifiers in the declaration grammar
 		let modifierPrefix = startAttrs + (modifiers.isEmpty ? "" : modifiers + (modifiers.last == " " ? "" : " "))
 		let name = fn.name.text
-		// a read-only sibling is generic over the mode so that a read-write
-		// boundary can join it (write transactions read)
-		let genericClause = mode.isReadWrite ? "" : "<M:TransactionMode>"
+		// the sibling's generic clause: the AUTHOR's generic parameters PLUS
+		// the mode-generic `M` (a read-only sibling is generic over the mode so
+		// a read-write boundary can join it — write transactions read). a bare
+		// authored generic method would otherwise lose its own parameter list
+		// (`P` in `func bulkLoad<P>(...) where P:PairProtocol`), breaking the
+		// body. the author's `where` clause rides on the SIGNATURE and is
+		// appended after the return type.
+		let genericNameList = fn.genericParameterClause?.parameters.map { $0.trimmedDescription } ?? []
+		var genericClause: String
+		if !genericNameList.isEmpty {
+			genericClause = "<" + genericNameList.joined(separator: ", ") + (mode.isReadWrite ? ">" : ", M:TransactionMode>")
+		} else {
+			genericClause = mode.isReadWrite ? "" : "<M:TransactionMode>"
+		}
+		let authorWhere = fn.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
 		var effects = ""
 		if fn.signature.effectSpecifiers?.throwsClause != nil { effects += " throws" }
 		let ret = fn.signature.returnClause.map { " \($0.trimmedDescription)" } ?? ""
@@ -396,7 +412,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		let rewritten = rewriter.visit(body)
 		let bodyText = rewritten.map { $0.trimmedDescription }.joined(separator: "\n")
 
-		let decl = "\(modifierPrefix)func \(name)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret) {\n\(bodyText)\n}"
+		let decl = "\(modifierPrefix)func \(name)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(bodyText)\n}"
 		return [DeclSyntax(stringLiteral: decl)]
 	}
 
