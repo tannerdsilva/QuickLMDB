@@ -238,5 +238,12 @@ public macro MDB_layout() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_l
 ///
 /// zero attributes = the default case: a bare `Database.X` property needs no
 /// decoration and behaves byte-identically to today.
-@attached(peer, names: arbitrary)
+///
+/// the `name:` argument may reference a same-core member (e.g.
+/// `name: Databases.foo.rawValue`) so the on-disk table name stays
+/// single-sourced. this requires a FIXED name set on the attached peer —
+/// `names: arbitrary` plus same-type member references in attribute args is a
+/// circular reference at expansion time. this macro generates nothing, so a
+/// fixed (unused) name is all the compiler needs to break the cycle.
+@attached(peer, names: named(_MDB_table_marker))
 public macro MDB_table(name: Swift.String? = nil, flags: [QuickLMDB.MDB_db_flags] = []) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_table_macro")

@@ -39,3 +39,44 @@ struct SchemaTableTests {
 		#expect(loaded == value)
 	}
 }
+
+
+// single-sourced names: `@MDB_table(name:)` may reference a same-core member
+// (e.g. the `Databases` enum) instead of duplicating the on-disk name as a
+// literal — this was the peer-macro circular reference, fixed by giving the
+// @MDB_table peer a FIXED name set.
+@MDB_environment(file: "schema_single_source.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+public struct SingleSourceCore: Sendable {
+	private enum Tables: String {
+		case hostEvents = "host_events"
+		case blobStore = "blob_store"
+	}
+	public let env: Environment
+	@MDB_table(name: Tables.hostEvents.rawValue)
+	public let events: Database.Strict<TestKey, TestValue>
+	@MDB_table(name: Tables.blobStore.rawValue)
+	public let blobs: Database
+}
+
+@Suite("schema layer — single-sourced table names (same-core member references)")
+struct SingleSourceTableTests {
+
+	@Test func memberReferencedNamesResolveToTheEnumValues() throws {
+		let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-single-source-\(UUID().uuidString)", isDirectory: true)
+		let core = try SingleSourceCore.open(at: dir.path)
+
+		#expect(core.events.dbName() == "host_events")
+		#expect(core.blobs.dbName() == "blob_store")
+
+		let key = TestKey(RAW_native: 3)
+		let value = TestValue(RAW_native: 30)
+		let write = try Transaction<Write>(env: core.env)
+		try core.events.setEntry(key: key, value: value, flags: [], tx: write)
+		try write.commit()
+
+		let read = try Transaction<Read>(env: core.env)
+		let loaded = core.events.load(key: key, tx: read)
+		read.abort()
+		#expect(loaded == value)
+	}
+}

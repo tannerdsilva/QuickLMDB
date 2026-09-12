@@ -76,6 +76,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 	private struct ResolvedTable {
 		let property:String              // the stored property name (local + Self init label)
 		var name:String                  // the resolved LMDB table name (property name unless overridden)
+		var nameIsExpression:Bool        // true when `name:` was a referenced expression (evaluated at runtime, not spliced as a literal)
 		let type:String
 		var extraFlags:String?    // the `flags:` array expression as written, or nil
 		var flagCases:Set<String> // member-case names for conflict validation
@@ -189,7 +190,8 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		lines.append("    let setupTX = try Transaction<Write>(env: env)")
 		for table in tables {
 			let flagsText = table.extraFlags.map { "QuickLMDB.MDB_db_flags([.create]).union(\($0))" } ?? "[.create]"
-			lines.append("    let \(table.property) = try \(table.type)(env: env, name: \"\(table.name)\", flags: \(flagsText), tx: setupTX)")
+			let nameLiteral = table.nameIsExpression ? table.name : "\"\(table.name)\""
+			lines.append("    let \(table.property) = try \(table.type)(env: env, name: \(nameLiteral), flags: \(flagsText), tx: setupTX)")
 		}
 		lines.append("    try setupTX.commit()")
 		var initArgs:[String] = ["env: env"]
@@ -211,9 +213,10 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		guard let attrList = attributes.first(where: { attr in
 			(attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription) == "MDB_table"
 		}), let attr = attrList.as(AttributeSyntax.self) else {
-			return ResolvedTable(property:propertyName, name:propertyName, type:typeText, extraFlags:nil, flagCases:[])
+			return ResolvedTable(property:propertyName, name:propertyName, nameIsExpression:false, type:typeText, extraFlags:nil, flagCases:[])
 		}
 		var nameOverride:String? = nil
+		var nameIsExpression = false
 		var extraFlags:String? = nil
 		var flagCases:Set<String> = []
 		if let argList = attr.arguments?.as(LabeledExprListSyntax.self) {
@@ -226,7 +229,11 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 						   let seg = lit.segments.first?.as(StringSegmentSyntax.self) {
 							content = seg.content.text
 						} else {
+							// a referenced expression (e.g. `Tables.foo.rawValue`):
+							// single-sourcing — it must be evaluated at RUNTIME,
+							// not spliced as a string literal of its own text
 							content = arg.expression.trimmedDescription
+							nameIsExpression = true
 						}
 						guard content.isEmpty == false, content.contains("\u{0}") == false else {
 							throw MacroError.invalidTableName(content)
@@ -246,6 +253,6 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 				}
 			}
 		}
-		return ResolvedTable(property:propertyName, name:nameOverride ?? propertyName, type:typeText, extraFlags:extraFlags, flagCases:flagCases)
+		return ResolvedTable(property:propertyName, name:nameOverride ?? propertyName, nameIsExpression:nameIsExpression, type:typeText, extraFlags:extraFlags, flagCases:flagCases)
 	}
 }
