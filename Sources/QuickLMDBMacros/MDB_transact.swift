@@ -376,7 +376,12 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		for r in resolutions { paramStrs.append("\(r.label): borrowing \(txParamType)") }
 
 		let modifiers = fn.modifiers.trimmedDescription
-		let modifierPrefix = modifiers.isEmpty ? "" : modifiers + " "
+		var startAttrs = ""
+		if fn.attributes.contains(where: { $0.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "discardableResult" }) {
+			startAttrs = "@discardableResult "
+		}
+		// attributes must precede modifiers in the declaration grammar
+		let modifierPrefix = startAttrs + (modifiers.isEmpty ? "" : modifiers + (modifiers.last == " " ? "" : " "))
 		let name = fn.name.text
 		// a read-only sibling is generic over the mode so that a read-write
 		// boundary can join it (write transactions read)

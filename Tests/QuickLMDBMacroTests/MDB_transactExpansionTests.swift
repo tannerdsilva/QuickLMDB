@@ -539,6 +539,7 @@ struct BoundaryHardeningExpansionTests {
 			struct Core {
 			    let env: Environment
 			    let primary: Database.Strict<Key, Value>
+			    @discardableResult
 			    @MDB_transact(.readWrite)
 			    func domainMake(name: Key, subnet: Key) throws {
 				guard try #contains(Core.self, database: \\.primary, key: subnet) == false else { throw TestError.bad }
@@ -549,6 +550,7 @@ struct BoundaryHardeningExpansionTests {
 			struct Core {
 			    let env: Environment
 			    let primary: Database.Strict<Key, Value>
+			    @discardableResult
 			    func domainMake(name: Key, subnet: Key) throws {
 			        let tx_Core = try Transaction<Write>(env: self.env)
 			        do {
@@ -560,7 +562,7 @@ struct BoundaryHardeningExpansionTests {
 			        try tx_Core.commit()
 			    }
 			
-			    func domainMake(name: Key, subnet: Key, tx_Core: borrowing Transaction<Write>) throws {
+			    @discardableResult func domainMake(name: Key, subnet: Key, tx_Core: borrowing Transaction<Write>) throws {
 			        guard try self[keyPath: \\.primary].contains(key: subnet, tx: tx_Core) == false else {
 			            throw TestError.bad
 			        }
