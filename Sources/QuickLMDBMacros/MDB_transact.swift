@@ -247,6 +247,63 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		}
 	}
 
+	// - MARK: the cursor closure's try-ability (DEBT item 4)
+
+	/// true when the AUTHORED site wrapped this verb in an explicit `try`
+	/// (`try #cursor(...)` — the recommended spelling). the check walks the
+	/// parent chain through parens and argument labels only, so an UNRELATED
+	/// try further out (`try foo(#cursor(...))`) never counts — the try must
+	/// wrap the cursor call itself.
+	private static func authoredTryWrapping(_ node: MacroExpansionExprSyntax) -> Bool {
+		var cur = node.parent
+		while let c = cur {
+			if c.is(TupleExprSyntax.self) || c.is(LabeledExprSyntax.self) {
+				cur = c.parent
+				continue
+			}
+			if c.is(TryExprSyntax.self) { return true }
+			return false
+		}
+		return false
+	}
+
+	/// rebuild the trailing closure with an explicit `throws` annotation after
+	/// its parameter clause. the handler type is `throws(E)`, and an
+	/// explicitly-throwing closure forces E away from `Never` — so the emitted
+	/// call is UNCONDITIONALLY throwing: `try` is always required and never a
+	/// warning, in every `#if` configuration. nil when injection is impossible
+	/// (no parameter clause — a `$0`-style closure — the author already
+	/// declared `throws`, or the signature carries elements this emitter
+	/// cannot reproduce faithfully).
+	private static func forceThrowsClosure(_ closure: ClosureExprSyntax) -> String? {
+		guard let sig = closure.signature,
+			  sig.effectSpecifiers?.throwsClause == nil,
+			  sig.attributes.isEmpty,
+			  sig.effectSpecifiers?.asyncSpecifier == nil,
+			  let paramClause = sig.parameterClause else { return nil }
+		// unexpected-node scan: any parse gap (or an element this rebuild does
+		// not emit) means the authored signature cannot be mirrored byte-safe —
+		// injecting would silently drop or corrupt it (e.g. a capture list was
+		// once dropped here by reconstruction). fall back to the verbatim
+		// closure instead of risking silent semantic change.
+		for child in sig.children(viewMode: .sourceAccurate) {
+			if child.is(UnexpectedNodesSyntax.self) { return nil }
+		}
+		var out = "{"
+		if let cap = sig.capture { out += " " + cap.trimmedDescription }
+		out += " " + paramClause.trimmedDescription
+		out += " throws"
+		if let ret = sig.returnClause { out += " " + ret.trimmedDescription }
+		out += " in" + closure.statements.description
+		// the trivia between the last body statement and the closing brace
+		// lives on `rightBrace.leadingTrivia` — dropped, an `#if`/`#endif`
+		// block closing a closure would glue its `#endif` to the brace
+		// (`#endif}` — "extra tokens following conditional compilation")
+		out += closure.rightBrace.leadingTrivia.description
+		out += "}"
+		return out
+	}
+
 	// - MARK: BodyMacro — the shell
 
 	static func expansion(
@@ -270,6 +327,14 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				throw Failure.missingEnvironmentInstance(envName)
 			}
 			resolutions.append((name: envName, expr: resolved.expr, label: resolved.label))
+		// DEBT item 1: the join contract needs ONE canonical tx-label order. the
+		// joining boundary threads its transactions into the callee's sibling by
+		// label, and Swift requires call arguments in declaration order — so the
+		// shell/sibling/join must ALL order the tx labels the same way. first-
+		// appearance order (verb order) differs between two boundaries over the
+		// same environment SET, which silently broke cross-env joins. sort by
+		// environment type NAME everywhere.
+		resolutions.sort { $0.name < $1.name }
 		}
 
 		let params = fn.signature.parameterClause.parameters
@@ -365,6 +430,14 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				return []
 			}
 			resolutions.append((name: envName, expr: resolved.expr, label: resolved.label))
+		// DEBT item 1: the join contract needs ONE canonical tx-label order. the
+		// joining boundary threads its transactions into the callee's sibling by
+		// label, and Swift requires call arguments in declaration order — so the
+		// shell/sibling/join must ALL order the tx labels the same way. first-
+		// appearance order (verb order) differs between two boundaries over the
+		// same environment SET, which silently broke cross-env joins. sort by
+		// environment type NAME everywhere.
+		resolutions.sort { $0.name < $1.name }
 		}
 
 		// the sibling's parameters: the author's params + one `tx_<E>` each.
@@ -431,13 +504,17 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		}
 
 		override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
+			// whether the AUTHORED site wrapped this verb in `try` (the
+			// recommended spelling). computed on the ORIGINAL node — the
+			// processed node's parent pointers are not reliable.
+			let authoredTry = MDB_transact_macro.authoredTryWrapping(node)
 			let processed = super.visit(node)
 			let expansion = processed.cast(MacroExpansionExprSyntax.self)
 			let trailingTrivia = expansion.trailingTrivia
 			let replacement: ExprSyntax
 			switch expansion.macroName.text {
 			case "store", "load", "delete", "contains", "cursor", "clear", "stats", "drop":
-				replacement = lowerVerb(expansion) ?? ExprSyntax(expansion)
+				replacement = lowerVerb(expansion, authoredTry: authoredTry) ?? ExprSyntax(expansion)
 			case "MDB_transacted":
 				replacement = rewriteJoined(expansion) ?? ExprSyntax(expansion)
 			default:
@@ -461,7 +538,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 		/// #store(E.self, database: \.events, key: K, value: V, flags: F)
 		///   -> <instance>[keyPath: \.events].store(key: K, value: V, flags: F, tx: tx_E)
-		private func lowerVerb(_ node: MacroExpansionExprSyntax) -> ExprSyntax? {
+		private func lowerVerb(_ node: MacroExpansionExprSyntax, authoredTry: Bool) -> ExprSyntax? {
 			guard let envName = MDB_transact_macro.environmentTypeName(of: node),
 				  let label = labelBy[envName],
 				  let expr = exprBy[envName],
@@ -482,9 +559,28 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			case "contains":
 				return ExprSyntax(stringLiteral: "\(receiver).contains(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(label))")
 			case "cursor":
-				// the trailing closure is the final argument; keep it verbatim
-				let closure = (node.trailingClosure)?.trimmedDescription ?? ""
-				return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(label)) \(closure)")
+				// the trailing closure is the final argument. the emitted call
+				// must never require a CONDITIONAL `try`: the handler type is
+				// `throws(E)`, so a non-throwing closure makes `try` spurious
+				// (the pricedb warnings), and an `#if`-gated closure makes
+				// try-ness configuration-dependent. an explicitly-`throws`
+				// closure forces E away from `Never`, so `try` is ALWAYS
+				// correct and never a warning. inject it when the authored
+				// site carries `try` (the recommended spelling) or when the
+				// closure contains `#if`; a bare non-`#if` closure keeps the
+				// non-throwing (`Never`) path, so consumers who omit `try` on
+				// pure closures keep compiling.
+				guard let closure = node.trailingClosure else {
+					return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(label)")
+				}
+				let closureText: String
+				if (authoredTry || closure.description.contains("#if")),
+				   let injected = MDB_transact_macro.forceThrowsClosure(closure) {
+					closureText = injected
+				} else {
+					closureText = closure.trimmedDescription
+				}
+				return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(label)) \(closureText)")
 			case "clear":
 				return ExprSyntax(stringLiteral: "\(receiver).deleteAllEntries(tx: \(label))")
 			case "stats":

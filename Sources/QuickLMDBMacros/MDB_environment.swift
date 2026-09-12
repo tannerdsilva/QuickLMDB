@@ -8,14 +8,15 @@ import SwiftDiagnostics
 // attached to a struct that owns an `Environment` and a set of `Database.X` tables as
 // stored properties. the expansion generates a single static factory:
 //
-//     static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, fileName: String? = nil) throws -> Self
+//     static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self
 //
 // which sizes the memory map as current file size + headroom, opens the environment with
 // the macro-declared flags/readers/dbs/mode, and opens every table in one setup
-// write-transaction, deriving each table's name from its property name. the generated
-// factory's `fileName:` parameter overrides the attribute-declared `file:` name at call
-// time — runtime-parameterized environments (e.g. one file per configured tenant or base
-// symbol) open through the same macro surface without an ambient naming global.
+// write-transaction, deriving each table's name from its property name. runtime
+// parameterized environment file names are out of scope for the macro factory — the
+// migration-stage consumers hand-roll their own `open(at:)` over a raw
+// `MDB_environment` conformance when they need per-tenant file names, and the
+// versioned `version:` attribute covers the fresh-file schema-migration story.
 //
 // the generated factory forces `.noTLS` onto the environment REGARDLESS of the declared
 // flags. this is intentional and load-bearing: `.noTLS` binds each read transaction's
@@ -174,22 +175,19 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		lines.append("/// - parameter basePath: the directory that will contain the environment file (created if")
 		lines.append("///   it does not already exist).")
 		lines.append("/// - parameter mapHeadroom: added to the current file size when sizing the memory map.")
-		lines.append("/// - parameter fileName: overrides the attribute-declared environment file name — for")
-		lines.append("///   runtime-parameterized environments (one file per configured tenant/base symbol).")
 		lines.append("@available(*, noasync)")
-		lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, fileName: String? = nil) throws -> Self {")
+		lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
 		lines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)")
 		lines.append("    let slash = basePath.hasSuffix(\"/\") ? \"\" : \"/\"")
-		lines.append("    let resolvedFile = fileName ?? \(fileArg)")
 		if let versionArg {
 			// versioned environment files: the schema version rides in the
 			// FILE NAME (`<stem>-v<N>.mdb`) — engaged by writing the version
 			// attribute. bump the version to ship a fresh file + stream the
 			// old one; the old file stays untouched and readable by older
 			// binaries (no sentinel, no in-place migration).
-			lines.append("    let targetPath = basePath + slash + (resolvedFile.hasSuffix(\".mdb\") ? String(resolvedFile.dropLast(4)) + \"-v\(versionArg)\" + \".mdb\" : resolvedFile + \"-v\(versionArg)\")")
+			lines.append("    let targetPath = basePath + slash + (\(fileArg).hasSuffix(\".mdb\") ? String(\(fileArg).dropLast(4)) + \"-v\(versionArg)\" + \".mdb\" : \(fileArg) + \"-v\(versionArg)\")")
 		} else {
-			lines.append("    let targetPath = basePath + slash + resolvedFile")
+			lines.append("    let targetPath = basePath + slash + \(fileArg)")
 		}
 		lines.append("    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)")
 		lines.append("    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union(\(flagsArg)), mapSize: Int(fileSize + mapHeadroom), maxReaders: \(maxReadersArg), maxDBs: \(maxDBsArg), mode: \(modeArg))")

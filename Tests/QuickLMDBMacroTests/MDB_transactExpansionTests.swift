@@ -571,3 +571,380 @@ struct BoundaryHardeningExpansionTests {
 			"""
 		)
 	}
+
+@Suite("MDB_transact — the cursor closure's try (DEBT item 4)")
+struct CursorTryExpansionTests {
+
+	// byte-frozen oracles: the emitted cursor call must never require a
+	// CONDITIONAL `try`. an explicitly-`throws` closure forces the handler's
+	// error type away from `Never`, so `try` is always valid and never a
+	// warning (the pricedb warnings); `#if` closures get the injection too,
+	// making try-ness configuration-independent. a bare non-`#if` closure
+	// keeps the non-throwing (`Never`) path, so consumers who omit `try`
+	// on pure closures still compile.
+
+	@Test func cursorTryPlainClosureInjectsThrows() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> Int {
+			        return try #cursor(Core.self, database: \\.primary) { c in
+			            return 0
+			        }
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    return 0
+			                }
+			    }
+			}
+			"""
+		)
+	}
+
+	@Test func cursorTryIfConfigClosureInjectsThrows() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> Int {
+			        return try #cursor(Core.self, database: \\.primary) { c in
+			            #if LOG
+			            c.trace()
+			            #endif
+			            return 0
+			        }
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    #if LOG
+			                    c.trace()
+			                    #endif
+			                    return 0
+			                }
+			    }
+			}
+			"""
+		)
+	}
+
+	@Test func cursorNoTryPlainClosureStaysNonThrowing() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> Int {
+			        #cursor(Core.self, database: \\.primary) { c in
+			            for (k, v) in c { _ = (k, v) }
+			        }
+			        return 0
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        self[keyPath: \\.primary].cursor(tx: tx_Core) { c in
+			                    for (k, v) in c {
+			                        _ = (k, v)
+			                    }
+			                }
+			        return 0
+			    }
+			}
+			"""
+		)
+	}
+
+	@Test func cursorNoTryIfConfigClosureGetsThrowsForDeterminism() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> Int {
+			        #cursor(Core.self, database: \\.primary) { c in
+			            #if LOG
+			            c.trace()
+			            #endif
+			            return 0
+			        }
+			        return 0
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    #if LOG
+			                    c.trace()
+			                    #endif
+			                    return 0
+			                }
+			        return 0
+			    }
+			}
+			"""
+		)
+	}
+
+	@Test func cursorTryReturnTypedClosurePlacesThrowsBeforeArrow() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> [Int] {
+			        return try #cursor(Core.self, database: \\.primary) { c -> Int in
+			            return c.count
+			        }
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> [Int] {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: [Int]
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> [Int] {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws -> Int in
+			                    return c.count
+			                }
+			    }
+			}
+			"""
+		)
+	}
+
+	@Test func cursorTryParenParameterClosureInjectsThrows() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> Int {
+			        return try #cursor(Core.self, database: \\.primary) { (c) in
+			            if true { return 1 }
+			            return 0
+			        }
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { (c) throws in
+			                    if true {
+			                        return 1
+			                    }
+			                    return 0
+			                }
+			    }
+			}
+			"""
+		)
+	}
+
+	@Test func cursorTryIfConfigClosureLastStatementKeepsBraceGap() {
+		assertExpansion(
+			"""
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan() throws -> Int {
+			        var total = 0
+			        try #cursor(Core.self, database: \\.primary) { c in
+			            total += 1
+			            #if LOG
+			            c.trace()
+			            #endif
+			        }
+			        return total
+			    }
+			}
+			""",
+			expanded: """
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan() throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        var total = 0
+			        try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    total += 1
+			                    #if LOG
+			                    c.trace()
+			                    #endif
+			                }
+			        return total
+			    }
+			}
+			"""
+		)
+	}
+
+	
+	@Test func cursorTryCaptureListClosureKeepsTheCaptureList() {
+		assertExpansion(
+			"""
+			class Owner {}
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    @MDB_transact(.readOnly)
+			    func scan(owner: Owner) throws -> Int {
+			        return try #cursor(Core.self, database: \\.primary) { [weak owner] c in
+			            _ = owner
+			            return 0
+			        }
+			    }
+			}
+			""",
+			expanded: """
+			class Owner {}
+			struct Core {
+			    let env: Environment
+			    let primary: Database.Strict<Key, Value>
+			    func scan(owner: Owner) throws -> Int {
+			        let tx_Core = try Transaction<Read>(env: self.env)
+			        let __mdb_output: Int
+			        do {
+			            __mdb_output = try self.scan(owner: owner, tx_Core: tx_Core)
+			        } catch let error {
+			            tx_Core.abort()
+			            throw error
+			        }
+			        tx_Core.abort()
+			        return __mdb_output
+			    }
+			
+			    func scan<M: TransactionMode>(owner: Owner, tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { [weak owner] c throws in
+			                    _ = owner
+			                    return 0
+			                }
+			    }
+			}
+			"""
+		)
+	}
+}

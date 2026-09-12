@@ -56,10 +56,10 @@ public enum MDB_transact_mode:Sendable {
 ///
 /// the struct must store exactly an `env: Environment` property plus `Database.X` tables.
 ///
-/// the generated `open(at:mapHeadroom:fileName:)` factory accepts an optional
-/// `fileName:` override (defaults to the `file:` attribute value) — the
-/// mechanism for runtime-parameterized environments (e.g. one file per
-/// configured tenant or base symbol) without ambient naming state.
+/// the generated factory's file name comes from the `file:` attribute (plus
+/// the optional `version:` suffix). runtime-parameterized file names are the
+/// consumer's own `open(at:)` over a hand-rolled `MDB_environment`
+/// conformance — the macro factory does not parameterize file names.
 @attached(member, names: arbitrary)
 @attached(extension, conformances: MDB_environment)
 public macro MDB_environment(file: Swift.String, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
@@ -187,6 +187,13 @@ public macro contains<E: MDB_environment, DB: MDB_db>(_ env: E.Type, database: K
 
 /// opens a cursor over the table `database` of environment `env` for the
 /// duration of the trailing closure.
+///
+/// `try` is the uniform spelling (`try belongs at the verb and the join`):
+/// the lowered call is unconditionally throwing, so `try #cursor(...)`
+/// never warns — even when the closure itself does not throw — and an
+/// `#if`-gated throwing set compiles identically in every configuration.
+/// a bare `#cursor` on a pure closure (no `#if`, nothing throwing) also
+/// compiles.
 @freestanding(expression)
 public macro cursor<E: MDB_environment, DB: MDB_db, R>(_ env: E.Type, database: KeyPath<E, DB>, _ body: (DB.MDB_db_cursor_type) throws -> R) -> R = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
 
