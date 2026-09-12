@@ -55,6 +55,11 @@ public enum MDB_transact_mode:Sendable {
 ///   - mode: file permissions used when creating the environment file.
 ///
 /// the struct must store exactly an `env: Environment` property plus `Database.X` tables.
+///
+/// the generated `open(at:mapHeadroom:fileName:)` factory accepts an optional
+/// `fileName:` override (defaults to the `file:` attribute value) — the
+/// mechanism for runtime-parameterized environments (e.g. one file per
+/// configured tenant or base symbol) without ambient naming state.
 @attached(member, names: arbitrary)
 @attached(extension, conformances: MDB_environment)
 public macro MDB_environment(file: Swift.String, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
