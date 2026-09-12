@@ -412,14 +412,26 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
 			let processed = super.visit(node)
 			let expansion = processed.cast(MacroExpansionExprSyntax.self)
+			let trailingTrivia = expansion.trailingTrivia
+			let replacement: ExprSyntax
 			switch expansion.macroName.text {
 			case "store", "load", "delete", "contains", "cursor", "clear", "stats", "drop":
-				return lowerVerb(expansion) ?? ExprSyntax(expansion)
+				replacement = lowerVerb(expansion) ?? ExprSyntax(expansion)
 			case "MDB_transacted":
-				return rewriteJoined(expansion) ?? ExprSyntax(expansion)
+				replacement = rewriteJoined(expansion) ?? ExprSyntax(expansion)
 			default:
-				return ExprSyntax(expansion)
+				replacement = ExprSyntax(expansion)
 			}
+			// the lowered expression replaces the macro node, so the node's trailing
+			// trivia (e.g. the space before a following `==`) lives only on the
+			// ORIGINAL. dropping it makes an adjacent infix operator asymmetric
+			// (`x)== y` — whitespace on one side only), which Swift lexes as UNARY,
+			// and a `guard` condition then fails to parse ("expected 'else' after
+			// 'guard' condition"). preserve the trivia so operators stay symmetric.
+			if replacement.trailingTrivia.isEmpty {
+				return replacement.with(\.trailingTrivia, trailingTrivia)
+			}
+			return replacement
 		}
 
 		private func arg(_ node: MacroExpansionExprSyntax, _ label: String) -> LabeledExprSyntax? {
