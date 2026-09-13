@@ -86,15 +86,13 @@ struct TableSchemaExpansionTests {
 			
 			    @available(*, noasync)
 			
-			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, fileName: String? = nil) throws -> Self {
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
 			
 			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
 			
 			    let slash = basePath.hasSuffix("/") ? "" : "/"
 
-			    let resolvedFile = fileName ?? "test.mdb"
-
-			    let targetPath = basePath + slash + resolvedFile
+			    let targetPath = basePath + slash + "test.mdb"
 			
 			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
 			
@@ -141,15 +139,13 @@ struct TableSchemaExpansionTests {
 			
 			    @available(*, noasync)
 			
-			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, fileName: String? = nil) throws -> Self {
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
 			
 			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
 			
 			    let slash = basePath.hasSuffix("/") ? "" : "/"
 
-			    let resolvedFile = fileName ?? "test.mdb"
-
-			    let targetPath = basePath + slash + resolvedFile
+			    let targetPath = basePath + slash + "test.mdb"
 			
 			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
 			
@@ -282,15 +278,13 @@ struct TableConsumptionTests {
 			
 			    @available(*, noasync)
 			
-			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, fileName: String? = nil) throws -> Self {
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
 			
 			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
 			
 			    let slash = basePath.hasSuffix("/") ? "" : "/"
 
-			    let resolvedFile = fileName ?? "test.mdb"
-
-			    let targetPath = basePath + slash + (resolvedFile.hasSuffix(".mdb") ? String(resolvedFile.dropLast(4)) + "-v2" + ".mdb" : resolvedFile + "-v2")
+			    let targetPath = basePath + slash + ("test.mdb".hasSuffix(".mdb") ? String("test.mdb".dropLast(4)) + "-v2" + ".mdb" : "test.mdb" + "-v2")
 			
 			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
 			

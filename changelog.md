@@ -46,6 +46,41 @@
   - the prior `environments:` attribute form, the `#MDB_entry_load`/
     `#MDB_entry_store` trailing verbs, the provider-style container, and
     per-core `Root` shells are REMOVED by this change.
+- **`@MDB_environment`'s generated `open(at:)` loses its `fileName:`
+  override** (breaking). the factory's file name comes from the `file:`
+  attribute (plus the optional `version:` suffix) only; runtime-parameterized
+  file names are the consumer's own `open(at:)` over a hand-rolled
+  `MDB_environment` conformance. the `fileName:` surface was built for a
+  pricedb plan whose end-state did not use it.
+- **the raw typed `Database.deleteEntry(key:tx:)` convenience is removed**
+  (breaking). no consumer used it (typed metadata tables delete through
+  `#delete`). the typed raw `setEntry`/`loadEntry` surfaces remain.
+- **`#cursor`'s emitted call never requires a CONDITIONAL `try`.** the
+  trailing closure is lowered with an explicit `throws` annotation when the
+  authored site carries `try` (the recommended spelling) or when the closure
+  contains `#if` — the handler type is `throws(E)`, and an explicitly-throwing
+  closure forces `try` to be always-required and never spurious, so the
+  "no calls to throwing functions occur within 'try' expression" warnings on
+  non-throwing cursor closures are gone and `#if`-gated closures compile
+  identically in every configuration. a bare `#cursor` on a pure non-`#if`
+  closure keeps compiling without `try`. capture lists are preserved under
+  the injection (`{ [weak self] c throws in … }`); signatures the emitter
+  cannot mirror byte-faithfully (attributes, `async`, unexpected parse
+  nodes) fall back to the verbatim closure.
+- **cross-environment joins: the tx labels are canonically ordered by
+  environment type name** (fix). the join rewrites the callee sibling's
+  arguments by label, and Swift requires call arguments in declaration order —
+  two boundaries over the SAME environment set in different verb orders
+  previously produced uncompilable joins. shells, siblings, and joins now all
+  emit `tx_<E>` labels in name order.
+- **`scripts/verify-consumers.sh`** — the cross-repo gate: pins each consumer
+  (defaults: the migration-stage pricedb/wiremand) to this tree's HEAD by
+  resyncing its staged QuickLMDB clone, then builds and runs its suite.
+- **new runtime coverage**: multi-environment atomic boundaries + cross-env
+  `#MDB_transacted` joins (commit, abort, joined-read-sees-uncommitted), a
+  torn-read concurrency test (a boundary repeatedly reading a (key, value)
+  composite while a concurrent writer mutates it), and cursor-`try` compile
+  pins for the non-throwing / `#if` / no-`try` closure shapes.
 
 # 16.1.0
 
