@@ -81,14 +81,6 @@ public enum LMDBError:Error {
 	/// The specified database was changed unexpectedly
 	case badDBI
 
-	/// The boundary shell resolved two transaction labels to the SAME
-	/// physical environment — a generated boundary opened (or was about to
-	/// open) two transactions on one env handle, which LMDB answers with a
-	/// writer-mutex self-deadlock, not an error. the compiled $-macro layer
-	/// collapses same-group labels; this is the loud runtime safety net for
-	/// what compile time cannot see. not produced by the engine itself.
-	case duplicateEnvironment
-
 	// OS specific errors
 	case invalidParameter
 	case outOfDiskSpace
@@ -187,8 +179,6 @@ public enum LMDBError:Error {
 				return MDB_BAD_VALSIZE
 			case .badDBI:
 				return MDB_BAD_DBI
-			case .duplicateEnvironment:
-				return MDB_INVALID
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case .invalidParameter:
 				return Errno.invalidArgument.rawValue
@@ -275,8 +265,6 @@ extension LMDBError:CustomDebugStringConvertible {
 				return "LMDBError.badValueSize"
 			case .badDBI:
 				return "LMDBError.badDBI"
-			case .duplicateEnvironment:
-				return "LMDBError.duplicateEnvironment"
 			case .invalidParameter:
 				return "LMDBError.invalidParameter"
 			case .outOfDiskSpace:

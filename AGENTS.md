@@ -63,8 +63,7 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   in the body: every environment type a verb references must be `self` (the
   boundary is attached to that core type) or a typed parameter of the method.
   the method becomes a SHELL (opens `Transaction<Read/Write>(env:)` per
-  inferred environment — COLLAPSED per group label, one transaction per
-  physical env — calls the sibling, and closes every one — readOnly
+  inferred environment — calls the sibling, and closes every one — readOnly
   aborts on throw AND success; readWrite commits on success). the peer emits
   the INVISIBLE SIBLING: same signature + `tx_<E>: borrowing Transaction<…>`
   per environment (read-only siblings are generic over the mode so write
@@ -96,48 +95,12 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   generates `open(at:mapHeadroom:) throws -> Self` (creates the dir, sizes the
   map as current file size + headroom, forces `.noTLS`, opens every table in
   one setup write-transaction). `version:` when WRITTEN derives the on-disk
-  name `<stem>-v<N>.mdb` (opt-in fresh-file migration). a core NESTED inside a
-  `@MDB_env_group` is a MEMBER core: `file:` is optional-on-the-declaration
-  but FORBIDDEN for members (schema-only — no standalone `open(at:)`, no env
-  tuning; the group owns them; a bare standalone core still diagnoses
-  `missingFileArg`).
+  name `<stem>-v<N>.mdb` (opt-in fresh-file migration). the declaration's
+  `file:` stays optional-on-the-declaration; a missing `file:` diagnoses
+  `missingFileArg`. one type = one physical env = one file.
 - `@MDB_table(name:flags:)` — per-table declaration on a `Database.X` stored
   property inside a core. name override + extra `MDB_db_flags`. zero
   attributes = identity (name = property name, flags `[.create]`).
-- `@MDB_env_group(file:version:flags:maxReaders:maxDBs:mode:)` — the
-  SHARED-PHYSICAL-ENVIRONMENT layer: one physical LMDB file = one TYPE. the
-  group struct's stored instance properties are ITS member cores — nested
-  `@MDB_environment` structs (POSITIONAL membership; no `group:` attribute,
-  nothing cross-declaration). generated `open(at:mapHeadroom:)` opens the env
-  ONCE and constructs every member from the same `Environment` value (one
-  setup write-transaction opens every member's tables; table names unique
-  across members), plus an `env:` accessor (the boundary shell opens its tx
-  from it), an `mdb_core_names` inventory, and `MDB_environment` conformance
-  so the group is verb-addressable with CHAINED keypaths
-  (`#store(Group.self, database: \.member.table, …)`).
-- **group-keyed transactions**: `@MDB_transact` labels by GROUP, not member
-  type — `DaemonEnv.DaemonDB` → `tx_DaemonEnv`, and a boundary on a member
-  core maps bare self-references to its own group label so member and group
-  boundaries share one label space. a boundary addressing TWO members emits
-  ONE transaction (the double-write self-deadlock is structurally
-  unreachable); cross-member write sets are atomic, joined sibling-member
-  boundaries are atomic with the caller, and `.readOnly` reads every member
-  through one snapshot.
-- **the runtime double-open guard**: multi-env shells refuse
-  (`LMDBError.duplicateEnvironment`) any two labels resolving to the SAME
-  `Environment` instance — the net for what compile time cannot see (e.g. a
-  bare-named sibling-member parameter the macro cannot classify).
-- **verb-less coordinator form**: a boundary with NO verbs whose self is a
-  `@MDB_env_group` struct (IN-STRUCT, via the enclosing struct's attribute) or
-  a group member, or that carries dotted-typed parameters, infers its env set
-  from the boundary's own shape — a pure-`#MDB_transacted` body needs no
-  `#stats` anchor for the group case.
-- **engine reality (do not relitigate)**: two DISTINCT `Environment` handles
-  on one file (two group types claiming one file) are TOLERATED by the current
-  LMDB build — fcntl locks are per-process, not per-handle — and are not
-  detectable without ambient state. one group per physical file is the
-  consumer's contract, documented not guarded. the hang class IS the
-  same-instance double-open, which groups make unreachable.
 
 ### macro-mechanics facts (verified, do not relitigate)
 
@@ -163,6 +126,12 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   entries, the provider-style layout with `_mdb_open_*` factories and authored
   statics, `MDB_transact_mode.readWriteChild`, and any ambient state
   (task-local/thread-local/registry) for transaction routing.
+- `@MDB_env_group` and the whole shared-physical-env layer (member cores,
+  group-keyed transaction labels, the verb-less coordinator form, the
+  `LMDBError.duplicateEnvironment` runtime guard). decision 2026-09-14: one
+  physical file = one TYPE, and several subsystems over one file is the
+  monolithic-core problem (a single core with `@MDB_table`-namespaced tables),
+  not a macro feature. cross-file atomicity is impossible by design.
 
 ## 3. operating principles (do not regress these)
 
@@ -180,10 +149,6 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   carry no transaction vocabulary.
 - **explicit composition by joining**, never by nesting a second write.
 - **derived defaults, explicit only where Swift fails.**
-- **membership is positional, never attributed.** a member core's group is the
-  TYPE SPELLING (`DaemonEnv.DaemonDB`), so the boundary macros read it from a
-  dotted name alone — no attribute on a remote declaration, no cross-file
-  resolution, no ambient lookup.
 - **the UX mandate:** every macro goes to all lengths possible within its
   scope — anything technically implementable that is in-scope is in scope, and
   validation failures are friendly diagnostics, never compiler foreignness.
@@ -194,10 +159,7 @@ BUILT and verified (full suite green, 0 warnings on a clean build):
 - `Transaction<M>` capability typing, `@MDB_environment`, `@MDB_table`,
   `version:`, `@MDB_layout`, `@MDB_transact` (typed-environment boundaries),
   the typed verb family, `#MDB_transacted` joining, `@MDB_comparable`, the
-  engine surface, typed companions, `readCommitted` family, interop,
-  `@MDB_env_group` (shared-physical-env layer: one-open arrangement,
-  positional member cores, group-keyed transaction labels, verb-less
-  coordinator form, `LMDBError.duplicateEnvironment` runtime guard).
+  engine surface, typed companions, `readCommitted` family, interop.
 
 PLANNED:
 - `@MDB_layout` as the home of application-level convenience beyond the
@@ -249,12 +211,12 @@ agents must not assume the planned surface exists.
   `attr.attributeName.trimmedDescription`.
 - Swift Testing `#expect(try op(...))` does not compose with typed
   `throws(LMDBError)` — hoist the `try` into a local first.
-- fixtures whose expansion reads the ENCLOSING type (verb-less coordinator
-  inference, self-group labels, nested-member detection) rely on
-  `assertMacroExpansion`'s AUTO-SEEDED lexical context
-  (`allMacroLexicalContexts`). the low-level `file.expand(macros:contextGenerator:)`
-  path does NOT run attached body macros — positive expansion fixtures must
-  use `assertMacroExpansion`, never the seeded path.
+- fixtures whose expansion reads the ENCLOSING type (extension-vs-in-struct
+  self-matching via `enclosingTypeName`) rely on `assertMacroExpansion`'s
+  AUTO-SEEDED lexical context (`allMacroLexicalContexts`). the low-level
+  `file.expand(macros:contextGenerator:)` path does NOT run attached body
+  macros — positive expansion fixtures must use `assertMacroExpansion`, never
+  the seeded path.
 
 ## 7. compile-to-fix pitfalls (each cost real cycles)
 
@@ -284,21 +246,10 @@ agents must not assume the planned surface exists.
   macro-source string literals — after any edit containing `\(`, collapse
   doubled runs (`\\` → `\`) or the generated code silently degrades to literal
   `\(` text.
-- **group label collapse is a SHELL concept only**: `resolveEnvironments`
-  returns the collapsed per-label list for the shell/sibling/join AND the full
-  per-env-name list; the `SiblingRewriter` lookups MUST use the full list or a
-  second member's verbs are silently left as bare `#store(...)` and hit the
-  standalone `nil` expansion (`'nil' is not compatible with type '()'`).
 - **generated member construction is NON-throwing** — `let member =
   Member(env:…)` emits no `try` (memberwise init); a `try` there surfaces as
   "no calls to throwing functions occur within 'try' expression" on a clean
   build only.
-- **coordinator inference needs the enclosing struct's ATTRIBUTES** — only
-  IN-STRUCT boundaries expose them (the body macro's lexicalContext type
-  shell); an extension-attached verb-less boundary on a group struct cannot
-  verify self-is-group and falls to `noVerbs`. attach coordinators inside the
-  group struct (or give the boundary a dotted-typed parameter, which also
-  infers).
 
 ## 8. releases
 
