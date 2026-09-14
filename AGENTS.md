@@ -61,7 +61,7 @@ instance methods. there is NO transaction vocabulary on the authored surface:
 - `@MDB_transact(_ mode: MDB_transact_mode)` — attached body + peer on an
   INSTANCE method. the environment set is INFERRED from the typed verb calls
   in the body: every environment type a verb references must be `self` (the
-  boundary is attached to that core type) or a typed parameter of the method.
+  boundary is attached to that environment type) or a typed parameter of the method.
   the method becomes a SHELL (opens `Transaction<Read/Write>(env:)` per
   inferred environment — calls the sibling, and closes every one — readOnly
   aborts on throw AND success; readWrite commits on success). the peer emits
@@ -88,8 +88,8 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   `eventOn(day)` = SIBLING read (its shell opens a separate read txn,
   committed-only — "validate against durable data").
 - `@MDB_layout` — the multi-environment ARRANGEMENT helper (member macro,
-  fixed names): opens N `@MDB_environment` cores at `<base>/<name>` in one
-  call (`open(at:mapHeadroom:)`) plus a `mdb_core_names` inventory. no
+  fixed names): opens N `@MDB_environment` types at `<base>/<name>` in one
+  call (`open(at:mapHeadroom:)`) plus a `mdb_environment_names` inventory. no
   per-environment factories, no statics, no baked path.
 - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` — schema assembly:
   generates `open(at:mapHeadroom:) throws -> Self` (creates the dir, sizes the
