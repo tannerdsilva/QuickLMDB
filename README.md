@@ -14,27 +14,27 @@ Inside a boundary body you write the **typed verb family** — the exact databas
 
 ```swift
 @MDB_environment(file: "booking.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
-public struct BookingCore: Sendable {
+public struct Booking: Sendable {
     public let env: Environment
     public let sheets: Database.Strict<SlotKey, SlotRecord>
 
     @MDB_transact(.readWrite)
     public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
-        try #store(BookingCore.self, database: \.sheets, key: key, value: record)
+        try #store(Booking.self, database: \.sheets, key: key, value: record)
     }
 
     @MDB_transact(.readOnly)
     public func slotOn(_ day: SlotKey) throws -> SlotRecord? {
-        #load(BookingCore.self, database: \.sheets, key: day)
+        #load(Booking.self, database: \.sheets, key: day)
     }
 }
 
-let booking = try BookingCore.open(at: "<data-path>")
+let booking = try Booking.open(at: "<data-path>")
 try booking.addBooking(key, record)
 let record = try booking.slotOn(day)
 ```
 
-- **`@MDB_transact(_ mode: MDB_transact_mode)`** — the boundary, on an instance method of an `@MDB_environment` type. `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. The environment set is **inferred from the verbs** — every environment type a verb references must be `self` or a typed parameter of the method. A multi-environment boundary just takes the other cores as typed parameters.
+- **`@MDB_transact(_ mode: MDB_transact_mode)`** — the boundary, on an instance method of an `@MDB_environment` type. `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. The environment set is **inferred from the verbs** — every environment type a verb references must be `self` or a typed parameter of the method. A multi-environment boundary just takes the other environments as typed parameters.
 - **The typed verbs** (`#store(E.self, database: \.table, key:…, value:…)`) — compiler-typed end to end: `E` names the environment, the `KeyPath` names the table on that type, and key/value/return types flow from the table's own generics. A call inside a boundary is lowered to `instance[keyPath: \.table].<op>(…, tx:)`; used outside a boundary it is a compile-time diagnostic.
 - **Composition is JOINING, not nesting.** `#MDB_transacted(callee(args))` is rewritten into the callee's sibling with `tx_<E>` threading — the callee runs on *this* boundary's transaction. joined reads see this boundary's own uncommitted state; joined writes land in ONE transaction, **atomic by construction** (a thrown joined write rolls back the whole boundary). a *sibling* read — the last committed state, independent of this boundary — is a plain call `eventOn(day)`.
 - **THE JOIN / SIBLING RULE (deadlock warning):** a bare call to a `.readWrite` boundary inside a live boundary opens a SECOND write transaction, which BLOCKS on LMDB's writer mutex until the outer commits — and the outer can't commit while it blocks: a **DEADLOCK**. composition inside a boundary is spelled with `#MDB_transacted(...)`, always. a bare call to a `.readOnly` boundary inside a boundary is a safe *sibling read* (its own fresh read transaction, committed state only).
@@ -44,28 +44,28 @@ let record = try booking.slotOn(day)
 For verification reads (tests, health checks) that just want "what is the last committed state", the typed handles carry self-scoped read members — each opens its own read-only transaction, performs the read, and closes it internally:
 
 ```swift
-let v = try core.primary.readCommitted(key: key)          // -> Value? (nil when absent)
-let present = try core.primary.containsCommitted(key: key) // -> Bool
-let dups = try core.secondary.readCommittedDups(key: key)  // -> [Value] (dupsort)
+let v = try env.primary.readCommitted(key: key)          // -> Value? (nil when absent)
+let present = try env.primary.containsCommitted(key: key) // -> Bool
+let dups = try env.secondary.readCommittedDups(key: key)  // -> [Value] (dupsort)
 ```
 
 these are NOT boundary verbs: a verb's contract is boundary participation, the opposite of a self-scoped verification read. they are protocol-extension members of `MDB_db`, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them with no manual `Transaction` ceremony.
 
 ## Multi-environment boundaries
 
-The same boundary coordinates MORE than one environment — the other cores flow in as **typed parameters**:
+The same boundary coordinates MORE than one environment — the other environments flow in as **typed parameters**:
 
 ```swift
-public struct ClubCalendarCore: Sendable { … }   // @MDB_environment: events, invitees
-public struct ClubContactsCore: Sendable { … }    // @MDB_environment: lastSync
+public struct ClubCalendar: Sendable { … }   // @MDB_environment: events, invitees
+public struct ClubContacts: Sendable { … }    // @MDB_environment: lastSync
 
-extension ClubCalendarCore {
+extension ClubCalendar {
     @MDB_transact(.readWrite)
     public func scheduleAndMarkSync(_ event: EventID, on day: DayKey,
                                     contact: ContactID, at timestamp: Timestamp,
-                                    contacts: ClubContactsCore) throws {
-        try #store(ClubCalendarCore.self, database: \.events, key: day, value: event)
-        try #store(ClubContactsCore.self, database: \.lastSync, key: contact, value: timestamp)
+                                    contacts: ClubContacts) throws {
+        try #store(ClubCalendar.self, database: \.events, key: day, value: event)
+        try #store(ClubContacts.self, database: \.lastSync, key: contact, value: timestamp)
     }
 }
 ```

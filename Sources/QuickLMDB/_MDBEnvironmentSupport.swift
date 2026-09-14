@@ -29,8 +29,8 @@ public enum _MDBEnvironmentSupport {
 	}
 
 	/// joins two path components with exactly one separator, tolerating a trailing
-	/// slash on the base. used by the generated container `open(at:)` to build each
-	/// core's subdirectory.
+	/// slash on the base. used by the generated arrangement `open(at:)` to build each
+	/// environment's subdirectory.
 	public static func __joinPath(_ base:String, _ component:String) -> String {
 		if base.isEmpty { return component }
 		if base.hasSuffix("/") { return base + component }
@@ -39,7 +39,7 @@ public enum _MDBEnvironmentSupport {
 
 	/// creates the directory at `path` (and any missing parents) when it does not
 	/// already exist. returns true when the directory is present afterwards.
-	/// used by the generated container `open(at:)` for the per-core subdirectories.
+	/// used by the generated arrangement `open(at:)` for the per-environment subdirectories.
 	public static func __createDirectory(at path:String) -> Bool {
 		// mkdir -p semantics by walking the path forward; stops at an existing dir
 		let absolute = path.hasPrefix("/") ? path : "/" + path

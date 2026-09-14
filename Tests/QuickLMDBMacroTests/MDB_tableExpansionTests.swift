@@ -18,14 +18,14 @@ private let schemaMacros: [String: Macro.Type] = [
 ]
 
 // NOTE: the schema fixtures use seeded file.expand paths below rather than
-// assertMacroExpansion: the table macro gates on the ENCLOSING core struct, and
-// assertMacroExpansion's contexts have empty lexicalContext, which would
-// spuriously fail its placement check. positives byte-compare the expansion;
+// assertMacroExpansion: the table macro gates on the ENCLOSING environment
+// struct, and assertMacroExpansion's contexts have empty lexicalContext, which
+// would spuriously fail its placement check. positives byte-compare the expansion;
 // negatives collect diagnostics by message.
 
 /// seeded contexts: a blank `BasicMacroExpansionContext` gives EMPTY
 /// lexicalContext, so a peer that gates on the enclosing type (the table
-/// macro's core check) is seeded by walking each node's parent chain to the
+/// macro's environment-type check) is seeded by walking each node's parent chain to the
 /// enclosing struct (in-process trees have parents — the span suite's
 /// established pattern).
 private func expandSeeded(_ source: String) -> (file: Syntax, contexts: [BasicMacroExpansionContext]) {
@@ -49,7 +49,7 @@ private func expandSeeded(_ source: String) -> (file: Syntax, contexts: [BasicMa
 }
 
 /// seeded positive-path: byte compares the expansion (the table macro's
-/// enclosing-core check sees the real struct, so no spurious placement error).
+/// enclosing-environment check sees the real struct, so no spurious placement error).
 private func assertSchemaExpansion(_ source: String, expanded expected: String) {
 	let (file, _) = expandSeeded(source)
 	let actual = String(describing: file)
@@ -207,7 +207,7 @@ struct TablePlacementTests {
 				let events: Database.Strict<TestKey, TestValue> = Database.Strict()
 			}
 			""",
-			["@MDB_table can only be used inside an @MDB_environment core — tables belong to a core's schema"]
+			["@MDB_table can only be used inside an @MDB_environment — tables belong to an environment's schema"]
 		)
 	}
 }

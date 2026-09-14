@@ -37,7 +37,7 @@ public struct SingleApp {
 struct LayoutCoreTests {
 
 	@Test func arrangementOpensFreshInstancesAndPinsTheInventory() throws {
-		#expect(SingleApp.mdb_core_names == ["single"])
+		#expect(SingleApp.mdb_environment_names == ["single"])
 
 		let root = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-layout-\(UUID().uuidString)", isDirectory: true)
 		let app = try SingleApp.open(at: root.path)

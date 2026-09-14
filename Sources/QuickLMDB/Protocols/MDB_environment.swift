@@ -6,6 +6,6 @@ import CLMDB
 // environment inventory off this conformance.
 
 public protocol MDB_environment {
-	/// the environment handle for this core.
+	/// the environment handle for this type.
 	var env: Environment { get }
 }

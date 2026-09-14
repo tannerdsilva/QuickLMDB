@@ -90,7 +90,7 @@ instance methods. there is NO transaction vocabulary on the authored surface:
 - `@MDB_layout` — the multi-environment ARRANGEMENT helper (member macro,
   fixed names): opens N `@MDB_environment` cores at `<base>/<name>` in one
   call (`open(at:mapHeadroom:)`) plus a `mdb_core_names` inventory. no
-  per-core factories, no statics, no baked path.
+  per-environment factories, no statics, no baked path.
 - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` — schema assembly:
   generates `open(at:mapHeadroom:) throws -> Self` (creates the dir, sizes the
   map as current file size + headroom, forces `.noTLS`, opens every table in
@@ -99,7 +99,7 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   `file:` stays optional-on-the-declaration; a missing `file:` diagnoses
   `missingFileArg`. one type = one physical env = one file.
 - `@MDB_table(name:flags:)` — per-table declaration on a `Database.X` stored
-  property inside a core. name override + extra `MDB_db_flags`. zero
+  property inside an environment. name override + extra `MDB_db_flags`. zero
   attributes = identity (name = property name, flags `[.create]`).
 
 ### macro-mechanics facts (verified, do not relitigate)
@@ -122,16 +122,17 @@ instance methods. there is NO transaction vocabulary on the authored surface:
 ### removed — do not resurrect
 
 - the `environments:` attribute form of `@MDB_transact`, the
-  `#MDB_entry_load`/`#MDB_entry_store` trailing verbs, per-core `Root` shell
-  entries, the provider-style layout with `_mdb_open_*` factories and authored
+  `#MDB_entry_load`/`#MDB_entry_store` trailing verbs, per-environment
+  `Root` shell entries, the provider-style layout with `_mdb_open_*` factories and authored
   statics, `MDB_transact_mode.readWriteChild`, and any ambient state
   (task-local/thread-local/registry) for transaction routing.
-- `@MDB_env_group` and the whole shared-physical-env layer (member cores,
-  group-keyed transaction labels, the verb-less coordinator form, the
-  `LMDBError.duplicateEnvironment` runtime guard). decision 2026-09-14: one
-  physical file = one TYPE, and several subsystems over one file is the
-  monolithic-core problem (a single core with `@MDB_table`-namespaced tables),
-  not a macro feature. cross-file atomicity is impossible by design.
+- `@MDB_env_group` and the whole shared-physical-env layer (member
+  environments, group-keyed transaction labels, the verb-less coordinator
+  form, the `LMDBError.duplicateEnvironment` runtime guard). decision
+  2026-09-14: one physical file = one environment TYPE, and several subsystems
+  over one file is the monolithic-schema problem (one environment type
+  holding every table, `@MDB_table`-namespaced), not a macro feature.
+  cross-file atomicity is impossible by design.
 
 ## 3. operating principles (do not regress these)
 
@@ -236,7 +237,7 @@ agents must not assume the planned surface exists.
   `withCheckedContinuation`, no DispatchQueue threading of LMDB work.
 - **no NS-prefixed APIs / `size_t`**: `Int` everywhere, Swift-native
   alternatives over Foundation where the standard library suffices.
-- **one struct per environment core** owning its tables and transaction
+- **one struct per environment** owning its tables and transaction
   scopes — no multi-env god objects, no ambient boundary stacks.
 - **map sizing at every open** = actual file size + headroom; never under-size
   an environment.

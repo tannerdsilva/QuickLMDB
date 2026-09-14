@@ -40,8 +40,8 @@ public enum MDB_transact_mode:Sendable {
 ///
 /// - Parameters:
 ///   - file: the name of the environment file (appended to the base path).
-///   - version: the schema version, ENGAGED ONLY WHEN WRITTEN. a bare core
-///     keeps its exact `file:` name; writing `version:` derives the on-disk
+///   - version: the schema version, ENGAGED ONLY WHEN WRITTEN. a bare
+///     environment keeps its exact `file:` name; writing `version:` derives the on-disk
 ///     name `<stem>-v<N>.mdb` (so `version: 0` gives `-v0`). bumping the
 ///     version ships a FRESH file — the migration convention is new file +
 ///     stream, never in-place (old data stays untouched and readable by older
@@ -88,7 +88,7 @@ internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", t
 
 // - MARK: the boundary dialect (the only transaction architecture)
 
-// every environment is its own TYPE (an @MDB_environment core). the
+// every environment is its own TYPE (an @MDB_environment type). the
 // transaction layer is invisible on the user's surface: @MDB_transact turns
 // an INSTANCE method into a transactional unit whose transactions are opened
 // and closed for it; the typed verb family (#store/#load/#delete/#contains/
@@ -102,7 +102,7 @@ internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", t
 ///
 /// the environment set is INFERRED from the typed verb calls in the body:
 /// every environment type referenced by a verb must be `self` (the boundary
-/// is attached to an ``MDB_environment`` core type) or a parameter declared
+///   is attached to an ``MDB_environment`` type) or a parameter declared
 /// with that exact type. the method's authored signature carries no
 /// transaction parameters at all.
 ///
@@ -216,26 +216,27 @@ public macro drop<E: MDB_environment, DB: MDB_db>(_ env: E.Type, database: KeyPa
 // - MARK: schema layer — the arrangement (MDB_layout)
 
 /// marks a struct as an ENVIRONMENT ARRANGEMENT: it owns N ``MDB_environment``
-/// cores as stored instance properties and gets a single
-/// `open(at:mapHeadroom:)` (each core opens at `<basePath>/<property name>`,
-/// path-stemming) plus a `mdb_core_names` inventory. every environment is its
-/// own type and transaction boundaries live ON those types; the layout is
-/// purely the multi-environment initialization and arrangement story.
+/// types as stored instance properties and gets a single
+/// `open(at:mapHeadroom:)` (each environment opens at `<basePath>/<property
+/// name>`, path-stemming) plus a `mdb_environment_names` inventory. every
+/// environment is its own type and transaction boundaries live ON those types;
+/// the layout is purely the multi-environment initialization and arrangement
+/// story.
 ///
 /// generated members:
-/// - `static func open(at:mapHeadroom:) throws -> Self` — opens every core and
-///   assembles a fresh instance.
-/// - `static let mdb_core_names: [String]` — the core inventory, declaration
-///   order (for docs/tooling).
+/// - `static func open(at:mapHeadroom:) throws -> Self` — opens every
+///   environment and assembles a fresh instance.
+/// - `static let mdb_environment_names: [String]` — the environment inventory,
+///   declaration order (for docs/tooling).
 ///
-/// no per-core factories, no static singletons, no baked base path.
-@attached(member, names: named(open(at:mapHeadroom:)), named(mdb_core_names))
+/// no per-environment factories, no static singletons, no baked base path.
+@attached(member, names: named(open(at:mapHeadroom:)), named(mdb_environment_names))
 public macro MDB_layout() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_layout_macro")
 
 // - MARK: schema layer — table declaration
 
 /// per-table declaration inside an ``MDB_environment(_:file:flags:maxReaders:maxDBs:mode:)``
-/// core, attached to a `Database.X` stored property. the environment scan
+/// type, attached to a `Database.X` stored property. the environment scan
 /// consumes this attribute when it opens the tables in the setup transaction.
 ///
 /// - Parameters:
@@ -251,7 +252,7 @@ public macro MDB_layout() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_l
 /// zero attributes = the default case: a bare `Database.X` property needs no
 /// decoration and behaves byte-identically to today.
 ///
-/// the `name:` argument may reference a same-core member (e.g.
+/// the `name:` argument may reference a same-environment member (e.g.
 /// `name: Databases.foo.rawValue`) so the on-disk table name stays
 /// single-sourced. this requires a FIXED name set on the attached peer —
 /// `names: arbitrary` plus same-type member references in attribute args is a

@@ -86,31 +86,31 @@ QuickLMDB organizes the transaction layer into **method boundaries** with no amb
 
 ```swift
 @MDB_environment(file: "booking.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
-public struct BookingCore: Sendable {
+public struct Booking: Sendable {
     public let env: Environment
     public let sheets: Database.Strict<SlotKey, SlotRecord>
 
     @MDB_transact(.readWrite)
     public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
-        try #store(BookingCore.self, database: \.sheets, key: key, value: record)
+        try #store(Booking.self, database: \.sheets, key: key, value: record)
     }
 
     @MDB_transact(.readOnly)
     public func slotOn(_ day: SlotKey) throws -> SlotRecord? {
-        #load(BookingCore.self, database: \.sheets, key: day)
+        #load(Booking.self, database: \.sheets, key: day)
     }
 }
 
-let booking = try BookingCore.open(at: "<data-path>")
+let booking = try Booking.open(at: "<data-path>")
 try booking.addBooking(key, record)
 let record = try booking.slotOn(day)
 ```
 
 - **modes** (``QuickLMDB/MDB_transact_mode``): `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. child/relationship composition is NOT a mode — composition is joining (below).
-- **the environment set is inferred from the verbs.** every environment type a verb references must be `self` (the boundary is attached to that core type) or a typed parameter of the method — a multi-environment boundary takes the other cores as typed parameters.
+- **the environment set is inferred from the verbs.** every environment type a verb references must be `self` (the boundary is attached to that environment type) or a typed parameter of the method — a multi-environment boundary takes the other environments as typed parameters.
 - the typed verbs used **outside** a boundary, and ``MDB_transacted(_:)`` written anywhere but inside one, are compile-time diagnostics.
 - the annotated method must be an instance method, `throws` (the boundary can fail to open or close), and must not be `async`.
-- typing end to end: `#store(BookingCore.self, database: \.sheets, key:…, value:…)` type-checks `key`/`value` against the `Database.Strict<SlotKey, SlotRecord>` the keypath names.
+- typing end to end: `#store(Booking.self, database: \.sheets, key:…, value:…)` type-checks `key`/`value` against the `Database.Strict<SlotKey, SlotRecord>` the keypath names.
 
 ### Composition is JOINING
 
@@ -128,7 +128,7 @@ Generates a `static func open(at:mapHeadroom:)` that creates the directory as ne
 
 ### ``QuickLMDB/MDB_layout()`` — the multi-environment arrangement
 
-``QuickLMDB/MDB_layout()`` on a struct owning N ``QuickLMDB/MDB_environment`` cores generates a single `open(at:mapHeadroom:)` — each core opens at `<base>/<property name>` and a fresh instance is assembled — plus a `mdb_core_names` inventory. no per-core factories, no statics, no baked path; every environment stays its own type and boundaries live on those types.
+``QuickLMDB/MDB_layout()`` on a struct owning N ``QuickLMDB/MDB_environment`` types generates a single `open(at:mapHeadroom:)` — each environment opens at `<base>/<property name>` and a fresh instance is assembled — plus a `mdb_environment_names` inventory. no per-environment factories, no statics, no baked path; every environment stays its own type and boundaries live on those types.
 
 ### Self-scoped committed reads
 
@@ -136,15 +136,15 @@ Verification reads ("what is the last committed state") carry no transaction cer
 
 ### Multi-environment boundaries
 
-The same boundary coordinates MORE than one environment — the other cores flow in as **typed parameters**:
+The same boundary coordinates MORE than one environment — the other environments flow in as **typed parameters**:
 
 ```swift
 @MDB_transact(.readWrite)
 public func scheduleAndMarkSync(_ event: EventID, on day: DayKey,
                                 contact: ContactID, at timestamp: Timestamp,
-                                contacts: ClubContactsCore) throws {
-    try #store(ClubCalendarCore.self, database: \.events, key: day, value: event)
-    try #store(ClubContactsCore.self, database: \.lastSync, key: contact, value: timestamp)
+                                contacts: ClubContacts) throws {
+    try #store(ClubCalendar.self, database: \.events, key: day, value: event)
+    try #store(ClubContacts.self, database: \.lastSync, key: contact, value: timestamp)
 }
 ```
 

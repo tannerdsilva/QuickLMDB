@@ -26,7 +26,7 @@ import SwiftDiagnostics
 //
 // this macro is purely schema assembly — it contains no transaction logic.
 // transaction boundaries are owned by `@MDB_transact` (attached body + peer)
-// on the methods of a container holding one or more of these cores. the C
+// on the methods of a container holding one or more of these environments. the C
 // wrapper layer is untouched; the generated code uses the existing public
 // `Environment`, `Transaction`, and `Database.*` API (plus the underscored
 // file-size probe in `QuickLMDB._MDBEnvironmentSupport`).
@@ -43,7 +43,7 @@ import SwiftDiagnostics
 
 internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 
-	// marks every @MDB_environment struct as an environment core — the type
+	// marks every @MDB_environment struct as an environment — the type
 	// `@MDB_transact(_:environments:)` accepts in its environments variadic
 	static func expansion(of node: SwiftSyntax.AttributeSyntax, attachedTo declaration: some SwiftSyntax.DeclGroupSyntax, providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.ExtensionDeclSyntax] {
 		return [try ExtensionDeclSyntax("""
@@ -77,7 +77,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		}
 	}
 
-	// a resolved `Database.X` table on a core: property name, effective LMDB
+	// a resolved `Database.X` table on an environment: property name, effective LMDB
 	// table name (property name unless @MDB_table overrides), the declared
 	// type, and any extra creation flags/payload cases for validation.
 	internal struct ResolvedTable {
@@ -89,9 +89,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		var flagCases:Set<String> // member-case names for conflict validation
 	}
 
-	// scans a core's stored properties for the `env` handle + `Database.X`
+	// scans an environment's stored properties for the `env` handle + `Database.X`
 	// tables (consuming `@MDB_table`), with the shared table resolution.
-	internal static func scanCore(_ decl: StructDeclSyntax) throws -> (hasEnv: Bool, tables: [ResolvedTable]) {
+	internal static func scanEnvironment(_ decl: StructDeclSyntax) throws -> (hasEnv: Bool, tables: [ResolvedTable]) {
 		var hasEnv = false
 		var tables:[ResolvedTable] = []
 		for member in decl.memberBlock.members {
@@ -157,7 +157,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		}
 
 		// -- scan stored properties: env + tables (consuming @MDB_table)
-		let (hasEnv, tables) = try scanCore(structDecl)
+		let (hasEnv, tables) = try scanEnvironment(structDecl)
 		guard hasEnv else {
 			throw MacroError.missingEnv
 		}
@@ -207,7 +207,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 	}
 
 	// shared validation of the resolved table set: unique names (within this
-	// scan's core) + dup-sort flags on a non-dup typed handle contradict the
+	// scan) + dup-sort flags on a non-dup typed handle contradict the
 	// declared type.
 	internal static func validateTableNames(_ tables: [ResolvedTable]) throws {
 		var resolvedNames:Set<String> = []

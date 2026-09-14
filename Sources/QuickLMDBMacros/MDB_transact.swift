@@ -4,12 +4,12 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
 // the boundary dialect (typed-environment architecture) on the real engine
-// (capability-typed `Transaction<M>`, @MDB_environment cores).
+// (capability-typed `Transaction<M>`, @MDB_environment types).
 //
 // @MDB_transact(_ mode:) — attached BODY + PEER on INSTANCE methods.
-//   every environment is its own TYPE (an @MDB_environment core). a boundary
-//   lives on a core type (the environment is `self`) and may additionally take
-//   other cores as typed parameters. the body is written with the TYPED VERB
+//   every environment is its own TYPE (an @MDB_environment type). a boundary
+//   lives on an environment type (the environment is `self`) and may
+//   additionally take other environments as typed parameters. the body is written with the TYPED VERB
 //   FAMILY — `#store(E.self, database: \\.events, key:..., value:...)` — where
 //   E is the environment TYPE the operation targets and the database is a
 //   KeyPath from that type to a `Database.X` handle. the tx plumbing is
@@ -114,16 +114,16 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 	// - MARK: body verbs — the environment type arg
 
-	/// `CalendarCore.self` or `E.self` — member access whose declName is
-	/// `self`, with a possibly-COMPOUND base (a namespaced core:
-	/// `MyNamespace.Core.self` yields `"MyNamespace.Core"`).
+	/// `MyEnvironment.self` or `E.self` — member access whose declName is
+	/// `self`, with a possibly-COMPOUND base (a namespaced environment:
+	/// `MyNamespace.Environment.self` yields `"MyNamespace.Environment"`).
 	private static func environmentTypeName(of verb: MacroExpansionExprSyntax) -> String? {
 		guard let first = verb.arguments.first?.expression else { return nil }
-		// `CalendarCore.self`
+		// `MyEnvironment.self`
 		if let member = first.as(MemberAccessExprSyntax.self), member.declName.baseName.text == "self" {
 			return compoundName(of: member.base)
 		}
-		// a bare type reference (`CalendarCore`)
+		// a bare type reference (`MyEnvironment`)
 		if let ref = first.as(DeclReferenceExprSyntax.self) {
 			return ref.baseName.text
 		}
@@ -131,7 +131,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 	}
 
 	/// unwraps a `self`-member's base chain into a dotted type name:
-	/// `MyNamespace.Core` (base of `.self`) → `"MyNamespace.Core"`.
+	/// `MyNamespace.Environment` (base of `.self`) → `"MyNamespace.Environment"`.
 	private static func compoundName(of base: ExprSyntax?) -> String? {
 		var parts: [String] = []
 		var cur: ExprSyntax? = base
@@ -157,9 +157,8 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 	// - MARK: environment type identity + tx labels
 
 	/// whether two type spellings denote the SAME environment type. with the
-	/// group layer gone, every core is a standalone type: environment
-	/// references are simple names (`CalendarCore.self`), so equality is
-	/// exact.
+	/// group layer gone, every environment is a standalone type: references
+	/// are simple names (`MyEnvironment.self`), so equality is exact.
 	private static func isSameEnvironmentType(_ a: String, _ b: String) -> Bool {
 		a == b
 	}
@@ -233,7 +232,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 	/// the name of the environment type a boundary is attached to: the
 	/// enclosing struct's name, or the extended-type text when declared in an
-	/// extension of a core.
+	/// extension of an environment type.
 	private static func enclosingTypeName(from context: some MacroExpansionContext) -> String? {
 		for decl in context.lexicalContext {
 			if let s = decl.as(StructDeclSyntax.self) {

@@ -27,7 +27,7 @@ designs below:
 - verb names (store/load/…) SHADOW bare same-named member calls — generated
   calls are `self.`-qualified.
 - #MDB_transacted(call) = the join verb; equal-env-set by type-set.
-- @MDB_layout = arrangement helper only: open(at:mapHeadroom:) + mdb_core_names
+- @MDB_layout = arrangement helper only: open(at:mapHeadroom:) + mdb_environment_names
   inventory; no basePath, no factories, no statics, fixed names.
 - residuals (documented): the join marker; cursor-write explicit tx; a
   boundary with NO direct verbs is a diagnostic (nothing to infer envs from);
@@ -151,7 +151,7 @@ status: DONE (2026-09-10) — folded into phase 2's landing (they are one
 
 status: DONE (2026-09-10) — clean build 0 warnings, 105 tests / 17 suites green.
   @MDB_layout landed: required basePath (path-stemming), per-core `_mdb_open_<name>`
-  factories, `mdb_core_names` inventory, dynamic `open(at:mapHeadroom:)`, and
+  factories, `mdb_environment_names` inventory, dynamic `open(at:mapHeadroom:)`, and
   validation (struct-only, missing basePath, empty core set, missing statics —
   negatives via the SEEDED file.expand path, since assertMacroExpansion does
   not capture thrown member-macro diagnostics). the demo (ClubApp) and a new

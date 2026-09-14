@@ -36,8 +36,8 @@
     writing on a read transaction is a type-checker error — the read-only
     write lint is retired as a runtime concept.
   - **`@MDB_layout`** — the multi-environment ARRANGEMENT helper: opens N
-    `@MDB_environment` cores at `<base>/<name>` in one call plus a
-    `mdb_core_names` inventory. no per-core factories, no statics, no baked
+    `@MDB_environment` types at `<base>/<name>` in one call plus a
+    `mdb_environment_names` inventory. no per-environment factories, no statics, no baked
     path.
   - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` and
     `@MDB_table(name:flags:)` unchanged in role (schema assembly + per-table
@@ -45,7 +45,7 @@
     `<stem>-v<N>.mdb` when written (opt-in, fresh-file migration).
   - the prior `environments:` attribute form, the `#MDB_entry_load`/
     `#MDB_entry_store` trailing verbs, the provider-style container, and
-    per-core `Root` shells are REMOVED by this change.
+    per-environment `Root` shells are REMOVED by this change.
 - **`@MDB_environment`'s generated `open(at:)` loses its `fileName:`
   override** (breaking). the factory's file name comes from the `file:`
   attribute (plus the optional `version:` suffix) only; runtime-parameterized
@@ -90,7 +90,7 @@
   - `#load(db, key:, as:)` remains for raw `MDB_val` handles; typed handles need no `as:`.
   - `#stats(db)` lowers to `dbStatistics(tx:)` (metadata read — never marks a span member write); `#drop(db)` lowers to `deleteDatabase(tx:)` (destructive — the handle is consumed, so the receiver must be a locally-owned raw `Database`, not a stored `self.X` table).
 - Added typed-handle companions the verbs lower to: `load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)` on `MDB_db` (one copy inherited by every handle), plus the dupsort pair `delete(key:value:tx:)` on `MDB_db_dupsort`.
-- **Cross-environment span boundaries: `@MDB_app` + `@MDB_transact_span`.** `@MDB_app` marks a struct as an environment container (its stored `@MDB_environment` cores become the routing inventory) AND generates a container-level `open(at:mapHeadroom:)` that creates the base + per-core subdirectories and opens every core in one call. `@MDB_transact_span` coordinates ALL of them behind one method: one top-level transaction per core, opened up front; a body throw aborts ALL of them (nothing lands — impossible with two isolated boundaries, the prior shape); write members commit back-to-back in first-touch/declaration order, read members close. bare form infers environments/modes/order from the body's verb calls; the override form (`@MDB_transact_span([.readWrite("calendar")])`) forces them explicitly. honest ceiling (documented): cross-environment commits remain best-effort — a crash between the adjacent commit calls can still split the pair; cross-env atomicity is impossible.
+- **Cross-environment span boundaries: `@MDB_app` + `@MDB_transact_span`.** `@MDB_app` marks a struct as an environment container (its stored `@MDB_environment` types become the routing inventory) AND generates a container-level `open(at:mapHeadroom:)` that creates the base + per-environment subdirectories and opens every environment in one call. `@MDB_transact_span` coordinates ALL of them behind one method: one top-level transaction per environment, opened up front; a body throw aborts ALL of them (nothing lands — impossible with two isolated boundaries, the prior shape); write members commit back-to-back in first-touch/declaration order, read members close. bare form infers environments/modes/order from the body's verb calls; the override form (`@MDB_transact_span([.readWrite("calendar")])`) forces them explicitly. honest ceiling (documented): cross-environment commits remain best-effort — a crash between the adjacent commit calls can still split the pair; cross-env atomicity is impossible.
 - **`@MDB_environment`'s generated `open(at:)` now creates the base directory as needed** (previously required it to pre-exist).
 - **Self-scoped committed reads** on `MDB_db` (protocol-extension members, every handle): `readCommitted(key:)`, `containsCommitted(key:)` and (dupsort) `readCommittedDups(key:)` — each opens its own read-only transaction, reads, and closes it. deliberately NOT boundary verbs: a verb's contract is boundary participation, the opposite of a self-scoped verification read. the suite-level `readViaRawTX`/`loadEntryDirect`-style helpers (open txn manually → read → abort) are replaced by these members.
 - Updated docs: the transaction-boundary README + DocC sections now describe the verb contract and the span boundary; examples migrated to verbs/spans.

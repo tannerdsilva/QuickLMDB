@@ -4,15 +4,15 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
 // @MDB_table(name:flags:) — per-table configuration on a `Database.X` stored
-// property inside an `@MDB_environment` core.
+// property inside an `@MDB_environment` type.
 //
 // this macro produces NOTHING (returns []): its entire job is to (a) be a
 // configuration attribute the `@MDB_environment` scan consumes, and (b) validate
 // its own PLACEMENT with friendly diagnostics:
 //   1. the target must be a stored property whose type is `Database` or
 //      Database.X<...> — "target must be a table property";
-//   2. the enclosing type must be an `@MDB_environment` struct (a core) —
-//      "tables belong inside an environment core".
+//   2. the enclosing type must be an `@MDB_environment` struct (an
+//      environment type) — "tables belong inside an environment".
 //
 // semantic checks (name validity/uniqueness, flags-vs-type conflicts) run on
 // the CONSUMING side (@MDB_environment), where the whole schema is visible.
@@ -54,23 +54,23 @@ internal struct MDB_table_macro: PeerMacro {
             throw Failure.notATable(typeText)
         }
 
-        // 2 — the enclosing type must be an @MDB_environment core
-        var isInsideCore = false
+        // 2 — the enclosing type must be an @MDB_environment type
+        var isInsideEnvironment = false
         for lexical in context.lexicalContext {
             if let structDecl = lexical.as(StructDeclSyntax.self),
                structDecl.attributes.contains(where: { attr in
                    (attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription) == "MDB_environment"
                }) {
-                isInsideCore = true
+                isInsideEnvironment = true
                 break
             }
         }
-        guard isInsideCore else {
+        guard isInsideEnvironment else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: TableDiagnostic(
-                    id: "tableOutsideCore",
-                    text: "@MDB_table can only be used inside an @MDB_environment core — tables belong to a core's schema"
+                    id: "tableOutsideEnvironment",
+                    text: "@MDB_table can only be used inside an @MDB_environment — tables belong to an environment's schema"
                 )
             ))
             return []

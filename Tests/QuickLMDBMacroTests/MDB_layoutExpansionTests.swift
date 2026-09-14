@@ -53,7 +53,7 @@ struct MDBlayoutExpansionTests {
 			    public var calendar: CalendarCore
 			    public var contacts: ContactsCore
 			
-			    public static let mdb_core_names: [String] = ["calendar", "contacts"]
+			    public static let mdb_environment_names: [String] = ["calendar", "contacts"]
 			
 			    @available(*, noasync)
 			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
@@ -87,7 +87,7 @@ struct MDBlayoutExpansionTests {
 			    static let helper = 1
 			}
 			""",
-			["@MDB_layout requires at least one stored property — the environment cores the arrangement owns"]
+			["@MDB_layout requires at least one stored property — the environment types the arrangement owns"]
 		)
 	}
 }
