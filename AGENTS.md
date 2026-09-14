@@ -87,6 +87,13 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   JOINED (same transaction, sees this boundary's uncommitted state); a plain
   `eventOn(day)` = SIBLING read (its shell opens a separate read txn,
   committed-only — "validate against durable data").
+- **the write-composition lint** lives in the `@MDB_environment` MEMBER macro,
+  not the boundary roles — their lexicalContext is a memberless shell, so only
+  the member role can classify same-type callees (verified under the real
+  compiler). a boundary body bare-calling a same-type `.readWrite` boundary is
+  a compile-time error (the second-root-write deadlock). `#MDB_transacted(...)`
+  joins, sibling reads, cross-environment typed-parameter callees and plain
+  methods are exempt. extension-declared boundaries are a documented residual.
 - `@MDB_layout` — the multi-environment ARRANGEMENT helper (member macro,
   fixed names): opens N `@MDB_environment` types at `<base>/<name>` in one
   call (`open(at:mapHeadroom:)`) plus a `mdb_environment_names` inventory. no

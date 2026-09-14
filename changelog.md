@@ -1,5 +1,13 @@
 # Unreleased
 
+- **write-composition lint** (hardening): `@MDB_environment` emits a
+  compile-time error when a boundary body bare-calls a same-type
+  `@MDB_transact(.readWrite)` boundary — the spell that opens a SECOND root
+  write on a live writer and deadlocks LMDB's writer mutex.
+  `#MDB_transacted(...)` joins, sibling reads, cross-environment callees
+  (typed parameters) and plain methods are unaffected. breaking only for code
+  that previously relied on accidental write composition inside a boundary.
+
 - **the transaction layer is now the typed-environment dialect** (breaking).
   every environment is its own `@MDB_environment` type, and transaction
   boundaries are INSTANCE methods on those types. there is no transaction

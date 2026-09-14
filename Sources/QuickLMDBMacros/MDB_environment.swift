@@ -167,6 +167,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		}
 		try validateTableNames(tables)
 
+		// -- the write-at-depth lint (compile-time, same-type write callees)
+		lintWriteBoundaryCalls(in: structDecl, context: context)
+
 		// -- build the open(at:) factory
 		var lines:[String] = []
 		lines.append("/// opens the environment and all of its tables with a single setup write-transaction.")
@@ -221,6 +224,107 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 				let badFlag = table.flagCases.contains("dupSort") ? "dupSort" : "dupFixed"
 				throw MacroError.flagTypeConflict(table.property, badFlag)
 			}
+		}
+	}
+
+	// - MARK: the write-composition lint (compile-time write-at-depth guard)
+
+	/// an error from the write-composition lint: a boundary body bare-calls a
+	/// same-type WRITE boundary.
+	private struct WriteCalleeDiagnostic: DiagnosticMessage {
+		let text: String
+		init(text: String) { self.text = text }
+		var message: String { text }
+		var diagnosticID: MessageID { MessageID(domain: "QuickLMDB", id: "writeCalleeInsideBoundary") }
+		var severity: DiagnosticSeverity { .error }
+	}
+
+	/// the compile-time write-at-depth lint. the boundary body/peer roles get
+	/// a lexicalContext SHELL (empty member list — verified under the real
+	/// compiler), so they cannot classify same-type callees; the MEMBER role is
+	/// the only one that sees every member and body, so this validation lives
+	/// here. every boundary body is scanned for BARE/`self.` calls to a
+	/// same-type `.readWrite` boundary — the spell that opens a SECOND root
+	/// write on a live writer (an LMDB writer-mutex deadlock):
+	/// - from a `.readWrite` boundary → an error directing the developer to
+	///   compose with `try #MDB_transacted(...)` (the sanctioned join);
+	/// - from a `.readOnly` boundary → an error (a read transaction cannot
+	///   host a write);
+	/// - `#MDB_transacted(w(...))`-wrapped calls, bare calls to READ boundaries
+	///   (the sibling-read pattern), cross-type receivers (`param.w(...)` — a
+	///   DIFFERENT environment, the legitimate cross-env transform), and plain
+	///   methods are each left alone.
+	/// extension-declared boundaries are a separate declaration the member
+	/// macro cannot see — documented residual, the same extension-wall the
+	/// whole codebase lives with.
+	private static func lintWriteBoundaryCalls(
+		in core: StructDeclSyntax,
+		context: some MacroExpansionContext
+	) {
+		var boundaryModes: [String: Bool] = [:]
+		for member in core.memberBlock.members {
+			guard let fn = member.decl.as(FunctionDeclSyntax.self) else { continue }
+			for attr in fn.attributes.compactMap({ $0.as(AttributeSyntax.self) }) {
+				guard attr.attributeName.trimmedDescription == "MDB_transact" else { continue }
+				guard let argList = attr.arguments?.as(LabeledExprListSyntax.self),
+					let modeText = argList.first?.expression.trimmedDescription else { continue }
+				boundaryModes[fn.name.text] =
+					modeText.hasPrefix(".readWrite") || modeText.hasPrefix("MDB_transact_mode.readWrite")
+			}
+		}
+		let writeSet = Set(boundaryModes.filter { $0.value }.keys)
+		guard !writeSet.isEmpty else { return }
+
+		for member in core.memberBlock.members {
+			guard let fn = member.decl.as(FunctionDeclSyntax.self),
+				let boundaryIsWrite = boundaryModes[fn.name.text],
+				let body = fn.body else { continue }
+			let visitor = WriteCalleeVisitor(writeSet: writeSet, callerIsReadOnly: !boundaryIsWrite)
+			visitor.walk(body)
+			for (node, message) in visitor.findings {
+				context.diagnose(Diagnostic(node: Syntax(node), message: WriteCalleeDiagnostic(text: message)))
+			}
+		}
+	}
+
+	/// body walker for the write-composition lint: collects bare/`self.` calls
+	/// to same-type write boundaries that are not inside `#MDB_transacted(...)`.
+	private final class WriteCalleeVisitor: SyntaxVisitor {
+		private let writeSet: Set<String>
+		private let callerIsReadOnly: Bool
+		private(set) var findings: [(node: FunctionCallExprSyntax, message: String)] = []
+
+		init(writeSet: Set<String>, callerIsReadOnly: Bool) {
+			self.writeSet = writeSet
+			self.callerIsReadOnly = callerIsReadOnly
+			super.init(viewMode: .sourceAccurate)
+		}
+
+		// the sanctioned join — its argument is a joined call, never linted
+		override func visit(_ node: MacroExpansionExprSyntax) -> SyntaxVisitorContinueKind {
+			node.macroName.text == "MDB_transacted" ? .skipChildren : .visitChildren
+		}
+
+		override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+			// bare `w(args)` or `self.w(args)` only — a cross-type receiver
+			// (`param.w(...)` = a DIFFERENT environment) is exempt
+			let calleeName: String?
+			if let bare = node.calledExpression.as(DeclReferenceExprSyntax.self) {
+				calleeName = bare.baseName.text
+			} else if let member = node.calledExpression.as(MemberAccessExprSyntax.self),
+				let base = member.base?.as(DeclReferenceExprSyntax.self),
+				base.baseName.text == "self" {
+				calleeName = member.declName.baseName.text
+			} else {
+				calleeName = nil
+			}
+			guard let name = calleeName, writeSet.contains(name) else { return .visitChildren }
+			if callerIsReadOnly {
+				findings.append((node, "calling write boundary '\(name)' from a read-only boundary cannot compose — a read transaction cannot host a write. make this boundary read-write, or call '\(name)' outside the boundary"))
+			} else {
+				findings.append((node, "calling write boundary '\(name)' from inside a write boundary opens a SECOND root write on this environment and deadlocks LMDB's writer mutex — compose with try #MDB_transacted(\(name)(...)) so the callee joins this boundary's transaction"))
+			}
+			return .visitChildren
 		}
 	}
 
