@@ -62,7 +62,37 @@ public enum MDB_transact_mode:Sendable {
 /// conformance — the macro factory does not parameterize file names.
 @attached(member, names: arbitrary)
 @attached(extension, conformances: MDB_environment)
-public macro MDB_environment(file: Swift.String, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
+public macro MDB_environment(file: Swift.String? = nil, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
+
+/// declares a SHARED-PHYSICAL-ENVIRONMENT group: one physical LMDB file = one
+/// type. the group struct's stored instance properties are its member cores —
+/// nested ``MDB_environment(_:file:flags:maxReaders:maxDBs:mode:)`` structs —
+/// and the generated `open(at:mapHeadroom:)` opens the physical environment
+/// ONCE and constructs every member core from the same ``Environment`` value
+/// (one setup write-transaction opens every member's tables).
+///
+/// this restores cross-core atomic composition on one file: several distinct
+/// core types (print queues, daemon metadata, wireguard state, logger tables)
+/// may legitimately live over one physical env, and the transaction layer
+/// (`@MDB_transact`) keys its transactions to the GROUP — the double-write
+/// self-deadlock becomes structurally unreachable.
+///
+/// membership is POSITIONAL: a nested ``MDB_environment`` struct is a member by
+/// construction, and its full type name (`DaemonEnv.DaemonDB`) carries the
+/// group prefix — the boundary macros read membership from the type spelling
+/// alone, with no runtime registry and no attribute indirection.
+///
+/// generated members:
+/// - `static func open(at:mapHeadroom:) throws -> Self`
+/// - `var env: Environment` — the shared handle (the boundary shell opens from it)
+/// - `static let mdb_core_names: [String]` — the member inventory
+/// - conformance to ``MDB_environment`` (the group is itself verb-addressable)
+///
+/// member cores carry no `file:`/env-tuning attributes (the group owns the
+/// environment) and generate no standalone `open(at:)`.
+@attached(member, names: named(open(at:mapHeadroom:)), named(env), named(mdb_core_names))
+@attached(extension, conformances: MDB_environment)
+public macro MDB_env_group(file: Swift.String, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_env_group_macro")
 
 @attached(member, names:			named(setEntry(key:value:flags:tx:)),
 								named(deleteEntry(key:value:tx:)),

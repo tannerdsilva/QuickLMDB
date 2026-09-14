@@ -401,6 +401,14 @@ struct BoundaryHardeningExpansionTests {
 			    let env: Environment
 			    let primary: Database.Strict<Key, Value>
 			    func sync(_ k: Key, _ v: Value, other: OtherCore) throws {
+			        // one transaction per resolved environment — two labels resolving to the same
+			            // Environment INSTANCE would be a double-open (LMDB writer-mutex self-deadlock)
+			            let __mdb_envs: [Environment] = [self.env, other.env]
+			            for __mdb_i in 0..<__mdb_envs.count {
+			                for __mdb_j in (__mdb_i + 1)..<__mdb_envs.count {
+			                    if __mdb_envs[__mdb_i] === __mdb_envs[__mdb_j] { throw LMDBError.duplicateEnvironment }
+			                }
+			            }
 			        let tx_Core = try Transaction<Write>(env: self.env)
 			        let tx_OtherCore = try Transaction<Write>(env: other.env)
 			        do {

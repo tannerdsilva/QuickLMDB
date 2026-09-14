@@ -10,10 +10,20 @@ import SwiftSyntaxMacros
 //   every environment is its own TYPE (an @MDB_environment core). a boundary
 //   lives on a core type (the environment is `self`) and may additionally take
 //   other cores as typed parameters. the body is written with the TYPED VERB
-//   FAMILY — `#store(E.self, database: \.events, key:..., value:...)` — where
+//   FAMILY — `#store(E.self, database: \\.events, key:..., value:...)` — where
 //   E is the environment TYPE the operation targets and the database is a
 //   KeyPath from that type to a `Database.X` handle. the tx plumbing is
 //   entirely invisible: the authored signature has NO transaction parameters.
+//
+//   ENVIRONMENT GROUPS: several cores may share one physical env — a nested
+//   `@MDB_environment` member inside an `@MDB_env_group` struct. membership is
+//   positional, carried in the type spelling (`DaemonEnv.DaemonDB`). the tx
+//   label keys to the GROUP, not the member type: every member of one group
+//   lowers to the single `tx_<Group>`, so a boundary addressing two members
+//   opens exactly ONE transaction on the shared env — the double-write
+//   self-deadlock is structurally unreachable. a bare self-reference inside a
+//   member resolves to the member's own group label, so member boundaries and
+//   group boundaries share one label space and join cleanly.
 //
 //   BODY — emits the SHELL at the authored name: opens
 //   `tx_<E> = try Transaction<Mode>(env: <instance>.env)` per environment the
@@ -21,6 +31,10 @@ import SwiftSyntaxMacros
 //   typed parameter), calls the peer SIBLING with those transactions, and
 //   closes every one: `.readOnly` aborts on throw AND on success (a read leaf
 //   never commits); `.readWrite` aborts on throw and COMMITS on success.
+//   before opening, the shell refuses (LMDBError.duplicateEnvironment) any two
+//   labels that resolve to the SAME Environment instance — the compile-time
+//   group collapse cannot see a bare-named sibling-member parameter, and a
+//   double-open on one env is a hang, not an error.
 //
 //   PEER — emits the network SIBLING (same name + `tx_<E>: borrowing
 //   Transaction<…>` per inferred environment): read-only siblings are generic
@@ -114,15 +128,14 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 	// - MARK: body verbs — the environment type arg
 
-	/// `CalendarCore.self` or `E.self` (member access whose declName is `self`)
+	/// `CalendarCore.self` or `E.self` — member access whose declName is
+	/// `self`, with a possibly-COMPOUND base: `DaemonEnv.DaemonDB.self`
+	/// (a group member core) yields `"DaemonEnv.DaemonDB"`.
 	private static func environmentTypeName(of verb: MacroExpansionExprSyntax) -> String? {
 		guard let first = verb.arguments.first?.expression else { return nil }
 		// `CalendarCore.self`
 		if let member = first.as(MemberAccessExprSyntax.self), member.declName.baseName.text == "self" {
-			if let base = member.base?.as(DeclReferenceExprSyntax.self) {
-				return base.baseName.text
-			}
-			return nil
+			return compoundName(of: member.base)
 		}
 		// a bare type reference (`CalendarCore`)
 		if let ref = first.as(DeclReferenceExprSyntax.self) {
@@ -131,30 +144,96 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		return nil
 	}
 
+	/// unwraps a `self`-member's base chain into a dotted type name:
+	/// `DaemonEnv.DaemonDB` (base of `.self`) → `"DaemonEnv.DaemonDB"`.
+	private static func compoundName(of base: ExprSyntax?) -> String? {
+		var parts: [String] = []
+		var cur: ExprSyntax? = base
+		while let c = cur {
+			if let ref = c.as(DeclReferenceExprSyntax.self) {
+				parts.insert(ref.baseName.text, at: 0)
+				break
+			}
+			if let m = c.as(MemberAccessExprSyntax.self), m.declName.baseName.text != "self" {
+				parts.insert(m.declName.baseName.text, at: 0)
+				cur = m.base
+				continue
+			}
+			return nil
+		}
+		return parts.isEmpty ? nil : parts.joined(separator: ".")
+	}
+
 	private static func verbDatabaseKeyPathText(_ verb: MacroExpansionExprSyntax) -> String? {
 		verb.arguments.first { $0.label?.text == "database" }?.expression.trimmedDescription
 	}
 
+	// - MARK: environment groups — the type-spelling machinery
+
+	/// the final path component of a (possibly dotted) type name.
+	private static func unqualifiedName(_ text: String) -> String {
+		if let dot = text.lastIndex(of: ".") {
+			return String(text[text.index(after: dot)...])
+		}
+		return text
+	}
+
+	/// the GROUP prefix of a dotted member-core name: `DaemonEnv.DaemonDB` →
+	/// `"DaemonEnv"`. a bare name is a standalone core (no group).
+	private static func groupName(ofDottedEnvType name: String) -> String? {
+		if let dot = name.lastIndex(of: ".") {
+			return String(name[..<dot])
+		}
+		return nil
+	}
+
+	/// whether two type spellings denote the SAME environment type/group
+	/// member: exact equality, or equal unqualified names with one side BARE
+	/// (so `AlphaCore` inside `extension SharedEnv.AlphaCore` matches
+	/// `SharedEnv.AlphaCore`, but `App.AlphaCore` never matches
+	/// `SharedEnv.AlphaCore`).
+	private static func isSameEnvironmentType(_ a: String, _ b: String) -> Bool {
+		if a == b { return true }
+		let ua = unqualifiedName(a), ub = unqualifiedName(b)
+		guard ua == ub else { return false }
+		return !a.contains(".") || !b.contains(".")
+	}
+
+	/// the transaction label for an environment type reference. group members
+	/// key to the GROUP (`tx_DaemonEnv`); a bare reference to SELF inside a
+	/// member boundary joins its own group's label so member and group
+	/// boundaries share one label space; standalone cores keep `tx_<Type>`.
+	private static func labelFor(_ envName: String, enclosingType: String?) -> String {
+		if let g = groupName(ofDottedEnvType: envName) {
+			return "tx_" + g
+		}
+		if let enclosingType, enclosingType.contains("."),
+		   isSameEnvironmentType(envName, enclosingType),
+		   let g = groupName(ofDottedEnvType: enclosingType) {
+			return "tx_" + g
+		}
+		return "tx_" + envName
+	}
+
 	// - MARK: environment instance resolution
 
-	/// the instance expression + tx label for an environment type name.
-	/// `self` when the boundary is attached to the environment type itself,
-	/// otherwise the first parameter declared with that type.
+	/// the instance expression for an environment type name: `self` when the
+	/// boundary is attached to the environment type itself, otherwise the
+	/// first parameter declared with that type.
 	private static func resolveInstance(
 		envName: String,
 		enclosingType: String?,
 		params: FunctionParameterClauseSyntax?
-	) -> (expr: String, label: String)? {
-		let label = "tx_" + envName
-		if envName == enclosingType {
-			return ("self", label)
+	) -> String? {
+		if let enclosingType, isSameEnvironmentType(envName, enclosingType) {
+			return "self"
 		}
 		if let params {
 			for p in params.parameters {
 				let typeText = p.type.trimmedDescription
-				if typeText == envName || typeText.hasSuffix("." + envName) {
+				if isSameEnvironmentType(envName, typeText) {
 					let expr = p.secondName?.text ?? p.firstName.text
-					return (expr, label)
+					return expr
 				}
 			}
 		}
@@ -165,34 +244,77 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 	/// typed parameters). more than one cannot be addressed by the verbs.
 	private static func instanceSourceCount(envName: String, enclosingType: String?, params: FunctionParameterClauseSyntax?) -> Int {
 		var count = 0
-		if envName == enclosingType { count += 1 }
+		if let enclosingType, isSameEnvironmentType(envName, enclosingType) { count += 1 }
 		if let params {
 			for p in params.parameters {
 				let t = p.type.trimmedDescription
-				if t == envName || t.hasSuffix("." + envName) { count += 1 }
+				if isSameEnvironmentType(envName, t) { count += 1 }
 			}
 		}
 		return count
 	}
 
+	/// resolves every env type the body touched to `(name, label, instance)`.
+	/// returns BOTH views of the resolution:
+	/// - `collapsed`: one entry per label, canonical (label-sorted) order —
+	///   the shell/sibling/join emission. two members of one group collapse to
+	///   one `tx_<Group>` (one transaction on the shared env — the double-write
+	///   self-deadlock is unreachable); a standalone core keeps its own label.
+	/// - `all`: EVERY env reference — the verb-lowering lookups (each member's
+	///   verbs must resolve even after the label collapse dedupes the shell).
+	private static func resolveEnvironments(
+		envNames: [String],
+		enclosingType: String?,
+		params: FunctionParameterClauseSyntax?
+	) throws -> (collapsed: [(name: String, label: String, expr: String)], all: [(name: String, label: String, expr: String)]) {
+		var raw: [(name: String, label: String, expr: String)] = []
+		for envName in envNames {
+			if instanceSourceCount(envName: envName, enclosingType: enclosingType, params: params) > 1 {
+				throw Failure.ambiguousEnvironment(envName)
+			}
+			guard let expr = resolveInstance(envName: envName, enclosingType: enclosingType, params: params) else {
+				throw Failure.missingEnvironmentInstance(envName)
+			}
+			raw.append((name: envName, label: labelFor(envName, enclosingType: enclosingType), expr: expr))
+		}
+		// canonical order: label-sorted, collapsed to one entry per label (the
+		// first instance per label wins — any member instance of one group
+		// resolves to the SAME Environment object)
+		let sorted = raw.sorted { $0.label < $1.label }
+		var collapsed: [(name: String, label: String, expr: String)] = []
+		for r in sorted where collapsed.last?.label != r.label {
+			collapsed.append(r)
+		}
+		return (collapsed, raw)
+	}
+
 	/// the name of the environment type a boundary is attached to: the
-	/// enclosing struct, or the EXTENDED type when declared in an extension of
-	/// a core (the README flagship pattern). a module qualifier is stripped so
-	/// `Module.Core.self` and `Core.self` unify.
+	/// enclosing struct's name, or the FULL extended-type text when declared
+	/// in an extension of a core — keeping the dotted shape
+	/// (`SharedEnv.AlphaCore`) so group membership stays derivable.
 	private static func enclosingTypeName(from context: some MacroExpansionContext) -> String? {
 		for decl in context.lexicalContext {
 			if let s = decl.as(StructDeclSyntax.self) {
 				return s.name.text
 			}
 			if let e = decl.as(ExtensionDeclSyntax.self) {
-				let text = e.extendedType.trimmedDescription
-				if let dot = text.lastIndex(of: ".") {
-					return String(text[text.index(after: dot)...])
-				}
-				return text
+				return e.extendedType.trimmedDescription
 			}
 		}
 		return nil
+	}
+
+	/// the attribute names of the enclosing STRUCT (available only for
+	/// in-struct boundaries — an extension's extended-type attributes are a
+	/// separate declaration the macro cannot see). used to recognize a
+	/// `@MDB_env_group` self for verb-less coordinator inference.
+	private static func enclosingStructAttributes(from context: some MacroExpansionContext) -> [String] {
+		for decl in context.lexicalContext {
+			if let s = decl.as(StructDeclSyntax.self) {
+				return s.attributes.compactMap { ($0.as(AttributeSyntax.self)?.attributeName.trimmedDescription) }
+			}
+		}
+		return []
 	}
 
 	// - MARK: shared validation
@@ -245,6 +367,35 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			// keep descending: verbs can be nested inside other expressions
 			return .visitChildren
 		}
+	}
+
+	/// environment inference for a VERB-LESS boundary — the pure-coordinator
+	/// form: the group of self (when self is a nested group member or a
+	/// `@MDB_env_group` struct) plus every dotted parameter type. a body of
+	/// pure `#MDB_transacted` joins over one group is inferred from the
+	/// boundary's own shape, so no `#stats` anchor is needed.
+	private static func inferredCoordinatorEnvironments(
+		enclosingType: String?,
+		enclosingAttributes: [String],
+		params: FunctionParameterClauseSyntax?
+	) -> [String] {
+		var names: [String] = []
+		var seen = Set<String>()
+		func add(_ n: String) {
+			if !seen.contains(n) { seen.insert(n); names.append(n) }
+		}
+		if let enclosingType {
+			if enclosingAttributes.contains("MDB_env_group") || enclosingType.contains(".") {
+				add(enclosingType)
+			}
+		}
+		if let params {
+			for p in params.parameters {
+				let t = p.type.trimmedDescription
+				if t.contains(".") { add(t) }
+			}
+		}
+		return names
 	}
 
 	// - MARK: the cursor closure's try-ability (DEBT item 4)
@@ -304,6 +455,26 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		return out
 	}
 
+	/// the generated runtime guard for multi-label shells: two labels resolving
+	/// to the SAME `Environment` instance would open two transactions on one
+	/// physical env — an LMDB writer-mutex HANG, not an error. the compile-time
+	/// group collapse is the primary fix; this net converts every residual
+	/// (e.g. a bare-named sibling-member parameter the macro cannot classify)
+	/// into a loud `LMDBError.duplicateEnvironment` before anything opens.
+	private static func runtimeDuplicateGuard(exprs: [String]) -> String {
+		guard exprs.count > 1 else { return "" }
+		let envList = "[" + exprs.map { "\($0).env" }.joined(separator: ", ") + "]"
+		var out = "    // one transaction per resolved environment — two labels resolving to the same\n"
+		out += "    // Environment INSTANCE would be a double-open (LMDB writer-mutex self-deadlock)\n"
+		out += "    let __mdb_envs: [Environment] = \(envList)\n"
+		out += "    for __mdb_i in 0..<__mdb_envs.count {\n"
+		out += "        for __mdb_j in (__mdb_i + 1)..<__mdb_envs.count {\n"
+		out += "            if __mdb_envs[__mdb_i] === __mdb_envs[__mdb_j] { throw LMDBError.duplicateEnvironment }\n"
+		out += "        }\n"
+		out += "    }"
+		return out
+	}
+
 	// - MARK: BodyMacro — the shell
 
 	static func expansion(
@@ -314,28 +485,21 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		let (fn, mode) = try validateMethod(declaration, node: node)
 		let body = fn.body?.statements ?? CodeBlockItemListSyntax([])
 
-		let envNames = inferredEnvironments(of: body)
+		var envNames = inferredEnvironments(of: body)
+		let enclosingType = MDB_transact_macro.enclosingTypeName(from: context)
+		if envNames.isEmpty {
+			// pure-coordinator form: the env set comes from the boundary's own
+			// shape (self's group, dotted params) — no #stats anchor needed
+			envNames = inferredCoordinatorEnvironments(
+				enclosingType: enclosingType,
+				enclosingAttributes: MDB_transact_macro.enclosingStructAttributes(from: context),
+				params: fn.signature.parameterClause
+			)
+		}
 		guard !envNames.isEmpty else { throw Failure.noVerbs }
 
-		let enclosingType = MDB_transact_macro.enclosingTypeName(from: context)
-		var resolutions: [(name: String, expr: String, label: String)] = []
-		for envName in envNames {
-			if MDB_transact_macro.instanceSourceCount(envName: envName, enclosingType: enclosingType, params: fn.signature.parameterClause) > 1 {
-				throw Failure.ambiguousEnvironment(envName)
-			}
-			guard let resolved = resolveInstance(envName: envName, enclosingType: enclosingType, params: fn.signature.parameterClause) else {
-				throw Failure.missingEnvironmentInstance(envName)
-			}
-			resolutions.append((name: envName, expr: resolved.expr, label: resolved.label))
-		// DEBT item 1: the join contract needs ONE canonical tx-label order. the
-		// joining boundary threads its transactions into the callee's sibling by
-		// label, and Swift requires call arguments in declaration order — so the
-		// shell/sibling/join must ALL order the tx labels the same way. first-
-		// appearance order (verb order) differs between two boundaries over the
-		// same environment SET, which silently broke cross-env joins. sort by
-		// environment type NAME everywhere.
-		resolutions.sort { $0.name < $1.name }
-		}
+		let resolution = try resolveEnvironments(envNames: envNames, enclosingType: enclosingType, params: fn.signature.parameterClause)
+		let resolutions = resolution.collapsed
 
 		let params = fn.signature.parameterClause.parameters
 		let name = fn.name.text
@@ -367,7 +531,12 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		let txMode = mode.modeExpr
 		let tryKw = isThrowing ? "try " : ""
 
+		let guardLines = runtimeDuplicateGuard(exprs: resolutions.map { $0.expr })
+
 		var items: [CodeBlockItemSyntax] = []
+		if !guardLines.isEmpty {
+			items.append(CodeBlockItemSyntax(stringLiteral: guardLines))
+		}
 		for r in resolutions {
 			items.append(CodeBlockItemSyntax(stringLiteral: "let \(r.label) = try Transaction<\(txMode)>(env: \(r.expr).env)"))
 		}
@@ -417,28 +586,24 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			return []   // the BODY role owns the diagnostics
 		}
 		let body = fn.body?.statements ?? CodeBlockItemListSyntax([])
-		let envNames = inferredEnvironments(of: body)
+		var envNames = inferredEnvironments(of: body)
+		let enclosingType = MDB_transact_macro.enclosingTypeName(from: context)
+		if envNames.isEmpty {
+			envNames = inferredCoordinatorEnvironments(
+				enclosingType: enclosingType,
+				enclosingAttributes: MDB_transact_macro.enclosingStructAttributes(from: context),
+				params: fn.signature.parameterClause
+			)
+		}
 		if envNames.isEmpty { return [] }
 
-		let enclosingType = MDB_transact_macro.enclosingTypeName(from: context)
-		var resolutions: [(name: String, expr: String, label: String)] = []
-		for envName in envNames {
-			if MDB_transact_macro.instanceSourceCount(envName: envName, enclosingType: enclosingType, params: fn.signature.parameterClause) > 1 {
-				return []   // the BODY role owns the diagnostic
-			}
-			guard let resolved = resolveInstance(envName: envName, enclosingType: enclosingType, params: fn.signature.parameterClause) else {
-				return []
-			}
-			resolutions.append((name: envName, expr: resolved.expr, label: resolved.label))
-		// DEBT item 1: the join contract needs ONE canonical tx-label order. the
-		// joining boundary threads its transactions into the callee's sibling by
-		// label, and Swift requires call arguments in declaration order — so the
-		// shell/sibling/join must ALL order the tx labels the same way. first-
-		// appearance order (verb order) differs between two boundaries over the
-		// same environment SET, which silently broke cross-env joins. sort by
-		// environment type NAME everywhere.
-		resolutions.sort { $0.name < $1.name }
+		let resolution: (collapsed: [(name: String, label: String, expr: String)], all: [(name: String, label: String, expr: String)])
+		do {
+			resolution = try resolveEnvironments(envNames: envNames, enclosingType: enclosingType, params: fn.signature.parameterClause)
+		} catch {
+			return []   // the BODY role owns the diagnostic
 		}
+		let resolutions = resolution.collapsed
 
 		// the sibling's parameters: the author's params + one `tx_<E>` each.
 		// `borrowing` is the v16-proven shape — the transaction flows in by
@@ -479,9 +644,11 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		if fn.signature.effectSpecifiers?.throwsClause != nil { effects += " throws" }
 		let ret = fn.signature.returnClause.map { " \($0.trimmedDescription)" } ?? ""
 
-		// lower the body: every verb xruns the tx-bearing op; every
+		// lower the body: every verb runs the tx-bearing op; every
 		// #MDB_transacted(...) marker joins this boundary's transactions
-		let rewriter = SiblingRewriter(resolutions: resolutions)
+		// (the rewriter's lookups carry EVERY env reference — the label
+		// collapse is only for the shell's transaction count)
+		let rewriter = SiblingRewriter(resolutions: resolution.all)
 		let rewritten = rewriter.visit(body)
 		let bodyText = rewritten.map { $0.trimmedDescription }.joined(separator: "\n")
 
@@ -492,12 +659,12 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 	// - MARK: the sibling-body rewriter
 
 	private final class SiblingRewriter: SyntaxRewriter {
-		let resolutions: [(name: String, expr: String, label: String)]
+		let resolutions: [(name: String, label: String, expr: String)]
 		// env label lookup by type name
 		private let labelBy: [String: String]
 		private let exprBy: [String: String]
 
-		init(resolutions: [(name: String, expr: String, label: String)]) {
+		init(resolutions: [(name: String, label: String, expr: String)]) {
 			self.resolutions = resolutions
 			self.labelBy = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.name, $0.label) })
 			self.exprBy = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.name, $0.expr) })
@@ -594,8 +761,8 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 		/// #MDB_transacted(callee(args)) -> callee(args, tx_<E>: tx_<E>, ...)
 		/// Design B: route into the callee's sibling with THIS boundary's
-		/// transactions. the callee must touch the same environment-type set —
-		/// the equal-env-set contract, enforced by the rewrite's labels.
+		/// transactions. the callee must touch the same environment-label set
+		/// — the equal-label-set contract, enforced by the rewrite's labels.
 		private func rewriteJoined(_ node: MacroExpansionExprSyntax) -> ExprSyntax? {
 			guard let call = node.arguments.first?.expression.as(FunctionCallExprSyntax.self) else { return nil }
 			var parts: [String] = []

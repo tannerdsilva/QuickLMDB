@@ -130,6 +130,32 @@ Generates a `static func open(at:mapHeadroom:)` that creates the directory as ne
 
 ``QuickLMDB/MDB_layout()`` on a struct owning N ``QuickLMDB/MDB_environment`` cores generates a single `open(at:mapHeadroom:)` — each core opens at `<base>/<property name>` and a fresh instance is assembled — plus a `mdb_core_names` inventory. no per-core factories, no statics, no baked path; every environment stays its own type and boundaries live on those types.
 
+### ``QuickLMDB/MDB_env_group(file:version:flags:maxReaders:maxDBs:mode:)`` — several cores over ONE physical file
+
+Several distinct subsystems (print queues, daemon metadata, wireguard state, logs) legitimately share one physical environment while remaining separate types. the boundary layer keys its transactions to the environment TYPE, so two such cores in one boundary meant two write transactions on one env — an LMDB writer-mutex **self-deadlock** (a hang, not an error). groups close the gap:
+
+```swift
+@MDB_env_group(file: "daemon.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 32)
+public struct DaemonEnv: Sendable {
+
+    @MDB_environment                    // nested = a member core
+    public struct DaemonDB: Sendable {
+        public let env: Environment
+        public let clients: Database.Strict<ClientPub, DaemonMeta>
+    }
+
+    public let daemon: DaemonDB          // the arranged members
+}
+
+let env = try DaemonEnv.open(at: dataDir)
+```
+
+the group opens the physical env ONCE (forcing `.noTLS`) and constructs every member core from the same ``QuickLMDB/Environment`` value, opening all member tables in one setup write-transaction. membership is positional (nesting): member cores carry no `file:` and generate no standalone `open(at:)`. generated surface: an `env:` accessor (the boundary shell opens its transactions from it), an `mdb_core_names` inventory, and ``QuickLMDB/MDB_environment`` conformance so the group is verb-addressable with chained keypaths (`\.member.table`).
+
+the transaction layer keys its `tx_<E>` labels to the GROUP: a boundary on a member core and a boundary on the group struct share one label space, and a boundary addressing TWO members opens ONE transaction — cross-member writes are atomic and the double-write deadlock is structurally unreachable. a verb-less boundary attached to a group struct (or member) whose body holds only ``QuickLMDB/MDB_transacted(_:)`` joins infers its environment from the boundary's own shape — the coordinator form with no `#stats` anchor. multi-environment shells additionally refuse (``QuickLMDB/LMDBError-swift.enum/duplicateEnvironment``) any two labels that resolve to the same ``QuickLMDB/Environment`` instance — the compile-time collapse is primary; the runtime check makes every residual an error, never a hang.
+
+two *groups* claiming one file are tolerated by the current LMDB build (fcntl locks are per-process) and are not detectable without ambient state — one group per physical file is the consumer's contract.
+
 ### Self-scoped committed reads
 
 Verification reads ("what is the last committed state") carry no transaction ceremony. ``QuickLMDB/MDB_db`` protocol-extension members `readCommitted(key:)`, `containsCommitted(key:)`, and (on dupsort databases) `readCommittedDups(key:)` each open their own read-only transaction, perform the read, and close it internally. they are deliberately NOT boundary verbs — a verb's contract is boundary participation, the opposite of a self-scoped verification read — so they are members, not macros.

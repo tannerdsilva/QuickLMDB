@@ -1,5 +1,57 @@
 # Unreleased
 
+- **`@MDB_env_group(file:version:flags:maxReaders:maxDBs:mode:)`** — the
+  SHARED-PHYSICAL-ENVIRONMENT layer (feature): one physical LMDB file = one
+  type. the group struct's stored instance properties are its member cores —
+  nested `@MDB_environment` structs — and the generated
+  `open(at:mapHeadroom:)` opens the physical env ONCE (forcing `.noTLS`) and
+  constructs every member core from the same `Environment` value, opening all
+  member tables in one setup write-transaction. generated surface: `env:`
+  accessor (the boundary shell opens its transactions from it), an
+  `mdb_core_names` inventory, and `MDB_environment` conformance so the group
+  is itself verb-addressable with keypaths chained through members
+  (`\.member.table`). membership is POSITIONAL (nesting), so the boundary
+  macros read it from the type spelling (`DaemonEnv.DaemonDB`) with no runtime
+  registry. table names must be unique across members (they share one env).
+- **group-keyed transactions** (fix — the multi-environment composition gap):
+  `@MDB_transact` keys its `tx_<E>` labels to the GROUP, not the member type.
+  a boundary on a member core and a boundary on the group struct share one
+  label space; a boundary addressing TWO members opens exactly ONE transaction
+  on the shared env, so the double-write self-deadlock (a hang, not an error)
+  is structurally unreachable. cross-member write sets are atomic (a thrown
+  mid-boundary failure rolls back every member), joined member boundaries are
+  atomic with the caller, and `.readOnly` boundaries read every member through
+  one snapshot.
+- **verb-less coordinator form** (feature): a boundary attached to a
+  `@MDB_env_group` struct (or to a group member) whose body holds only
+  `#MDB_transacted` joins infers its environment set from the boundary's own
+  shape — no artificial `#stats` anchor for the group case.
+- **runtime double-open guard** (safety net): multi-environment shells refuse
+  (`LMDBError.duplicateEnvironment`, new error case) any two tx labels that
+  resolve to the SAME `Environment` instance. the compile-time group collapse
+  is the primary defense; this net converts every residual (e.g. a bare-named
+  sibling-member parameter the macro cannot classify) into a loud error
+  instead of a writer-mutex hang.
+- **`@MDB_environment` member-core variant**: a struct NESTED inside an
+  `@MDB_env_group` is a member core — it carries no `file:`/`version:`/env
+  tuning (the group owns the environment) and generates no standalone
+  `open(at:)`. the `file:` argument is now OPTIONAL on the declaration; a bare
+  standalone core still diagnoses `missingFileArg` (same friendly error, now
+  from the macro instead of the compiler).
+- **documented engine reality**: two DISTINCT env handles on one file (two
+  group types claiming one file) are TOLERATED by the current LMDB build
+  (fcntl locks are per-process) — the macro cannot see across declarations and
+  a runtime registry would violate the zero-ambient doctrine, so this remains
+  the consumer's responsibility (declare one group per physical file). pinned
+  as an engine-tolerance test so a future LMDB behavior change surfaces.
+- **new coverage**: `SharedEnvironmentMultiCoreTests` (one-open guarantee,
+  cross-member atomic write/abort/one-snapshot read, member-attached sibling
+  boundary, joined sibling atomicity, in-struct group coordinator, mixed
+  same-group + distinct-env exception-atomicity, two-groups-on-one-file
+  tolerance pin) plus byte-exact group expansion fixtures and group-boundary
+  fixtures (group label collapse, verb-less coordinator, mixed-label guard).
+  the existing multi-env suite (distinct files) is unchanged and green.
+
 - **the transaction layer is now the typed-environment dialect** (breaking).
   every environment is its own `@MDB_environment` type, and transaction
   boundaries are INSTANCE methods on those types. there is no transaction

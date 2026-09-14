@@ -34,6 +34,15 @@ import SwiftDiagnostics
 // contract: the struct's stored properties must be exactly `env` plus `Database.X` tables.
 // plain `Database` (raw MDB_val) tables are supported.
 //
+// GROUP MEMBER variant: a struct NESTED inside a `@MDB_env_group` struct is a
+// member of that group. it declares NO standalone `file:` (the group owns the
+// physical file), carries no env-tuning attributes (flags/readers/dbs/mode
+// live on the group), and generates NO `open(at:)` — the group's generated
+// open constructs every member from the single shared `Environment` and one
+// setup write-transaction. membership is positional (nesting), so the member
+// macro detects it from its lexical context; the group macro validates the
+// arrangement.
+//
 // per-table configuration: a `@MDB_table(name:flags:)` attribute on a table
 // property is consumed here — an explicit table-name override and extra
 // creation flags the declared type cannot express (the typed subtype and its
@@ -51,9 +60,10 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			""")]
 	}
 
-	private enum MacroError:Swift.Error, CustomStringConvertible {
+	enum MacroError:Swift.Error, CustomStringConvertible {
 		case notAStruct
 		case missingEnv
+		case memberSchemaOnly
 		case missingFileArg
 		case invalidTableName(String)
 		case duplicateTableName(String)
@@ -65,6 +75,8 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 					return "@MDB_environment can only be applied to a struct"
 				case .missingEnv:
 					return "@MDB_environment requires the struct to have a stored property named `env` of type `Environment`"
+				case .memberSchemaOnly:
+					return "@MDB_environment inside a @MDB_env_group is a MEMBER CORE: it cannot carry a `file:`/`version:`/`flags:`/`maxReaders:`/`maxDBs:`/`mode:` — the group owns the physical environment and its tuning"
 				case .missingFileArg:
 					return "@MDB_environment requires a `file:` argument naming the environment file (e.g. @MDB_environment(file: \"store.mdb\"))"
 				case .invalidTableName(let name):
@@ -77,7 +89,10 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		}
 	}
 
-	private struct ResolvedTable {
+	// a resolved `Database.X` table on a core: property name, effective LMDB
+	// table name (property name unless @MDB_table overrides), the declared
+	// type, and any extra creation flags/payload cases for validation.
+	internal struct ResolvedTable {
 		let property:String              // the stored property name (local + Self init label)
 		var name:String                  // the resolved LMDB table name (property name unless overridden)
 		var nameIsExpression:Bool        // true when `name:` was a referenced expression (evaluated at runtime, not spliced as a literal)
@@ -86,43 +101,28 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		var flagCases:Set<String> // member-case names for conflict validation
 	}
 
-	static func expansion(of node:AttributeSyntax, providingMembersOf declaration:some DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some MacroExpansionContext) throws -> [DeclSyntax] {
-		guard let structDecl = declaration.as(StructDeclSyntax.self) else {
-			throw MacroError.notAStruct
-		}
-
-		// -- attribute arguments
-		var fileArg:String? = nil
-		var flagsArg = "[.noSubDir]"
-		var maxReadersArg = "32"
-		var maxDBsArg = "8"
-		var modeArg = "[.ownerReadWriteExecute, .groupRead, .otherRead]"
-		var versionArg:String? = nil   // nil = the version attribute was NOT written (legacy exact file name)
-		if let argList = node.arguments?.as(LabeledExprListSyntax.self) {
-			for arg in argList {
-				guard let label = arg.label?.text else {
-					continue
-				}
-				let value = arg.expression.trimmedDescription
-				switch label {
-					case "file": fileArg = value
-					case "version": versionArg = value
-					case "flags": flagsArg = value
-					case "maxReaders": maxReadersArg = value
-					case "maxDBs": maxDBsArg = value
-					case "mode": modeArg = value
-					default: break
-				}
+	// whether a struct's lexical context contains an ancestor `@MDB_env_group`
+	// struct — the positional marker that this core is a GROUP MEMBER (its
+	// physical env is opened once, by the group).
+	internal static func isGroupMember(in context: some MacroExpansionContext) -> Bool {
+		for decl in context.lexicalContext {
+			if let s = decl.as(StructDeclSyntax.self) {
+				if s.attributes.contains(where: { attr in
+					(attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription) == "MDB_env_group"
+				}) { return true }
 			}
 		}
-		guard let fileArg, fileArg.isEmpty == false else {
-			throw MacroError.missingFileArg
-		}
+		return false
+	}
 
-		// -- scan stored properties: env + tables (consuming @MDB_table)
+	// scans a core's stored properties for the `env` handle + `Database.X`
+	// tables (consuming `@MDB_table`), with the shared table resolution. the
+	// standalone macro AND the group macro (which opens member tables from the
+	// nested declarations) both use this — one resolution, not two.
+	internal static func scanCore(_ decl: StructDeclSyntax) throws -> (hasEnv: Bool, tables: [ResolvedTable]) {
 		var hasEnv = false
 		var tables:[ResolvedTable] = []
-		for member in structDecl.memberBlock.members {
+		for member in decl.memberBlock.members {
 			guard let prop = member.decl.as(VariableDeclSyntax.self) else {
 				continue
 			}
@@ -151,23 +151,65 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 				tables.append(try resolveTable(propertyName:propName, typeText:typeText, attributes:prop.attributes))
 			}
 		}
+		return (hasEnv, tables)
+	}
+
+	static func expansion(of node:AttributeSyntax, providingMembersOf declaration:some DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some MacroExpansionContext) throws -> [DeclSyntax] {
+		guard let structDecl = declaration.as(StructDeclSyntax.self) else {
+			throw MacroError.notAStruct
+		}
+
+		let isMember = MDB_environment_macro.isGroupMember(in: context)
+
+		// -- attribute arguments
+		var fileArg:String? = nil
+		var flagsArg = "[.noSubDir]"
+		var maxReadersArg = "32"
+		var maxDBsArg = "8"
+		var modeArg = "[.ownerReadWriteExecute, .groupRead, .otherRead]"
+		var versionArg:String? = nil   // nil = the version attribute was NOT written (legacy exact file name)
+		var anyEnvTuningArg = false
+		if let argList = node.arguments?.as(LabeledExprListSyntax.self) {
+			for arg in argList {
+				guard let label = arg.label?.text else {
+					continue
+				}
+				let value = arg.expression.trimmedDescription
+				switch label {
+					case "file": fileArg = value
+					case "version": versionArg = value
+					case "flags": flagsArg = value; anyEnvTuningArg = true
+					case "maxReaders": maxReadersArg = value; anyEnvTuningArg = true
+					case "maxDBs": maxDBsArg = value; anyEnvTuningArg = true
+					case "mode": modeArg = value; anyEnvTuningArg = true
+					default: break
+				}
+			}
+		}
+
+		// -- scan stored properties: env + tables (consuming @MDB_table)
+		let (hasEnv, tables) = try scanCore(structDecl)
 		guard hasEnv else {
 			throw MacroError.missingEnv
 		}
 
-		// -- validated schema invariants (the "no missed opportunities" surface)
-		var resolvedNames:Set<String> = []
-		for table in tables {
-			if resolvedNames.contains(table.name) {
-				throw MacroError.duplicateTableName(table.name)
+		if isMember {
+			// a group member is schema-only: no standalone file (the group
+			// owns the physical env), no env tuning (lives on the group), and
+			// no `open(at:)` (the group's open constructs the member). the
+			// member still validates its own tables below (name validity and
+			// flag-vs-type conflicts).
+			if fileArg != nil || versionArg != nil || anyEnvTuningArg {
+				throw MacroError.memberSchemaOnly
 			}
-			resolvedNames.insert(table.name)
-			// dup-sort flags on a non-dup typed handle contradict the declared type
-			if table.type.contains("Strict") && !table.flagCases.isDisjoint(with:["dupSort", "dupFixed"]) {
-				let badFlag = table.flagCases.contains("dupSort") ? "dupSort" : "dupFixed"
-				throw MacroError.flagTypeConflict(table.property, badFlag)
-			}
+			try validateTableNames(tables)
+			return []
 		}
+
+		guard let fileArg, fileArg.isEmpty == false else {
+			throw MacroError.missingFileArg
+		}
+		try validateTableNames(tables)
 
 		// -- build the open(at:) factory
 		var lines:[String] = []
@@ -208,12 +250,30 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		return lines.map { DeclSyntax(stringLiteral: $0) }
 	}
 
+	// shared validation of the resolved table set: unique names (within this
+	// scan's core) + dup-sort flags on a non-dup typed handle contradict the
+	// declared type.
+	internal static func validateTableNames(_ tables: [ResolvedTable]) throws {
+		var resolvedNames:Set<String> = []
+		for table in tables {
+			if resolvedNames.contains(table.name) {
+				throw MacroError.duplicateTableName(table.name)
+			}
+			resolvedNames.insert(table.name)
+			// dup-sort flags on a non-dup typed handle contradict the declared type
+			if table.type.contains("Strict") && !table.flagCases.isDisjoint(with:["dupSort", "dupFixed"]) {
+				let badFlag = table.flagCases.contains("dupSort") ? "dupSort" : "dupFixed"
+				throw MacroError.flagTypeConflict(table.property, badFlag)
+			}
+		}
+	}
+
 	// -- @MDB_table consumption
 
 	/// the table's effective schema: derived defaults when no attribute present
 	/// (name = property name, no extra flags); the explicit `name:`/`flags:`
 	/// overrides plus their validation otherwise.
-	private static func resolveTable(propertyName:String, typeText:String, attributes:AttributeListSyntax) throws -> ResolvedTable {
+	internal static func resolveTable(propertyName:String, typeText:String, attributes:AttributeListSyntax) throws -> ResolvedTable {
 		guard let attrList = attributes.first(where: { attr in
 			(attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription) == "MDB_table"
 		}), let attr = attrList.as(AttributeSyntax.self) else {

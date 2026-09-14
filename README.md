@@ -72,6 +72,63 @@ extension ClubCalendarCore {
 
 one transaction per referenced environment, all aborted on any body throw (nothing lands), write members committed back-to-back. **honest ceiling:** cross-environment commits are best-effort — a crash between the adjacent commit calls can still split the pair. cross-env atomicity is impossible. (within ONE environment, joined writes are fully atomic — the single transaction.)
 
+## Environment groups — several cores over ONE physical file
+
+A common real shape is several *distinct subsystems* over a **single** physical environment — print queues, daemon metadata, wireguard state, logs — which are legitimately separate types, not a god object. The boundary layer keys transactions to the core **type**, so a boundary touching two such cores would open two write transactions on one env: an LMDB writer-mutex **self-deadlock** (a hang, not an error). Nothing in the type system could see it.
+
+Environment groups make shared-file cores a first-class, type-checked fact:
+
+```swift
+@MDB_env_group(file: "daemon.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 32)
+public struct DaemonEnv: Sendable {
+
+    @MDB_environment                 // nested = a member core: no file:, no standalone open
+    public struct DaemonDB: Sendable {
+        public let env: Environment
+        public let clients: Database.Strict<ClientPub, DaemonMeta>
+    }
+
+    @MDB_environment
+    public struct WireguardDatabase: Sendable {
+        public let env: Environment
+        public let clientPub: Database.Strict<ClientPub, WireguardState>
+    }
+
+    public let daemon: DaemonDB       // the arranged members
+    public let wireguard: WireguardDatabase
+}
+
+let env = try DaemonEnv.open(at: dataDir)   // ONE env handle, one setup write-txn
+```
+
+- **one physical env = one type.** `@MDB_env_group` opens the environment once and constructs every member core from the *same* `Environment` value — the generated `open(at:)` creates every member's tables in one setup write-transaction. table names are unique across members (they share one file).
+- **transactions key to the GROUP.** a boundary addressing two members emits **one** `tx_DaemonEnv` — the double-write deadlock is structurally unreachable. a thrown mid-boundary failure rolls back every member; `.readOnly` boundaries read every member through one snapshot.
+- **single-member boundaries are unchanged** — a boundary on `DaemonDB` that only touches its own tables (its `#store(DaemonDB.self, …)` calls) is exactly today's code, opening one transaction on the shared env.
+
+```swift
+extension DaemonEnv {
+    @MDB_transact(.readWrite)
+    public func registerClient(_ pub: ClientPub, _ key: ClientPub) throws {   // ONE transaction
+        try #store(DaemonEnv.self, database: \.daemon.clients, key: key, value: .init())
+        try #store(DaemonEnv.self, database: \.wireguard.clientPub, key: key, value: pub)
+    }
+
+    @MDB_transact(.readWrite)         // verb-less coordinator: inferable from self
+    public func registerAndLog(_ pub: ClientPub, _ key: ClientPub) throws {
+        try #MDB_transacted(daemon.addClient(key, pub))   // both joins share the one group tx
+        try #MDB_transacted(wireguard.putPub(key, pub))
+    }
+}
+```
+
+a boundary **on a member** can join its siblings the same way — reference the sibling by its qualified type (`WireguardDatabase.self`) and take it as a typed parameter; both collapse to the group transaction. mixing a same-group pair *and* a distinct-env core in one boundary keeps today's exception-atomic semantics across the distinct env.
+
+contracts and limits, stated out loud:
+
+- membership is **positional** (nesting): a nested `@MDB_environment` struct is a group member by construction, carries no `file:`/env-tuning (the group owns them), and generates no standalone `open(at:)`.
+- two *groups* claiming one file (two distinct `Environment` handles) are tolerated by the current LMDB build — fcntl locks are per-process, not per-handle — and are not detectable without ambient state (against the zero-ambient doctrine). one group per physical file is the consumer's contract.
+- the generated shell refuses (`LMDBError.duplicateEnvironment`) any two labels that resolve to the *same* `Environment` instance — the compile-time collapse is the primary defense; this net turns every residual into an error instead of a hang.
+
 ## Transaction relationships
 
 - **joined** (via `#MDB_transacted`) — the callee runs on the caller's transaction: reads see the boundary's own uncommitted state; writes are atomic with the boundary.
