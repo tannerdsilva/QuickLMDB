@@ -356,6 +356,26 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 	// - MARK: BodyMacro — the shell
 
+	/// the author's arguments by their original labels for a sibling/body
+	/// call. INOUT parameters must be re-prefixed with `&` — the callee takes
+	/// them by reference and the caller owns the storage.
+	private static func callArgsText(parameters: FunctionParameterClauseSyntax?) -> [String] {
+		guard let parameters else { return [] }
+		var callArgs: [String] = []
+		for p in parameters.parameters {
+			let isInout = p.type.trimmedDescription.hasPrefix("inout ")
+			let ampersand = isInout ? "&" : ""
+			if p.firstName.text == "_" {
+				callArgs.append("\(ampersand)\(p.secondName?.text ?? "")")
+			} else if let second = p.secondName {
+				callArgs.append("\(p.firstName.text): \(ampersand)\(second.text)")
+			} else {
+				callArgs.append("\(p.firstName.text): \(ampersand)\(p.firstName.text)")
+			}
+		}
+		return callArgs
+	}
+
 	static func expansion(
 		of node: AttributeSyntax,
 		providingBodyFor declaration: some DeclSyntaxProtocol & WithOptionalCodeBlockSyntax,
@@ -370,27 +390,13 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 
 		let resolutions = try resolveEnvironments(envNames: envNames, enclosingType: enclosingType, params: fn.signature.parameterClause)
 
-		let params = fn.signature.parameterClause.parameters
 		let name = fn.name.text
 		let isThrowing = fn.signature.effectSpecifiers?.throwsClause != nil
 		let retText = fn.signature.returnClause?.type.trimmedDescription
 
 		// the shell's call into the sibling: the author's arguments by their
 		// original labels, then one `tx_<E>: tx_<E>` per inferred environment.
-		// INOUT parameters must be re-prefixed with `&` — the sibling takes
-		// them by reference and the caller owns the storage.
-		var callArgs: [String] = []
-		for p in params {
-			let isInout = p.type.trimmedDescription.hasPrefix("inout ")
-			let ampersand = isInout ? "&" : ""
-			if p.firstName.text == "_" {
-				callArgs.append("\(ampersand)\(p.secondName?.text ?? "")")
-			} else if let second = p.secondName {
-				callArgs.append("\(p.firstName.text): \(ampersand)\(second.text)")
-			} else {
-				callArgs.append("\(p.firstName.text): \(ampersand)\(p.firstName.text)")
-			}
-		}
+		var callArgs = MDB_transact_macro.callArgsText(parameters: fn.signature.parameterClause)
 		for r in resolutions { callArgs.append("\(r.label): \(r.label)") }
 		// qualify with `self.` — the typed verb macros (#store/#load/...)
 		// shadow bare same-named member calls in this scope
@@ -464,14 +470,14 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		// the sibling's parameters: the author's params + one `tx_<E>` each.
 		// `borrowing` is the v16-proven shape — the transaction flows in by
 		// explicit borrow (never captured); the CALLER owns the lifecycle.
-		var paramStrs: [String] = []
+		var authorParams: [String] = []
 		for p in fn.signature.parameterClause.parameters {
 			var s = p.trimmedDescription
 			if s.hasSuffix(",") { s = String(s.dropLast()) }
-			paramStrs.append(s)
+			authorParams.append(s)
 		}
 		let txParamType = mode.isReadWrite ? "Transaction<Write>" : "Transaction<M>"
-		for r in resolutions { paramStrs.append("\(r.label): borrowing \(txParamType)") }
+		let paramStrs = authorParams + resolutions.map { "\($0.label): borrowing \(txParamType)" }
 
 		let modifiers = fn.modifiers.trimmedDescription
 		var startAttrs = ""
@@ -507,22 +513,161 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		let rewritten = rewriter.visit(body)
 		let bodyText = rewritten.map { $0.trimmedDescription }.joined(separator: "\n")
 
-		let decl = "\(modifierPrefix)func \(name)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(bodyText)\n}"
-		return [DeclSyntax(stringLiteral: decl)]
+		let flatDecl = "\(modifierPrefix)func \(name)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(bodyText)\n}"
+
+		// the CHILD variant — the peer'd `_child` entry the join rewrite routes
+		// into. a WRITE variant opens one child transaction per environment
+		// label (of the tx it was handed — a root at top level, or an outer
+		// join's child), runs the body DIRECTLY INLINE against the child txns
+		// (no closure wrapper), commits each child (folds into the parent) or
+		// aborts them (selective rollback when the caller catches). the
+		// authored `return` statements are re-pointed to a labeled exit
+		// (`__mdb_output = …` + `break childWrapped`) so every path lands AFTER
+		// the commits. a READ variant is byte-identical to flat — the join
+		// site cannot classify read-vs-write, so reads carry the flat twin.
+		let childName = name + "_child"
+		let childDecl: String
+		if mode.isReadWrite {
+			let override = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.label, "__child_" + $0.label) })
+			let childRewriter = SiblingRewriter(resolutions: resolutions, txOverride: override)
+			let childBodyText = childRewriter.visit(body).map { $0.trimmedDescription }.joined(separator: "\n")
+			let retType = fn.signature.returnClause?.type.trimmedDescription
+			let hasReturns = MDB_transact_macro.bodyHasReturns(of: body)
+			let abortLines = resolutions.map { "    __child_\($0.label).abort()" }.joined(separator: "\n")
+			let commitLines = resolutions.map { "    try __child_\($0.label).commit()" }.joined(separator: "\n")
+			var childLines: [String] = []
+			for r in resolutions {
+				childLines.append("    let __child_\(r.label) = try Transaction<Write>(env: \(r.expr).env, parent: \(r.label))")
+			}
+			if let retType {
+				childLines.append("    let __mdb_output: \(retType)")
+				if hasReturns {
+					// lower the body first (verbs + inner joins), THEN re-point
+					// its returns to the labeled exit
+					let lowered = childRewriter.visit(body)
+					let reroute = ChildReturnRewriter(assignTo: "__mdb_output", label: "childWrapped").visit(lowered)
+					let reroutedText = reroute.map { $0.trimmedDescription }.joined(separator: "\n")
+					childLines.append("    childWrapped: do {")
+					childLines.append("        \(reroutedText)")
+					childLines.append("    } catch let error {")
+					childLines.append(abortLines)
+					childLines.append("        throw error")
+					childLines.append("    }")
+				} else {
+					childLines.append("    do {")
+					childLines.append("        __mdb_output = \(childBodyText)")
+					childLines.append("    } catch let error {")
+					childLines.append(abortLines)
+					childLines.append("        throw error")
+					childLines.append("    }")
+				}
+				childLines.append(commitLines)
+				childLines.append("    return __mdb_output")
+			} else if hasReturns {
+				let lowered = childRewriter.visit(body)
+				let reroute = ChildReturnRewriter(assignTo: nil, label: "childWrapped").visit(lowered)
+				let reroutedText = reroute.map { $0.trimmedDescription }.joined(separator: "\n")
+				childLines.append("    childWrapped: do {")
+				childLines.append("        \(reroutedText)")
+				childLines.append("    } catch let error {")
+				childLines.append(abortLines)
+				childLines.append("        throw error")
+				childLines.append("    }")
+				childLines.append(commitLines)
+			} else {
+				childLines.append("    do {")
+				childLines.append("        \(childBodyText)")
+				childLines.append("    } catch let error {")
+				childLines.append(abortLines)
+				childLines.append("        throw error")
+				childLines.append("    }")
+				childLines.append(commitLines)
+			}
+			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(childLines.joined(separator: "\n"))\n}"
+		} else {
+			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(bodyText)\n}"
+		}
+		return [DeclSyntax(stringLiteral: flatDecl), DeclSyntax(stringLiteral: childDecl)]
 	}
 
 	// - MARK: the sibling-body rewriter
+
+	/// whether the authored body contains a RETURN outside any closure (a
+	/// closure's `return` belongs to the closure and must not be re-pointed).
+	private static func bodyHasReturns(of body: CodeBlockItemListSyntax) -> Bool {
+		let scanner = ReturnScanner()
+		scanner.walk(body)
+		return scanner.found
+	}
+
+	private final class ReturnScanner: SyntaxVisitor {
+		var found = false
+		init() {
+			super.init(viewMode: .sourceAccurate)
+		}
+		override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+			.skipChildren
+		}
+		override func visit(_ node: ReturnStmtSyntax) -> SyntaxVisitorContinueKind {
+			found = true
+			return .skipChildren
+		}
+	}
+
+	/// re-points authored `return` statements to a LABELED EXIT so a `_child`
+	/// variant can run the body INLINE and still close its child transactions
+	/// (commit/abort) before the boundary returns through `__mdb_output`:
+	/// - `return expr` → `__mdb_output = expr` + `break childWrapped`
+	/// - `return`      → `break childWrapped`
+	/// returns inside CLOSURES are the closure's own and are left untouched.
+	private final class ChildReturnRewriter: SyntaxRewriter {
+		private let assignTo: String?
+		private let label: String
+		init(assignTo: String?, label: String) {
+			self.assignTo = assignTo
+			self.label = label
+			super.init(viewMode: .sourceAccurate)
+		}
+		override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
+			ExprSyntax(node)
+		}
+		override func visit(_ node: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
+			var items: [CodeBlockItemSyntax] = []
+			for item in node {
+				if let ret = item.item.as(ReturnStmtSyntax.self) {
+					// constructed items carry NO trailing trivia — a
+					// CodeBlockItemList serializes elements back-to-back, so
+					// each replacement must end with its own newline
+					if let assignTo, let expr = ret.expression {
+						items.append(CodeBlockItemSyntax(stringLiteral: "\(assignTo) = \(expr.trimmedDescription)").with(\.trailingTrivia, .newline))
+					}
+					items.append(CodeBlockItemSyntax(stringLiteral: "break \(label)").with(\.trailingTrivia, .newline))
+				} else {
+					items.append(visit(item))
+				}
+			}
+			return CodeBlockItemListSyntax(items)
+		}
+	}
 
 	private final class SiblingRewriter: SyntaxRewriter {
 		let resolutions: [(name: String, label: String, expr: String)]
 		// env label lookup by type name
 		private let labelBy: [String: String]
 		private let exprBy: [String: String]
+		/// the tx EXPRESSION for a label — the child variant substitutes its
+		/// own child local (`__child_<label>`); flat bodies keep the label.
+		private let txOverride: [String: String]
 
-		init(resolutions: [(name: String, label: String, expr: String)]) {
+		init(resolutions: [(name: String, label: String, expr: String)], txOverride: [String: String] = [:]) {
 			self.resolutions = resolutions
 			self.labelBy = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.name, $0.label) })
 			self.exprBy = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.name, $0.expr) })
+			self.txOverride = txOverride
+		}
+
+		private func txExpr(for label: String) -> String {
+			txOverride[label] ?? label
 		}
 
 		override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
@@ -566,20 +711,21 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				  let expr = exprBy[envName],
 				  let keyPath = MDB_transact_macro.verbDatabaseKeyPathText(node) else { return nil }
 			let receiver = "\(expr)[keyPath: \(keyPath)]"
+			let txText = txExpr(for: label)
 			switch node.macroName.text {
 			case "store":
 				let value = arg(node, "value")?.expression.trimmedDescription ?? ""
 				let flags = arg(node, "flags").map { ", flags: \($0.expression.trimmedDescription)" } ?? ""
-				return ExprSyntax(stringLiteral: "\(receiver).store(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), value: \(value)\(flags), tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).store(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), value: \(value)\(flags), tx: \(txText))")
 			case "load":
-				return ExprSyntax(stringLiteral: "\(receiver).load(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).load(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(txText))")
 			case "delete":
 				if let value = arg(node, "value") {
-					return ExprSyntax(stringLiteral: "\(receiver).delete(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), value: \(value.expression.trimmedDescription), tx: \(label))")
+					return ExprSyntax(stringLiteral: "\(receiver).delete(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), value: \(value.expression.trimmedDescription), tx: \(txText))")
 				}
-				return ExprSyntax(stringLiteral: "\(receiver).delete(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).delete(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(txText))")
 			case "contains":
-				return ExprSyntax(stringLiteral: "\(receiver).contains(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).contains(key: \(arg(node, "key")?.expression.trimmedDescription ?? ""), tx: \(txText))")
 			case "cursor":
 				// the trailing closure is the final argument. the emitted call
 				// must never require a CONDITIONAL `try`: the handler type is
@@ -593,7 +739,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				// non-throwing (`Never`) path, so consumers who omit `try` on
 				// pure closures keep compiling.
 				guard let closure = node.trailingClosure else {
-					return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(label)")
+					return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(txText)")
 				}
 				let closureText: String
 				if (authoredTry || closure.description.contains("#if")),
@@ -602,22 +748,25 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				} else {
 					closureText = closure.trimmedDescription
 				}
-				return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(label)) \(closureText)")
+				return ExprSyntax(stringLiteral: "\(receiver).cursor(tx: \(txText)) \(closureText)")
 			case "clear":
-				return ExprSyntax(stringLiteral: "\(receiver).deleteAllEntries(tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).deleteAllEntries(tx: \(txText))")
 			case "stats":
-				return ExprSyntax(stringLiteral: "\(receiver).dbStatistics(tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).dbStatistics(tx: \(txText))")
 			case "drop":
-				return ExprSyntax(stringLiteral: "\(receiver).deleteDatabase(tx: \(label))")
+				return ExprSyntax(stringLiteral: "\(receiver).deleteDatabase(tx: \(txText))")
 			default:
 				return nil
 			}
 		}
 
-		/// #MDB_transacted(callee(args)) -> callee(args, tx_<E>: tx_<E>, ...)
-		/// Design B: route into the callee's sibling with THIS boundary's
-		/// transactions. the callee must touch the same environment-label set
-		/// — the equal-label-set contract, enforced by the rewrite's labels.
+		/// #MDB_transacted(callee(args)) -> callee_child(args, tx_<E>: tx_<E>)
+		/// Design B: route into the callee's `_child` sibling — a child
+		/// transaction of this boundary's CURRENT tx per environment (the `tx`
+		/// values here are the ones this boundary holds, which at depth are
+		/// themselves children). the `_child` suffix selects the child variant;
+		/// the callee must touch the same environment-label set — the
+		/// equal-label-set contract, enforced by the rewrite's labels.
 		private func rewriteJoined(_ node: MacroExpansionExprSyntax) -> ExprSyntax? {
 			guard let call = node.arguments.first?.expression.as(FunctionCallExprSyntax.self) else { return nil }
 			var parts: [String] = []
@@ -626,7 +775,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				if s.hasSuffix(",") { s = String(s.dropLast()) }
 				parts.append(s)
 			}
-			for r in resolutions { parts.append("\(r.label): \(r.label)") }
+			for r in resolutions { parts.append("\(r.label): \(txExpr(for: r.label))") }
 			// qualify bare callees with `self.` — the typed verb macros shadow
 			// bare same-named member calls in this scope
 			let calleeText: String
@@ -635,7 +784,18 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			} else {
 				calleeText = call.calledExpression.trimmedDescription
 			}
-			var text = "\(calleeText)(\(parts.joined(separator: ", ")))"
+			// route into the peer'd `_child` variant: splice the suffix onto
+			// the METHOD name (before any trailing generic clause — never onto
+			// a dotted type prefix)
+			let childCallee: String
+			if let lt = calleeText.firstIndex(of: "<"),
+				let lastDot = calleeText.lastIndex(of: "."),
+				lt > lastDot {
+				childCallee = String(calleeText[..<lt]) + "_child" + String(calleeText[lt...])
+			} else {
+				childCallee = calleeText + "_child"
+			}
+			var text = "\(childCallee)(\(parts.joined(separator: ", ")))"
 			// a trailing closure may attach to the INNER call or to the marker
 			// itself — preserve whichever the parser placed
 			if let trailing = call.trailingClosure {

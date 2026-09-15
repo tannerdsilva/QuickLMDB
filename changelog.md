@@ -1,5 +1,27 @@
 # Unreleased
 
+- **`#MDB_transacted(...)` composes by CHILD TRANSACTION** (breaking, Design B
+  re-lift). a joined call runs in a child transaction of the caller's current
+  tx per environment — it sees the caller's uncommitted state; on success it
+  FOLDS into the caller (nothing durable until the caller commits); on failure
+  it aborts ONLY the child — a catching caller keeps its prior writes
+  (selective rollback); an uncaught join failure still aborts the whole
+  boundary (atomicity preserved). joins nest as child-of-child at arbitrary
+  depth; multi-environment joins spawn one child per environment. the channel
+  is the peer'd `<name>_child` sibling (`@attached(peer, names: overloaded,
+  suffixed(_child))`), with the body run INLINE and authored `return`s
+  re-pointed to a labeled exit so every path closes the child before the
+  boundary returns. bare same-env write-in-write stays a compile-time error
+  pointing at the marker (see the lint entry). breaking only for code that
+  observes composed-write failure granularity from inside a `catch`.
+- **`Transaction<Write>.init(env:parent:)`** (engine API): opens a CHILD
+  transaction of a WRITE parent on the same environment — sees the parent's
+  uncommitted writes; `commit()` folds into the parent (not durable until the
+  parent commits); `abort()` discards only the child. the underlying LMDB
+  build does not guard close-order, so closing every child before its parent
+  is a caller contract (the macro's `_child` variants enforce it by
+  construction).
+
 - **write-composition lint** (hardening): `@MDB_environment` emits a
   compile-time error when a boundary body bare-calls a same-type
   `@MDB_transact(.readWrite)` boundary — the spell that opens a SECOND root

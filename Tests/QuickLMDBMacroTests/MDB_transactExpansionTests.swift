@@ -278,6 +278,10 @@ struct BoundaryHardeningExpansionTests {
 			    func readCal<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
 			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
 			    }
+
+			    func readCal_child<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
+			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
+			    }
 			}
 			"""
 		)
@@ -312,6 +316,17 @@ struct BoundaryHardeningExpansionTests {
 
 			    func writeCal(_ key: Key, _ value: Value, tx_Core: borrowing Transaction<Write>) throws {
 			        try self[keyPath: \\.primary].store(key: key, value: value, tx: tx_Core)
+			    }
+
+			    func writeCal_child(_ key: Key, _ value: Value, tx_Core: borrowing Transaction<Write>) throws {
+			        let __child_tx_Core = try Transaction<Write>(env: self.env, parent: tx_Core)
+			        do {
+			            try self[keyPath: \\.primary].store(key: key, value: value, tx: __child_tx_Core)
+			        } catch let error {
+			        __child_tx_Core.abort()
+			            throw error
+			        }
+			        try __child_tx_Core.commit()
 			    }
 			}
 			"""
@@ -354,7 +369,13 @@ struct BoundaryHardeningExpansionTests {
 			    }
 
 			    func overview<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> (Value?, Value?) {
-			        let a = try self.readCal(key, tx_Core: tx_Core)
+			        let a = try self.readCal_child(key, tx_Core: tx_Core)
+			        let b = self[keyPath: \\.primary].load(key: key, tx: tx_Core)
+			        return (a, b)
+			    }
+
+			    func overview_child<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> (Value?, Value?) {
+			        let a = try self.readCal_child(key, tx_Core: tx_Core)
 			        let b = self[keyPath: \\.primary].load(key: key, tx: tx_Core)
 			        return (a, b)
 			    }
@@ -372,6 +393,10 @@ struct BoundaryHardeningExpansionTests {
 			    }
 
 			    func readCal<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
+			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
+			    }
+
+			    func readCal_child<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
 			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
 			    }
 			}
@@ -417,6 +442,21 @@ struct BoundaryHardeningExpansionTests {
 			    func sync(_ k: Key, _ v: Value, other: OtherCore, tx_Core: borrowing Transaction<Write>, tx_OtherCore: borrowing Transaction<Write>) throws {
 			        try self[keyPath: \\.primary].store(key: k, value: v, tx: tx_Core)
 			        try other[keyPath: \\.secondary].store(key: k, value: v, tx: tx_OtherCore)
+			    }
+
+			    func sync_child(_ k: Key, _ v: Value, other: OtherCore, tx_Core: borrowing Transaction<Write>, tx_OtherCore: borrowing Transaction<Write>) throws {
+			        let __child_tx_Core = try Transaction<Write>(env: self.env, parent: tx_Core)
+			        let __child_tx_OtherCore = try Transaction<Write>(env: other.env, parent: tx_OtherCore)
+			        do {
+			            try self[keyPath: \\.primary].store(key: k, value: v, tx: __child_tx_Core)
+			            try other[keyPath: \\.secondary].store(key: k, value: v, tx: __child_tx_OtherCore)
+			        } catch let error {
+			        __child_tx_Core.abort()
+			        __child_tx_OtherCore.abort()
+			            throw error
+			        }
+			        try __child_tx_Core.commit()
+			        try __child_tx_OtherCore.commit()
 			    }
 			}
 			struct OtherCore {
@@ -466,6 +506,10 @@ struct BoundaryHardeningExpansionTests {
 			    func readCal<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
 			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
 			    }
+
+			    func readCal_child<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
+			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
+			    }
 			}
 			"""
 		)
@@ -507,7 +551,14 @@ struct BoundaryHardeningExpansionTests {
 			    }
 
 			    func overview<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
-			        let x = try self.cursorRead(key, tx_Core: tx_Core) { _ in
+			        let x = try self.cursorRead_child(key, tx_Core: tx_Core) { _ in
+			        }
+			        let y = self[keyPath: \\.primary].load(key: key, tx: tx_Core)
+			        return y
+			    }
+
+			    func overview_child<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
+			        let x = try self.cursorRead_child(key, tx_Core: tx_Core) { _ in
 			        }
 			        let y = self[keyPath: \\.primary].load(key: key, tx: tx_Core)
 			        return y
@@ -526,6 +577,10 @@ struct BoundaryHardeningExpansionTests {
 			    }
 
 			    func cursorRead<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
+			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
+			    }
+
+			    func cursorRead_child<M: TransactionMode>(_ key: Key, tx_Core: borrowing Transaction<M>) throws -> Value? {
 			        self[keyPath: \\.primary].load(key: key, tx: tx_Core)
 			    }
 			}
@@ -561,11 +616,24 @@ struct BoundaryHardeningExpansionTests {
 			        }
 			        try tx_Core.commit()
 			    }
-			
+
 			    @discardableResult func domainMake(name: Key, subnet: Key, tx_Core: borrowing Transaction<Write>) throws {
 			        guard try self[keyPath: \\.primary].contains(key: subnet, tx: tx_Core) == false else {
 			            throw TestError.bad
 			        }
+			    }
+
+			    @discardableResult func domainMake_child(name: Key, subnet: Key, tx_Core: borrowing Transaction<Write>) throws {
+			        let __child_tx_Core = try Transaction<Write>(env: self.env, parent: tx_Core)
+			        do {
+			            guard try self[keyPath: \\.primary].contains(key: subnet, tx: __child_tx_Core) == false else {
+			                throw TestError.bad
+			            }
+			        } catch let error {
+			        __child_tx_Core.abort()
+			            throw error
+			        }
+			        try __child_tx_Core.commit()
 			    }
 			}
 			"""
@@ -613,8 +681,14 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    return 0
+			                }
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
 			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
 			                    return 0
 			                }
@@ -657,8 +731,17 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    #if LOG
+			                    c.trace()
+			                    #endif
+			                    return 0
+			                }
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
 			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
 			                    #if LOG
 			                    c.trace()
@@ -702,8 +785,17 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        self[keyPath: \\.primary].cursor(tx: tx_Core) { c in
+			                    for (k, v) in c {
+			                        _ = (k, v)
+			                    }
+			                }
+			        return 0
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
 			        self[keyPath: \\.primary].cursor(tx: tx_Core) { c in
 			                    for (k, v) in c {
 			                        _ = (k, v)
@@ -750,8 +842,18 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    #if LOG
+			                    c.trace()
+			                    #endif
+			                    return 0
+			                }
+			        return 0
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
 			        self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
 			                    #if LOG
 			                    c.trace()
@@ -795,8 +897,14 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> [Int] {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws -> Int in
+			                    return c.count
+			                }
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> [Int] {
 			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws -> Int in
 			                    return c.count
 			                }
@@ -837,8 +945,17 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { (c) throws in
+			                    if true {
+			                        return 1
+			                    }
+			                    return 0
+			                }
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
 			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { (c) throws in
 			                    if true {
 			                        return 1
@@ -886,8 +1003,19 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
+			        var total = 0
+			        try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
+			                    total += 1
+			                    #if LOG
+			                    c.trace()
+			                    #endif
+			                }
+			        return total
+			    }
+
+			    func scan_child<M: TransactionMode>(tx_Core: borrowing Transaction<M>) throws -> Int {
 			        var total = 0
 			        try self[keyPath: \\.primary].cursor(tx: tx_Core) { c throws in
 			                    total += 1
@@ -936,8 +1064,15 @@ struct CursorTryExpansionTests {
 			        tx_Core.abort()
 			        return __mdb_output
 			    }
-			
+
 			    func scan<M: TransactionMode>(owner: Owner, tx_Core: borrowing Transaction<M>) throws -> Int {
+			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { [weak owner] c throws in
+			                    _ = owner
+			                    return 0
+			                }
+			    }
+
+			    func scan_child<M: TransactionMode>(owner: Owner, tx_Core: borrowing Transaction<M>) throws -> Int {
 			        return try self[keyPath: \\.primary].cursor(tx: tx_Core) { [weak owner] c throws in
 			                    _ = owner
 			                    return 0

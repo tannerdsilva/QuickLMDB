@@ -65,7 +65,7 @@ struct WriteCompositionLintTests {
 			}
 			""")
 		#expect(diags == [
-			"calling write boundary 'post' from inside a write boundary opens a SECOND root write on this environment and deadlocks LMDB's writer mutex — compose with try #MDB_transacted(post(...)) so the callee joins this boundary's transaction"
+			"calling write boundary 'post' from inside a write boundary opens a SECOND root write on this environment and deadlocks LMDB's writer mutex — compose with try #MDB_transacted(post(...)) so the callee runs as a child transaction of this boundary"
 		])
 	}
 

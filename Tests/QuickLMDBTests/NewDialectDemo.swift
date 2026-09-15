@@ -116,7 +116,9 @@ public struct ClubCalendar: Sendable {
 	public func scheduleAndMarkSyncThrowing(_ event: EventID, on day: DayKey, contact: ContactID, at timestamp: Timestamp, contacts: ClubContacts) throws {
 		try #store(ClubCalendar.self, database: \.events, key: day, value: event)
 		try #store(ClubContacts.self, database: \.lastSync, key: contact, value: timestamp)
-		throw ClubDemoError.syncFailed
+		// the timestamp-0 write is the FAILING sentinel (a boundary must be
+		// well-formed — conditionally throwing — or its composed path is dead)
+		if timestamp == Timestamp(RAW_native: 0) { throw ClubDemoError.syncFailed }
 	}
 }
 
@@ -220,7 +222,7 @@ struct NewDialectDemo {
 		let event = EventID(RAW_native: 800)
 
 		#expect(throws: ClubDemoError.self) {
-			try calendar.scheduleAndMarkSyncThrowing(event, on: day, contact: ContactID(RAW_native: 11), at: Timestamp(RAW_native: 8_000), contacts: contacts)
+			try calendar.scheduleAndMarkSyncThrowing(event, on: day, contact: ContactID(RAW_native: 11), at: Timestamp(RAW_native: 0), contacts: contacts)
 		}
 		#expect(try calendar.eventOn(day) == nil, "the calendar write must be rolled back with the failed contacts write")
 		#expect(try contacts.lastSync(ContactID(RAW_native: 11)) == nil)

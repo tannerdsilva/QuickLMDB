@@ -87,10 +87,17 @@ public struct Transaction<M: TransactionMode>: ~Copyable {
 
 extension Transaction where M == Write {
 
-	/// creates a CHILD transaction of `parent`. the engine permits one active
-	/// child per parent; a child commit merges into the parent. children are
+	/// creates a CHILD transaction of `parent` (a WRITE parent on the SAME
+	/// environment). the child sees the parent's uncommitted writes;
+	/// `commit()` FOLDS the child into the parent (nothing is durable until
+	/// the parent commits); `abort()` discards only the child. children are
 	/// write-capable only (read children are engine-invalid), so this
 	/// initializer exists exclusively on ``Transaction``/``Write``.
+	///
+	/// NOTE: the underlying LMDB build does NOT guard close-order — closing a
+	/// parent while a child is open silently succeeds — so ordering (every
+	/// child closed before its parent) is a caller contract. `@MDB_transact`'s
+	/// `_child` variants enforce it by construction.
 	@available(*, noasync)
 	public init(env:borrowing Environment, parent:borrowing Transaction<Write>) throws(LMDBError) {
 		var startHandle:OpaquePointer? = nil

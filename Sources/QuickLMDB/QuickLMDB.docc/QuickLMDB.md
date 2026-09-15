@@ -106,21 +106,22 @@ try booking.addBooking(key, record)
 let record = try booking.slotOn(day)
 ```
 
-- **modes** (``QuickLMDB/MDB_transact_mode``): `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. child/relationship composition is NOT a mode — composition is joining (below).
+- **modes** (``QuickLMDB/MDB_transact_mode``): `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. child/relationship composition is NOT a mode — composition is joining (below), and a join is a CHILD transaction.
 - **the environment set is inferred from the verbs.** every environment type a verb references must be `self` (the boundary is attached to that environment type) or a typed parameter of the method — a multi-environment boundary takes the other environments as typed parameters.
 - the typed verbs used **outside** a boundary, and ``MDB_transacted(_:)`` written anywhere but inside one, are compile-time diagnostics.
 - the annotated method must be an instance method, `throws` (the boundary can fail to open or close), and must not be `async`.
 - typing end to end: `#store(Booking.self, database: \.sheets, key:…, value:…)` type-checks `key`/`value` against the `Database.Strict<SlotKey, SlotRecord>` the keypath names.
 
-### Composition is JOINING
+### Composition is joining — and a join is a CHILD transaction
 
-`#MDB_transacted(callee(args))` is rewritten into the callee's sibling with `tx_<E>` threading — the callee JOINS this boundary's transaction instead of opening its own:
+`#MDB_transacted(callee(args))` is rewritten onto the callee's peer'd `_child` variant, which opens a CHILD transaction of *this* boundary's current transaction per environment (a root at top level, or an outer join's child — joins nest to arbitrary depth):
 
 - joined reads see this boundary's own uncommitted state (the "child view");
-- joined writes land in ONE transaction — **atomic by construction** (a thrown joined write rolls back the whole boundary);
+- a joined write **folds into the boundary** on success (durable when the boundary commits) and, on failure, **aborts only the child** — a catching caller keeps its prior writes (selective rollback); an uncaught join failure still aborts the whole boundary (atomicity preserved);
+- multi-environment joins spawn one child per environment (the equal-env-set contract below still gates which callees may be joined);
 - a *sibling* read — the last committed state, independent of this boundary — is a plain call (`slotOn(day)` on its own instance opens its own read transaction);
-- the equal-env-set contract: the rewrite passes the caller's full tx label set, so the callee's sibling must reference the same environment-type set (a single-env callee called from a multi-env boundary does not compile — loud and named at the call site).
-- a bare call to a write boundary inside a live boundary also root-scopes (opens its own transaction) — composition is spelled with the join marker.
+- the equal-env-set contract: the rewrite passes the caller's full tx label set, so the callee must reference the same environment-type set (a single-env callee called from a multi-env boundary does not compile — loud and named at the call site);
+- a bare call to a write boundary inside a live boundary is a compile-time error (the `@MDB_environment` write-composition lint) — it would root-scope a SECOND write on a live writer; composition is spelled with the join marker.
 
 ### ``QuickLMDB/MDB_environment(file:flags:maxReaders:maxDBs:mode:)`` — schema assembly
 

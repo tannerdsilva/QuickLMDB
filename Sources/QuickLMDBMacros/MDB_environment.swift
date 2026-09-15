@@ -322,7 +322,7 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			if callerIsReadOnly {
 				findings.append((node, "calling write boundary '\(name)' from a read-only boundary cannot compose — a read transaction cannot host a write. make this boundary read-write, or call '\(name)' outside the boundary"))
 			} else {
-				findings.append((node, "calling write boundary '\(name)' from inside a write boundary opens a SECOND root write on this environment and deadlocks LMDB's writer mutex — compose with try #MDB_transacted(\(name)(...)) so the callee joins this boundary's transaction"))
+				findings.append((node, "calling write boundary '\(name)' from inside a write boundary opens a SECOND root write on this environment and deadlocks LMDB's writer mutex — compose with try #MDB_transacted(\(name)(...)) so the callee runs as a child transaction of this boundary"))
 			}
 			return .visitChildren
 		}

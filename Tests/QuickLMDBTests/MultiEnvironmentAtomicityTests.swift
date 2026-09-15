@@ -84,7 +84,9 @@ extension LedgerA {
 	func writeBothFailing(_ key: TestKey, _ value: TestValue, to other: LedgerB) throws {
 		try #store(LedgerA.self, database: \.entries, key: key, value: value)
 		try #store(LedgerB.self, database: \.entries, key: key, value: value)
-		throw TestError.simulatedFailure
+		// the value-0 write is the FAILING sentinel (a boundary must be
+		// well-formed — conditionally throwing — or its composed path is dead)
+		if value == TestValue(RAW_native: 0) { throw TestError.simulatedFailure }
 	}
 }
 
@@ -110,7 +112,7 @@ struct MultiEnvironmentAtomicityTests {
 	@Test func multiEnvShellAbortLeavesBothEnvironmentsUntouched() throws {
 		let (a, b) = try freshPair()
 		let key = TestKey(RAW_native: 2)
-		let value = TestValue(RAW_native: 200)
+		let value = TestValue(RAW_native: 0)   // the failing sentinel
 		#expect(throws: TestError.self) {
 			try a.writeBothFailing(key, value, to: b)
 		}

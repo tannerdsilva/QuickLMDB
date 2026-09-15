@@ -55,7 +55,9 @@ public struct LeafPortCore: Sendable {
 	@MDB_transact(.readWrite)
 	public func writeCalThrowing(_ key: TestKey, _ value: TestValue) throws {
 		try #store(LeafPortCore.self, database: \.primary, key: key, value: value)
-		throw LeafPortError.badWrite
+		// the value-0 write is the FAILING sentinel (a boundary must be
+		// well-formed — conditionally throwing — or its composed path is dead)
+		if value == TestValue(RAW_native: 0) { throw LeafPortError.badWrite }
 	}
 }
 
@@ -127,7 +129,7 @@ struct LeafBoundaryPortTests {
 		// the joined write throws AFTER writing its own key; the boundary's
 		// single transaction aborts, so NEITHER write is durable
 		#expect(throws: LeafPortError.self) {
-			try core.writePairThrowing(k1, TestValue(RAW_native: 9), k2, TestValue(RAW_native: 10))
+			try core.writePairThrowing(k1, TestValue(RAW_native: 9), k2, TestValue(RAW_native: 0))
 		}
 		#expect(try core.readCal(k1) == nil)
 		#expect(try core.readCal(k2) == nil)

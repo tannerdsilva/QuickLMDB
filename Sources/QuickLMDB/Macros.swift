@@ -135,18 +135,25 @@ internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", t
 ///   composition is spelled ``MDB_transacted(_:)`` — always.
 ///
 /// the mode is ``MDB_transact_mode`` — `.readOnly` (never commits) and
-/// `.readWrite` (commits on success). `.readWriteChild` is not a mode:
-/// Design-B joining already composes calls into ONE transaction.
+/// `.readWrite` (commits on success). `.readWriteChild` is not a mode: a
+/// write-within-a-write is composed as a CHILD transaction of the current one
+/// via ``MDB_transacted(_:)`` (folds on success, aborts alone on failure),
+/// never as a second root write.
 @attached(body)
-@attached(peer, names: overloaded)
+@attached(peer, names: overloaded, suffixed(_child))
 public macro MDB_transact(_ mode: MDB_transact_mode) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_transact_macro")
 
 /// the call marker for ``MDB_transact(_:)``-wrapped functions (Design B).
-/// inside a boundary the call is rewritten onto the callee's SIBLING,
-/// threading this boundary's transactions — the callee joins the boundary
-/// (one transaction across the composed call, atomic for writes; joined reads
-/// see this boundary's own uncommitted state). the callee must reference the
-/// SAME environment-type set — the equal-env-set contract, enforced by the
+/// inside a boundary the call is rewritten onto the callee's peer'd `_child`
+/// variant, which opens a CHILD transaction of this boundary's CURRENT
+/// transaction per environment: joined reads see the boundary's own
+/// uncommitted state; a joined write FOLDS into the boundary on success
+/// (durable when the boundary commits) and, on failure, aborts ONLY the child
+/// — a catching caller keeps its prior writes (selective rollback); an
+/// uncaught join failure still aborts the whole boundary (atomic). joins
+/// nest as child-of-child at arbitrary depth; multi-environment joins spawn
+/// one child per environment. the callee must reference the SAME
+/// environment-type set — the equal-env-set contract, enforced by the
 /// rewrite's labels. written anywhere else, this is a compile-time
 /// diagnostic.
 @freestanding(expression)
