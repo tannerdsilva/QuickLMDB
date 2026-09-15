@@ -1,5 +1,16 @@
 # Unreleased
 
+- **read-twin redirect + committed-read doctrine** (generated-surface + API
+  refinement). a READ boundary's `_child` variant is now a THIN REDIRECT to
+  its flat sibling (a joined read threads the caller's transaction; LMDB has
+  no read-only children — pinned `MDB_BAD_TXN` — so reads never spawn a child
+  and a `.readOnly` boundary is a composition LEAF). the demo and docs teach
+  committed-only validation via the verb-less `readCommitted(key:)` instead
+  of a bare boundary call at depth. the invariance itself (children are
+  ALWAYS write-capable; one active child per parent; parent-quiescent while a
+  child is active) is pinned by a raw interop probe and stated positively in
+  the engine + macro docs.
+
 - **`#MDB_transacted(...)` composes by CHILD TRANSACTION** (breaking, Design B
   re-lift). a joined call runs in a child transaction of the caller's current
   tx per environment — it sees the caller's uncommitted state; on success it

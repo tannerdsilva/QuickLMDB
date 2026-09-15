@@ -83,10 +83,13 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   boundary). the callee must reference the SAME environment-type set — the
   equal-env-set contract, enforced by the rewrite's labels. standalone use is
   a hard diagnostic.
-- two read modes inside a write boundary: `#MDB_transacted(eventOn(day))` =
-  JOINED (same transaction, sees this boundary's uncommitted state); a plain
-  `eventOn(day)` = SIBLING read (its shell opens a separate read txn,
-  committed-only — "validate against durable data").
+- two modes of reading inside a write boundary: `#MDB_transacted(eventOn(day))`
+  = JOINED — the callee's `_child` twin THREADS THIS boundary's transaction
+  directly (LMDB has no read-only children — pinned MDB_BAD_TXN — so reads
+  never spawn a child and a `.readOnly` boundary is a composition LEAF);
+  a plain `eventOn(day)` = SIBLING read (its shell opens a separate read txn,
+  committed-only — "validate against durable data"; simple key reads are the
+  verb-less `readCommitted(key:)`).
 - **the write-composition lint** lives in the `@MDB_environment` MEMBER macro,
   not the boundary roles — their lexicalContext is a memberless shell, so only
   the member role can classify same-type callees (verified under the real
@@ -94,6 +97,17 @@ instance methods. there is NO transaction vocabulary on the authored surface:
   a compile-time error (the second-root-write deadlock). `#MDB_transacted(...)`
   joins, sibling reads, cross-environment typed-parameter callees and plain
   methods are exempt. extension-declared boundaries are a documented residual.
+- the composition channel is the peer'd `<name>_child` SIBLING
+  (`@attached(peer, names: overloaded, suffixed(_child))`): `#MDB_transacted`
+  rewrites to `callee_child(...)`. a WRITE variant opens one child
+  transaction per env label (`Transaction<Write>(env:parent:)`) and runs the
+  body DIRECTLY INLINE against the child(s), with authored `return`s
+  re-pointed to a labeled exit (`__mdb_output = …` + `break childWrapped`). a
+  READ variant is a THIN REDIRECT to the flat sibling (`try self.readCal(…,
+  tx_…: tx_…)`) — never a duplicated body — because a joined read threads the
+  caller's transaction. LMDB children are ALWAYS write-capable (read-only
+  children rejected, pinned `MDB_BAD_TXN`; one active child per parent;
+  parent-quiescent-while-child-active per lmdb.h — honored by construction).
 - `@MDB_layout` — the multi-environment ARRANGEMENT helper (member macro,
   fixed names): opens N `@MDB_environment` types at `<base>/<name>` in one
   call (`open(at:mapHeadroom:)`) plus a `mdb_environment_names` inventory. no

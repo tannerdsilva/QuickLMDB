@@ -116,7 +116,7 @@ let record = try booking.slotOn(day)
 
 `#MDB_transacted(callee(args))` is rewritten onto the callee's peer'd `_child` variant, which opens a CHILD transaction of *this* boundary's current transaction per environment (a root at top level, or an outer join's child — joins nest to arbitrary depth):
 
-- joined reads see this boundary's own uncommitted state (the "child view");
+- joined reads see this boundary's own uncommitted state — by threading the caller's transaction directly (LMDB has no read-only children, pinned, so reads never spawn a child; a `.readOnly` boundary is a composition leaf);
 - a joined write **folds into the boundary** on success (durable when the boundary commits) and, on failure, **aborts only the child** — a catching caller keeps its prior writes (selective rollback); an uncaught join failure still aborts the whole boundary (atomicity preserved);
 - multi-environment joins spawn one child per environment (the equal-env-set contract below still gates which callees may be joined);
 - a *sibling* read — the last committed state, independent of this boundary — is a plain call (`slotOn(day)` on its own instance opens its own read transaction);

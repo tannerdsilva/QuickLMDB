@@ -94,12 +94,13 @@ public struct ClubCalendar: Sendable {
 		return try #MDB_transacted(eventOn(day))
 	}
 
-	// a bare call to a READ boundary inside this write boundary is a SIBLING
-	// read: eventOn's own shell opens a fresh root READ, seeing only the last
-	// COMMITTED state — the "validate against durable data" pattern
+	// committed-only validation: the SELF-SCOPED committed read opens its own
+	// read txn and closes it internally — no boundary call at depth (a bare
+	// boundary call here would be a sibling root read; readCommitted is the
+	// verb-less spelling for "what is the last committed state")
 	@MDB_transact(.readWrite)
 	public func validateThenBook(_ event: EventID, on day: DayKey) throws -> Bool {
-		guard try eventOn(day) == nil else { return false }
+		guard try self.events.readCommitted(key: day) == nil else { return false }
 		try #store(ClubCalendar.self, database: \.events, key: day, value: event)
 		return true
 	}
@@ -186,13 +187,14 @@ struct NewDialectDemo {
 		#expect(selfCheck == event, "the joined read must see the boundary's own uncommitted write")
 	}
 
-	@Test func siblingReadInsideWriteSeesCommittedOnly() throws {
+	@Test func committedValidationUsesTheSelfScopedRead() throws {
 		let calendar = try freshCalendar()
 		let day = DayKey(RAW_native: 6)
 		let event = EventID(RAW_native: 600)
-		// eventOn(day) bare is a root-scoped sibling read: its own read txn
-		// sees only committed data — so the validate passes, the write lands,
-		// and a second attempt refuses because the GATE sees committed
+		// the validation reads COMMITTED data through the self-scoped
+		// readCommitted (no bare boundary call at depth) — so the first
+		// booking lands, and a second attempt refuses because the committed
+		// read now sees the day occupied
 		#expect(try calendar.validateThenBook(event, on: day))
 		let again = try calendar.validateThenBook(EventID(RAW_native: 601), on: day)
 		#expect(!again)

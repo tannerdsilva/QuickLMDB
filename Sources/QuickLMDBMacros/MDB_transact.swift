@@ -585,7 +585,14 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			}
 			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(childLines.joined(separator: "\n"))\n}"
 		} else {
-			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(bodyText)\n}"
+			// a READ `_child` twin is a THIN REDIRECT to the flat sibling: a
+			// joined read threads THIS caller's transaction (it NEVER spawns a
+			// child — LMDB has no read-only children, pinned MDB_BAD_TXN), so
+			// the redirect is the entire body. no duplicated body per peer.
+			var redirectArgs = MDB_transact_macro.callArgsText(parameters: fn.signature.parameterClause)
+			for r in resolutions { redirectArgs.append("\(r.label): \(r.label)") }
+			let redirect = "    try self.\(name)(\(redirectArgs.joined(separator: ", ")))"
+			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(redirect)\n}"
 		}
 		return [DeclSyntax(stringLiteral: flatDecl), DeclSyntax(stringLiteral: childDecl)]
 	}

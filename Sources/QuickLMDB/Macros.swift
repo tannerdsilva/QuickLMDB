@@ -125,9 +125,17 @@ internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", t
 /// transactions per the declared mode and commits-or-aborts alone).
 ///
 /// THE JOIN / SIBLING ASYMMETRY — read this once:
+/// - a joined call (`MDB_transacted(_:)`) runs on THIS boundary's current
+///   transaction — a joined READ threads it directly (LMDB has no read-only
+///   children — pinned — so reads never spawn a child and a `.readOnly`
+///   boundary is a composition LEAF); a joined WRITE folds through a
+///   WRITE-scoped child of it (the only kind of child that exists). the
+///   distinction is about what the callee does, not the transaction kind.
 /// - a bare call to a `.readOnly` boundary inside a boundary is a SIBLING
 ///   read: its own shell opens a fresh READ transaction and sees the last
-///   committed state. deliberate, safe.
+///   committed state. deliberate, safe — and for simple key reads the
+///   verb-less ``QuickLMDB/MDB_db/readCommitted(key:)`` is the self-scoped
+///   spelling with no boundary call at all.
 /// - a bare call to a `.readWrite` boundary inside a boundary ROOT-SCOPES a
 ///   SECOND WRITE transaction — which BLOCKS on LMDB's per-environment
 ///   writer mutex until the outer boundary commits, and the outer boundary
@@ -146,8 +154,10 @@ public macro MDB_transact(_ mode: MDB_transact_mode) = #externalMacro(module:"Qu
 /// the call marker for ``MDB_transact(_:)``-wrapped functions (Design B).
 /// inside a boundary the call is rewritten onto the callee's peer'd `_child`
 /// variant, which opens a CHILD transaction of this boundary's CURRENT
-/// transaction per environment: joined reads see the boundary's own
-/// uncommitted state; a joined write FOLDS into the boundary on success
+/// transaction per environment: joined reads SEE the boundary's own
+/// uncommitted state — by threading the caller's transaction directly (LMDB
+/// has no read-only children, pinned, so reads never spawn a child); a
+/// joined write FOLDS into the boundary on success
 /// (durable when the boundary commits) and, on failure, aborts ONLY the child
 /// — a catching caller keeps its prior writes (selective rollback); an
 /// uncaught join failure still aborts the whole boundary (atomic). joins
