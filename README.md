@@ -84,6 +84,23 @@ All macros expand to plain calls through the existing public API (`Environment`,
 
 The raw `Transaction` surface stays public for code that deliberately manages its own transactions.
 
+## Reconcile stores over any transport — the `concord` product
+
+`concord` is a typed, transport-agnostic [negentropy](https://github.com/hoytech/negentropy) reconciliation engine over QuickLMDB. It brings two stores with the same fixed-size-byte-key schema into agreement: range fingerprints (24-byte blake2s over mmap key bytes) skip matching regions, mismatches split and recurse, and the resulting have/need diff moves values **as bytes** — never decoded, never re-encoded.
+
+Three protocols and one engine:
+
+- **`ConcordIndex`** — the store contract: streaming key walks, `fingerprint(of:_:)` / `fingerprintAndAdvance(begin:count:end:)`, and the byte-passthrough pair `loadBytes(_:)` (a borrowed view over the mmap — zero copies out) / `storeBytes(_:_:)` (a verbatim write — one copy in). `Value` is a phantom schema marker, never instantiated.
+- **`ConcordTransport`** — the networking contract. Typed `ConcordMessage` values in both directions; concord ships no wire format, no framing, no implementation.
+- **`ConcordSession`** — the pure synchronous engine (initiate / reconcile / split / have/need diff / data transfer), raising a typed `ConcordError` for every malformed input, trapping on nothing.
+
+The driver binds one long-lived `Transaction<Write>` for the whole round — the round is simultaneously the full snapshot and the writable view, which is what makes zero copies possible — opens the database, cursor, and `ConcordLMDBIndex` with it, runs `runRound()`, then commits. Two lifecycle facts the driver owns:
+
+- the index (and its cursor) must be **released before the transaction commits** — closing a cursor after its transaction closed reads freed memory and can trap;
+- a round holds the environment's **writer lock** for its duration — schedule rounds (off-peak, spaced) to bound the writer stall.
+
+See the `concord` module documentation for the driver pattern and the copy accounting.
+
 ## Versioning
 
 This library uses SemVer 2.0 for version tags.

@@ -11,6 +11,10 @@ let package = Package(
         .library(
             name: "QuickLMDB",
             targets: ["QuickLMDB"]
+        ),
+        .library(
+            name: "concord",
+            targets: ["concord"]
         )
     ],
     dependencies:[
@@ -36,6 +40,14 @@ let package = Package(
 				"QuickLMDBFunctionalInterop",
 			],
 		),
+		.target(
+			name:"concord",
+			dependencies:[
+				"QuickLMDB",
+				.product(name:"RAW", package:"rawdog"),
+				.product(name:"RAW_blake2", package:"rawdog"),
+			],
+		),
 		.macro(
 			name:"QuickLMDBMacros",
 			dependencies:[
@@ -49,6 +61,10 @@ let package = Package(
 		.testTarget(
 			name: "QuickLMDBTests",
 			dependencies: ["QuickLMDB"]
+		),
+		.testTarget(
+			name: "ConcordTests",
+			dependencies: ["concord"]
 		),
 		.testTarget(
 			name: "QuickLMDBFunctionalInteropTests",
