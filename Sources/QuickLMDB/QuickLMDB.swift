@@ -55,12 +55,12 @@ public enum Operation {
 		/// do not write the entry if the key already exists in the database. In this case, ``LMDBError/keyExists`` is thrown.
 		public static let noOverwrite = Flags(rawValue:UInt32(MDB_NOOVERWRITE))
 		
-		/// only for use with ``Database/Flags/dupSort``
-		/// - for ``Cursor/setEntry(value:forKey:flags:)``: don't write if the key and data pair already exist.
-		/// - for ``Cursor/deleteEntry(flags:)``: remove all duplicate data items from the database.
+		/// only for use with ``MDB_db_flags/dupSort``
+		/// - for ``MDB_cursor/setEntry(key:value:flags:tx:)``: don't write if the key and data pair already exist.
+		/// - for ``MDB_cursor/deleteCurrentEntry(flags:tx:)``: remove all duplicate data items from the database.
 		public static let noDupData = Flags(rawValue:UInt32(MDB_NODUPDATA))
 		
-		/// for ``Cursor/setEntry(value:forKey:flags:)``: overwrite the current key/value pair.
+		/// for ``MDB_cursor/setEntry(key:value:flags:tx:)``: overwrite the current key/value pair.
 		public static let current = Flags(rawValue:UInt32(MDB_CURRENT))
 	
 		/// pre-sorted keys are being stored in the database. don't split full pages.
@@ -69,7 +69,7 @@ public enum Operation {
 		/// pre-sorted key/value entires are being stored in the database. don't split full pages.
 		public static let appendDup = Flags(rawValue:UInt32(MDB_APPENDDUP))
 		
-		/// store multiple data items in one call. only for ``Database/Flags/dupFixed``.
+		/// store multiple data items in one call. only for ``MDB_db_flags/dupFixed``.
 		public static let multiple = Flags(rawValue:UInt32(MDB_MULTIPLE))
 	}
 	
@@ -77,7 +77,7 @@ public enum Operation {
 	/// position at first key/data item.
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case first
-	/// position at first data item of current key. Only use with ``Database/Flags/dupSort`` enabled.
+	/// position at first data item of current key. Only use with ``MDB_db_flags/dupSort`` enabled.
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case firstDup
 
@@ -103,17 +103,17 @@ public enum Operation {
 	// previous variants
 	/// position at previous data item.
 	case previous	
-	/// position at previous data item of current key. Only for ``Database/Flags/dupSort``.
+	/// position at previous data item of current key. Only for ``MDB_db_flags/dupSort``.
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case previousDup
 	/// position at last data item of previous key.
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case previousNoDup
 
-	/// position at key/data pair. Only use with ``Database/Flags/dupSort`` enabled.
+	/// position at key/data pair. Only use with ``MDB_db_flags/dupSort`` enabled.
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case getBoth
-	/// position at key, nearest data. Only use with ``Database/Flags/dupSort`` enabled.
+	/// position at key, nearest data. Only use with ``MDB_db_flags/dupSort`` enabled.
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case getBothRange
 	/// return the key/value entry at the cursor's current position.
@@ -130,9 +130,9 @@ public enum Operation {
 	/// - returned key and value will point to the buffer that is stored in the memory map.
 	case setRange
 
-	/// return key and up to a page of duplicate data items from the current cursor position. Move cursor to prepare for ``Cursor/Operation/nextMultiple``.
+	/// return key and up to a page of duplicate data items from the current cursor position. Move cursor to prepare for ``Operation/nextMultiple``.
 	case getMultiple
-	/// return key and up to a page of duplicate data items from next cursor position. Move cursor to prepare for the next ``Cursor/Operation/nextMultiple``.
+	/// return key and up to a page of duplicate data items from next cursor position. Move cursor to prepare for the next ``Operation/nextMultiple``.
 	case nextMultiple
 }
 
@@ -206,7 +206,7 @@ extension Operation:CustomDebugStringConvertible {
 }
 
 extension Operation {
-	/// initialize an operation with a specified ``MDB_cursor_op``.
+	/// initialize an operation with a specified `MDB_cursor_op`.
 	public init(mdbValue:MDB_cursor_op) {
 		switch mdbValue {
 			case MDB_FIRST:

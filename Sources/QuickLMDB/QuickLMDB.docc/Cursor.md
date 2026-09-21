@@ -1,111 +1,61 @@
 #  ``QuickLMDB/Cursor``
 
-Enables complex navigation and traversal of ``QuickLMDB/Database`` contents.
+An advanced traversal handle over a ``QuickLMDB/Database``: positional movement, duplicate-set navigation, and direct entry reads and writes. cursors are bound to the transaction they were created in.
 
 ## Creating a Cursor
 
-A ``Cursor`` can be created by calling ``QuickLMDB/Database/cursor(tx:)`` on a given ``QuickLMDB/Database`` object. This must be done under the existence of an active Transaction.
+A ``Cursor`` is created from a database handle through ``QuickLMDB/MDB_db/cursor(tx:_:)``, which scopes the cursor to a trailing closure:
 
 ```
-// Open a write transaction from your environment (mode lives in the type).
-let thisTransaction = try Transaction<Write>(env: someEnvironment)
-
-// Open a database with the transaction.
-let myDatabase = try someEnvironment.openDatabase(named:nil, flags: [], tx:thisTransaction)
-
-// Create a cursor from the database and transaction.
-let myCursor = try myDatabase.cursor(tx:thisTransaction)
-
-// Any interactions with the cursor should happen here.
-try thisTransaction.commit()
+// any interactions with the cursor should happen here, under an active transaction
+try database.cursor(tx: thisTransaction) { cursor in
+    // position, read, and write through the cursor
+}
 ```
 
-## Considerations
+the cursor type is paired with the database handle type: `Database` uses ``QuickLMDB/Cursor``; the typed handles use ``QuickLMDB/Cursor/Strict``, ``QuickLMDB/Cursor/DupSort``, and ``QuickLMDB/Cursor/DupFixed``.
 
-- Cursors have an exclusive relationship with the Transaction and Database in which they were created.
+## Zero-copy by default
 
-	- Cursors cannot exist outside of their associated Transaction.
-
-- Unlike ``QuickLMDB/Database``, ``QuickLMDB/Cursor`` does **NOT** integrate any decoding functionality.
-
-	- Lack of binary decoding (and requisite copying of data through the decoding process) allows for much higher performance in traversing a database.
-
-- ``QuickLMDB/Cursor`` faithfully returns `MDB_val` objects as provided from LMDB. No other types are returned.
-
-	- You are responsible for safely handling these `MDB_val` objects within their transactions. These values point to data directly in the memorymap.
-
-	- You are responsible for any deserialization that may need to be done with the returned values.
-
-		- ``MDB_decodable`` has been implemented for many of the base Foundation types to make decoding from raw `MDB_val`'s straightforward (with a single line of code).
-
-- QuickLMDB takes ``MDB_encodable`` objects as function arguments for keys and values.
-
-	- Cursor will also accept raw `MDB_val`'s as arguments for keys and values, since this type has been extended to conform to ``MDB_encodable``.
-
-- ``QuickLMDB/Cursor`` conveniently conforms to the `Sequence` protocol.
-
-	- Loops can be written with a single line of code.
+- ``QuickLMDB/Cursor`` (over a raw `Database`) returns `MDB_val` objects straight from the memory map — no copies, no decoding. you own the lifetime: those buffers are only valid while the cursor's transaction is alive.
+- the typed cursors (`Strict` / `DupSort` / `DupFixed`) decode entries into the database's Swift key/value types as they are returned — the `MDB_cursor_dbtype.MDB_db_key_type` / `MDB_db_val_type` the cursor is generic over.
+- cursors have an exclusive relationship with the transaction they were created in — they cannot outlive it, and they are the only way to navigate duplicate entries on `dupSort` / `dupFixed` tables.
 
 ## Looping Database Contents with Cursor
 
 ```
-// define a cursor for the sake of demonstration
-let thisCursor = try someDatabase.cursor(tx:currentTransaction)
-
-// this is a database loop
-for curKeyValueEntry in thisCursor {
-	// process each entry in the database here
+try database.cursor(tx: currentTransaction) { cursor in
+    for entry in cursor {
+        // each entry is the database's (key, value) pair type
+    }
 }
 ```
 
+``QuickLMDB/Cursor`` and its typed variants conform to `Sequence`, and ``QuickLMDB/DatabaseIterator`` / ``QuickLMDB/DatabaseDupIterator`` back the iteration.
+
+## Cursor operations
+
+the `op*` member family on ``QuickLMDB/MDB_cursor`` covers the LMDB cursor operations: first/last, next/previous (including the `*Dup` / `*NoDup` traversal forms), the `get*` read forms (`opGetCurrent`, `opGetBoth`, `opGetBothRange`), the `set*` seeking forms (`opSet`, `opSetKey`, `opSetRange`), and the `*Multiple` batch forms. write operations (`setEntry(key:value:flags:tx:)`, `deleteCurrentEntry(flags:tx:)`) require a write transaction.
+
 ## Topics
 
-### Storing Entries
+### Cursor types
 
-- ``Cursor/setEntry(value:forKey:flags:)``
+- ``QuickLMDB/Cursor/Strict``
+- ``QuickLMDB/Cursor/DupSort``
+- ``QuickLMDB/Cursor/DupFixed``
 
-### Retrieving Entries
+### The cursor protocol
 
-- ``Cursor/Operation``
+- ``QuickLMDB/MDB_cursor``
 
-- ``Cursor/getEntry(_:key:value:)``
+### Iteration
 
-- ``Cursor/getEntry(_:key:)``
+- ``QuickLMDB/DatabaseIterator``
+- ``QuickLMDB/DatabaseDupIterator``
+- ``QuickLMDB/Cursor/makeIterator()``
 
-- ``Cursor/getEntry(_:value:)``
+### Operation vocabulary
 
-- ``Cursor/getEntry(_:)``
-
-### Checking for Existence of Entries
-
-- ``Cursor/containsEntry(key:value:)``
-
-- ``Cursor/containsEntry(key:)``
-
-### Removing Entries
-
-- ``Cursor/deleteEntry(flags:)``
-
-### Comparing Values
-
-- ``Cursor/compareKeys(_:_:)``
-
-- ``Cursor/compareValues(_:_:)``
-
-### CLMDB Interoperability
-
-- ``Cursor/cursor_handle``
-
-- ``Cursor/txn_handle``
-
-- ``Cursor/db_handle``
-
-### Sequence Protocol
-
-- ``Cursor/makeIterator()``
-
-- ``Cursor/CursorIterator``
-
-- ``Cursor/Element``
-
-- ``Cursor/Iterator``
+- ``QuickLMDB/Operation``
+- ``QuickLMDB/Operation/Flags``

@@ -1,80 +1,73 @@
 # ``QuickLMDB/Database``
 
-Enables quick and convenient access to database entries.
+A typed handle to one LMDB database (a named table) inside an ``QuickLMDB/Environment``. `Database` itself is the raw, `MDB_val`-based handle; typed variants wrap it so keys and values flow through Swift types end to end.
 
-## Creating a Database
+## Opening a Database
 
-A ``Database`` can be created (or retrieved) by calling ``QuickLMDB/Environment/openDatabase(named:flags:tx:)``. This must be done under the existence of an active Transaction.
-
-Example:
+A ``Database`` handle is created inside a **write** transaction — creating a handle registers the database name (and any typed comparators) with the environment, which is a mutating operation:
 
 ```
 // open a write transaction (mode lives in the type)
 let someTransaction = try Transaction<Write>(env: someEnvironment)
 
 // open a database named "my database". specify flags as needed.
-let database = try someEnvironment.openDatabase(named: "my database", flags: [.create], tx: someTransaction)
+let database = try Database(env: someEnvironment, name: "my database", flags: [.create], tx: someTransaction)
 
 // any interactions with the database should happen here.
 try someTransaction.commit()
 ```
 
-## Considerations
+When you declare your schema with ``QuickLMDB/MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)``, every `Database.X` table is opened for you in the generated `open(at:)`'s setup write-transaction — no manual `Database.init(env:name:flags:tx:)` calls on the authored surface.
 
-- Databases can (and **should**) exist outside of the transactions in which they are first created.
+- ``QuickLMDB/Database/init(env:name:flags:tx:)`` — the raw handle initializer.
+- ``QuickLMDB/Database/Strict`` — a typed handle where both keys and values are ``QuickLMDB/MDB_convertible`` and keys are ``QuickLMDB/MDB_comparable`` (sorted).
+- ``QuickLMDB/Database/DupSort`` — a typed handle for `dupSort` tables: values share a key and are themselves sorted.
+- ``QuickLMDB/Database/DupFixed`` — a typed handle for `dupFixed` tables: keys and values are both fixed-size (`RAW_staticbuff`).
 
-- QuickLMDB is best used when all databases are opened in a single transaction and stored for later use.
+## Reading and writing entries
 
-- Database structures have a non-exclusive relationship with transactions within their environment.
+The typed companions are protocol-extension members of ``QuickLMDB/MDB_db``, so every handle inherits them:
 
-- Database is optimized for **quick and convenient** access to entries, rather than offering complete access to LMDB's complex features.
+- ``QuickLMDB/MDB_db/load(key:tx:)`` — read a value (nil when the key is absent); mode-generic, so write transactions read too.
+- ``QuickLMDB/MDB_db/store(key:value:flags:tx:)`` — write a value; requires a write transaction.
+- ``QuickLMDB/MDB_db/delete(key:tx:)`` and ``QuickLMDB/MDB_db_dupsort/delete(key:value:tx:)`` — remove an entry (or an exact key/value pairing on duplicate-bearing tables); require a write transaction.
+- ``QuickLMDB/MDB_db/contains(key:tx:)`` — key existence check; mode-generic.
+- ``QuickLMDB/MDB_db/readCommitted(key:)`` / ``QuickLMDB/MDB_db/containsCommitted(key:)`` — self-scoped verification reads that open their own short-lived read transaction (a committed-only view, no boundary ceremony).
 
-	- Database delivers entries in strictly deserialized form. This means that Database will use the `MDB_convertible` protocol to translate the raw memory from `MDB_val` structures into the specified Swift Type before they are returned.
+the raw ``Database`` handle additionally keeps the protocol's `loadEntry(key:as:tx:)` / `setEntry(...)` / `containsEntry(key:tx:)` surface for `consuming MDB_val` call sites.
+
+## Iterating with cursors
+
+``QuickLMDB/MDB_db/cursor(tx:_:)`` opens a cursor over the database for the duration of a trailing closure:
+
+```
+try database.cursor(tx: tx) { cursor in
+    // traverse the database here
+}
+```
+
+Each handle type pairs with a cursor type named the same way (`Cursor`, `Cursor.Strict<D>`, `Cursor.DupSort<D>`, `Cursor.DupFixed<D>`).
 
 ## Topics
 
-### Structures
+### Database handles
 
-- ``Database/Flags``
+- ``QuickLMDB/Database/init(env:name:flags:tx:)``
+- ``QuickLMDB/Database/Strict``
+- ``QuickLMDB/Database/DupSort``
+- ``QuickLMDB/Database/DupFixed``
 
-- ``Database/Statistics``
+### The protocol surface
 
-### Instance Properties
+- ``QuickLMDB/MDB_db``
 
-- ``Database/db_handle``
+### Typed companions
 
-- ``Database/env_handle``
-
-- ``Database/name``
-
-### Creating a cursor
-
-- ``Database/cursor(tx:)``
-
-### Retrieving Entries & Info
-
-- ``Database/getEntry(type:forKey:tx:)``
-
-- ``Database/getFlags(tx:)``
-
-- ``Database/getStatistics(tx:)``
-
-- ``Database/containsEntry(key:tx:)``
-
-### Setting Entries
-
-- ``Database/setEntry(value:forKey:flags:tx:)``
-
-### Deleting Entries
-
-- ``Database/deleteEntry(key:tx:)``
-
-- ``Database/deleteEntry(key:value:tx:)``
-
-- ``Database/deleteAllEntries(tx:)``
-
-### Managing Database
-
-- ``Database/closeDatabase()``
-
-- ``Database/deleteDatabase(tx:)``
+- ``QuickLMDB/MDB_db/load(key:tx:)``
+- ``QuickLMDB/MDB_db/store(key:value:flags:tx:)``
+- ``QuickLMDB/MDB_db/delete(key:tx:)``
+- ``QuickLMDB/MDB_db_dupsort/delete(key:value:tx:)``
+- ``QuickLMDB/MDB_db/contains(key:tx:)``
+- ``QuickLMDB/MDB_db/readCommitted(key:)``
+- ``QuickLMDB/MDB_db/containsCommitted(key:)``
+- ``QuickLMDB/MDB_db/cursor(tx:_:)``

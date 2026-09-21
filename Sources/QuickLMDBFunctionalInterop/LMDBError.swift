@@ -63,8 +63,8 @@ public enum LMDBError:Error {
 	case mapResized
 	
 	/// Operation and database incompatible, or database type changed. This can mean...
-	/// - The operation expects an ``QuickLMDB/Database/Flags/dupSort``/``QuickLMDB/Database/Flags/dupFixed`` database.
-	/// - Opening a named database when the unnamed database has ``QuickLMDB/Database/Flags/dupSort`` / ``QuickLMDB/Database/Flags/integerKey``
+	/// - The operation expects an `MDB_db_flags.dupSort`/`MDB_db_flags.dupFixed` database.
+	/// - Opening a named database when the unnamed database has `MDB_db_flags.dupSort` / `MDB_db_flags.integerKey`
 	/// - Accessing a data entry as a database, or vice versa.
 	/// - The database was dropped and recreated with different flags.
 	case incompatible
@@ -75,7 +75,7 @@ public enum LMDBError:Error {
 	/// Transaction must abort, has a child, or is invalid
 	case badTransaction
 	
-	/// Unsupported size of the key/db name/data, or wrong ``QuickLMDB/Database/Flags/dupFixed`` size
+	/// Unsupported size of the key/db name/data, or wrong `MDB_db_flags.dupFixed` size
 	case badValueSize
 	
 	/// The specified database was changed unexpectedly

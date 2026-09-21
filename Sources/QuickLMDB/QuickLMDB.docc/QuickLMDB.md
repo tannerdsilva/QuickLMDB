@@ -79,7 +79,7 @@ QuickLMDB has reasonable default behavior when managing the lifecycle of ``Quick
 QuickLMDB organizes the transaction layer into **method boundaries** with no ambient state of any kind (no task-local, no thread-local, no registry). every environment is its own ``QuickLMDB/MDB_environment`` TYPE, and a boundary is an INSTANCE method on that type. the authored surface carries no transaction vocabulary:
 
 - ``QuickLMDB/MDB_transact(_:)`` — attached body + peer. the environment set is INFERRED from the typed verb calls in the body; the method becomes a SHELL (opens/closes its own transactions) and the peer emits an INVISIBLE sibling carrying the tx parameters.
-- the **typed verb family** — ``QuickLMDB/store(_:database:key:value:flags:)``, ``QuickLMDB/load(_:database:key:)``, ``QuickLMDB/delete(_:database:key:)``, ``QuickLMDB/contains(_:database:key:)``, ``QuickLMDB/cursor(_:database:_:)``, plus ``QuickLMDB/clear(_:database:)``, ``QuickLMDB/stats(_:database:)``, ``QuickLMDB/drop(_:database:)`` — the exact database operations, where the first argument is the environment TYPE and `database:` is a ``KeyPath`` to a `Database.X` handle (key/value/return types bind through the table's own generics).
+- the **typed verb family** — ``QuickLMDB/store(_:database:key:value:flags:)``, ``QuickLMDB/load(_:database:key:)``, ``QuickLMDB/delete(_:database:key:)``, ``QuickLMDB/contains(_:database:key:)``, ``QuickLMDB/cursor(_:database:_:)``, plus ``QuickLMDB/clear(_:database:)``, ``QuickLMDB/stats(_:database:)``, ``QuickLMDB/drop(_:database:)`` — the exact database operations, where the first argument is the environment TYPE and `database:` is a `KeyPath` to a `Database.X` handle (key/value/return types bind through the table's own generics).
 - ``QuickLMDB/MDB_transacted(_:)`` — the Design-B JOIN marker: inside a boundary it is rewritten into a call to the callee's sibling, threading this boundary's transaction.
 
 ### ``QuickLMDB/MDB_transact(_:)`` — the boundary
@@ -123,7 +123,7 @@ let record = try booking.slotOn(day)
 - the equal-env-set contract: the rewrite passes the caller's full tx label set, so the callee must reference the same environment-type set (a single-env callee called from a multi-env boundary does not compile — loud and named at the call site);
 - a bare call to a write boundary inside a live boundary is a compile-time error (the `@MDB_environment` write-composition lint) — it would root-scope a SECOND write on a live writer; composition is spelled with the join marker.
 
-### ``QuickLMDB/MDB_environment(file:flags:maxReaders:maxDBs:mode:)`` — schema assembly
+### ``QuickLMDB/MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)`` — schema assembly
 
 Generates a `static func open(at:mapHeadroom:)` that creates the directory as needed, sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported). `.noTLS` is forced on every environment (reader slots bind to the transaction object, making Swift task-based concurrency safe and enabling sibling reads). Writing the optional `version:` derives the on-disk name `<stem>-v<N>.mdb` — the schema version rides in the file name (opt-in; bumping ships a fresh file, old data untouched).
 
@@ -154,3 +154,87 @@ one transaction per referenced environment, all opened up front, ALL aborted on 
 All macros expand to plain calls through the existing public API — `Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:tx:)`, `cursor(tx:_:)`. the raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. the C wrapper layer itself (CLMDB) is untouched.
 
 The typed-handle companions the verbs lower to (`load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)`, plus the dupsort pair `delete(key:value:tx:)`) are protocol-extension members of ``QuickLMDB/MDB_db``, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them. the raw ``QuickLMDB/MDB_val`` tier keeps `loadEntry(key:as:tx:)` for value-raw call sites. The raw ``QuickLMDB/Transaction`` surface stays public for code that deliberately manages its own transactions.
+
+## Encryption and checksums (LMDB 1.0)
+
+QuickLMDB builds on the LMDB 1.0 engine, whose authenticated per-page encryption and optional per-page checksums are lifted through the macro surface. the providers are compile-time facts — ``QuickLMDB/MDB_crypto_impl`` / ``QuickLMDB/MDB_checksum_impl`` conformances — and the cipher key is runtime data:
+
+```
+@MDB_environment(file: "vault.mdb", encryption: ChaChaPoly.self, checksum: Blake2.self)
+public struct Vault: Sendable {
+    public let env: Environment
+    public let secrets: Database.Strict<Key, Secret>
+}
+
+let vault = try Vault.open(at: "<data-path>", encryptionKey: keyBytes)
+```
+
+- ``QuickLMDB/MDB_crypto_impl`` / ``QuickLMDB/ChaChaPoly`` — the authenticated-encryption provider surface and its ChaCha20-Poly1305 conformer (rawdog `RAW_chachapoly`).
+- ``QuickLMDB/MDB_checksum_impl`` / ``QuickLMDB/Blake2`` — the per-page checksum surface and an 8-byte keyed/keyless BLAKE2b conformer (rawdog `RAW_blake2`).
+- ``QuickLMDB/Environment/EncryptionConfiguration`` — an implementation + cipher key handed to ``QuickLMDB/Environment/init(path:flags:mapSize:maxReaders:maxDBs:mode:encrypt:checksum:)``, which registers the callbacks before the environment opens.
+- an encrypted environment's generated `open(at:)` requires the `encryptionKey:` parameter — an encrypted env cannot be opened keyless (compile-time enforced). `@MDB_layout` does not thread per-env keys; encrypted environments inside a layout stay a documented residual (author a hand-rolled arrangement open for those).
+
+## Topics
+
+### Engine types
+
+- ``QuickLMDB/Environment``
+- ``QuickLMDB/Transaction``
+- ``QuickLMDB/TransactionMode``
+- ``QuickLMDB/Read``
+- ``QuickLMDB/Write``
+
+### Databases
+
+- ``QuickLMDB/Database``
+- ``QuickLMDB/MDB_db``
+- ``QuickLMDB/MDB_db_basic``
+- ``QuickLMDB/MDB_db_strict``
+- ``QuickLMDB/MDB_db_dupsort``
+- ``QuickLMDB/MDB_db_dupfixed``
+
+### Cursors
+
+- ``QuickLMDB/Cursor``
+- ``QuickLMDB/MDB_cursor``
+- ``QuickLMDB/MDB_cursor_basic``
+- ``QuickLMDB/MDB_cursor_strict``
+- ``QuickLMDB/MDB_cursor_dupsort``
+- ``QuickLMDB/MDB_cursor_dupfixed``
+- ``QuickLMDB/DatabaseIterator``
+- ``QuickLMDB/DatabaseDupIterator``
+- ``QuickLMDB/Operation``
+
+### The typed-verb and boundary macro vocabulary
+
+- ``QuickLMDB/MDB_transact(_:)``
+- ``QuickLMDB/MDB_transact_mode``
+- ``QuickLMDB/MDB_transacted(_:)``
+- ``QuickLMDB/store(_:database:key:value:flags:)``
+- ``QuickLMDB/load(_:database:key:)``
+- ``QuickLMDB/delete(_:database:key:)``
+- ``QuickLMDB/delete(_:database:key:value:)``
+- ``QuickLMDB/contains(_:database:key:)``
+- ``QuickLMDB/cursor(_:database:_:)``
+- ``QuickLMDB/clear(_:database:)``
+- ``QuickLMDB/stats(_:database:)``
+- ``QuickLMDB/drop(_:database:)``
+
+### Schema-layer macros
+
+- ``QuickLMDB/MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)``
+- ``QuickLMDB/MDB_layout()``
+- ``QuickLMDB/MDB_table(name:flags:)``
+- ``QuickLMDB/MDB_comparable()``
+
+### Protocols and value types
+
+- ``QuickLMDB/MDB_environment``
+- ``QuickLMDB/MDB_convertible``
+- ``QuickLMDB/MDB_comparable``
+- ``QuickLMDB/MDB_crypto_impl``
+- ``QuickLMDB/MDB_checksum_impl``
+- ``QuickLMDB/ChaChaPoly``
+- ``QuickLMDB/Blake2``
+- ``QuickLMDB/MDB_db_flags``
+- ``QuickLMDB/MDB_val``

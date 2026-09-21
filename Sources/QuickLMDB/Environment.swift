@@ -83,6 +83,17 @@ public final class Environment:@unchecked Sendable {
 	public let flags:Flags
 
 	/// create a new environment given the specified path and flags.
+	/// - parameter path: the filesystem path of the environment.
+	/// - parameter flags: the flags the environment is opened with.
+	/// - parameter mapSize: the size of the memory map in bytes. nil defers to
+	///   the engine default (the `@MDB_environment` factory sizes at every open
+	///   as current file size plus headroom).
+	/// - parameter maxReaders: the maximum number of reader slots the
+	///   environment supports.
+	/// - parameter maxDBs: the maximum number of named databases the
+	///   environment may hold.
+	/// - parameter mode: the file permissions used when creating the
+	///   environment file.
 	/// - parameter encrypt: an optional encryption configuration. when provided,
 	///   `mdb_env_set_encrypt` is called before the environment opens and the
 	///   environment is created with encryption enabled (the engine additionally

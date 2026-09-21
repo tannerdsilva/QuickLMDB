@@ -28,7 +28,7 @@ public struct Database:Sendable, MDB_db_basic {
 	/// initialize a new database instance from the specified environment.
 	/// - parameters:
 	/// 	- env: a pointer to the environment that the database will be based on.
-	/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
+	/// 	- name_in: the name of the database (external label `name`). you may pass `nil` for this argument if you plan on storing only one database in the environment.
 	/// 	- flags: the flags that will be used when opening the database.
 	///		- tx: a pointer to the transaction that will be used to open the database.
 	@available(*, noasync)

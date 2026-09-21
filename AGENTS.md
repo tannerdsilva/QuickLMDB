@@ -13,22 +13,33 @@ decision trail, roadmap) is `v16 vision.md`; API docs are the DocC catalog.
 QuickLMDB is a Swift integration of LMDB: a full transactional control surface
 over an `Environment`, zero-copy memory map access, and a macro layer that
 organizes the transaction layer into method boundaries. the tree runs Swift
-6.3 (`swift-tools-version: 6.3`, macOS 15+, also Linux). three products read as
+6.3 (`swift-tools-version: 6.3`, macOS 15+, also Linux). two shipped library
+products (`QuickLMDB` and `concord`) plus two internal targets that read as
 one module:
 
 - **`QuickLMDB`** — the handwritten engine: `Transaction<M>` (capability-typed),
   `Environment`, `Database`/`Cursor` (typed handles `Strict`/`DupSort`/`DupFixed`
-  + raw), the protocol tree, the typed companions, and the public macro
-  declarations (`Macros.swift`).
+  + raw), the protocol tree, the typed companions, the crypto/checksum
+  providers, and the public macro declarations (`Macros.swift`).
 - **`QuickLMDBFunctionalInterop`** — the C bridge (imports only CLMDB): 19
   `consuming MDB_val` functions over raw handles, `LMDBError`,
   `MDB_cmp_func_t`. re-exported via `@_exported import`.
 - **`QuickLMDBMacros`** — the only target that writes Swift that rewrites
   Swift. declared as a `.macro` target (never a `.target`); registered in
   `Plugin.swift`; declared publicly in `QuickLMDB/Macros.swift`.
+- **`concord`** — a separate library product: a typed, transport-agnostic
+  negentropy reconciliation engine over QuickLMDB. the protocol trio
+  `ConcordIndex`/`ConcordTransport`/`ConcordSession` plus the
+  `ConcordLMDBIndex` driver (one long-lived write transaction per round;
+  release the index before the commit). values move as bytes, never decoded.
 
 external dependencies: CLMDB (LMDB headers), rawdog 22 (`RAW_*` byte
-coding/comparison), swift-system, swift-syntax 603.
+coding/comparison), swift-system, swift-syntax 603, swift-docc-plugin (DocC
+tooling).
+
+documentation is DocC: every documented module ships a `.docc` catalog with an
+`Info.plist` and a curated landing page (`QuickLMDB.docc`,
+`QuickLMDBFunctionalInterop.docc`, `concord.docc`).
 
 ## 2. the architecture (current, ratified)
 
@@ -177,11 +188,15 @@ instance methods. there is NO transaction vocabulary on the authored surface:
 
 ## 4. what is built vs planned (honest status)
 
-BUILT and verified (full suite green, 0 warnings on a clean build):
+BUILT and verified (full suite green, 0 warnings on a clean build, all three
+DocC catalogs warning-free under `--warnings-as-errors`):
 - `Transaction<M>` capability typing, `@MDB_environment`, `@MDB_table`,
   `version:`, `@MDB_layout`, `@MDB_transact` (typed-environment boundaries),
   the typed verb family, `#MDB_transacted` joining, `@MDB_comparable`, the
-  engine surface, typed companions, `readCommitted` family, interop.
+  engine surface, typed companions, `readCommitted` family, the LMDB 1.0
+  encryption/checksum providers (`MDB_crypto_impl`/`ChaChaPoly`,
+  `MDB_checksum_impl`/`Blake2`, environment `encrypt:`/`checksum:` linkage),
+  interop, and the `concord` reconciliation product.
 
 PLANNED:
 - `@MDB_layout` as the home of application-level convenience beyond the
@@ -198,6 +213,10 @@ agents must not assume the planned surface exists.
   warning truth — incremental builds cache diagnostics. run
   `swift package clean && swift build --build-tests` before declaring
   "0 warnings".
+- documentation: `swift package --disable-sandbox generate-documentation
+  --target <M> --warnings-as-errors` on every module with a catalog
+  (QuickLMDB, QuickLMDBFunctionalInterop, concord). per-target scoping is
+  mandatory — a whole-package run floods with dependency-closure noise.
 - filter suites by target/name: `swift test --filter <Name>`.
 - drop a new macro into three places, or it does not exist: the declaration
   (`QuickLMDB/Macros.swift`), the implementation (`QuickLMDBMacros/<file>.swift`),
@@ -276,11 +295,11 @@ agents must not assume the planned surface exists.
 ## 8. releases
 
 the library is SemVer 2.0. before release: squasheable warnings gone
-(clean-build verified), DocC builds warning-free
-(`swift package --disable-sandbox generate-documentation`; NOTE the
-swift-docc plugin is not currently wired in `Package.swift`, so the command
-errors with "unknown subcommand" until it is added — do not treat that as a
-docc failure), the changelog
-matches the shipped API (breaking changes documented), and the full suite is
-green. the public macro vocabulary is the contract — never remove or rename a
-shipped macro without the changelog saying so.
+(clean-build verified), DocC builds warning-free — the swift-docc plugin is
+wired (swift-docc-plugin 1.5.0); run the hard gate
+`swift package --disable-sandbox generate-documentation --target <M>
+--warnings-as-errors` for each of QuickLMDB, QuickLMDBFunctionalInterop, and
+concord —, the changelog matches the shipped API (breaking changes documented;
+current unreleased work is staged under the planned next-version heading), and
+the full suite is green. the public macro vocabulary is the contract — never
+remove or rename a shipped macro without the changelog saying so.

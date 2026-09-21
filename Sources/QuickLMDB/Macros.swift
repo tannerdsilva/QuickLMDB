@@ -1,6 +1,8 @@
 import SystemPackage
 import CLMDB
 
+/// wraps `RAW_comparable` byte ordering into a C-compatible `MDB_compare_f`
+/// member so LMDB can sort a type's keys or values natively.
 @attached(member,		names:			named(MDB_compare_f))
 @attached(extension,	conformances:	MDB_comparable)
 public macro MDB_comparable() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_comparable_macro")
@@ -21,13 +23,13 @@ internal macro MDB_cursor_RAW_access_members() = #externalMacro(module:"QuickLMD
 @attached(member,		names:			arbitrary)
 internal macro MDB_cursor_basics() = #externalMacro(module:"QuickLMDBMacros", type:"_QUICKLMDB_INTERNAL_cursor_init_basics_impl")
 
-/// the operation mode for the ``MDB_transact(_:environments:)`` macro.
+/// the operation mode for the ``MDB_transact(_:)`` macro.
 /// - ``MDB_transact_mode/readOnly`` makes the boundary a read-only transaction boundary: it opens read transactions, never commits, and aborts every one on throw and on success (a read leaf).
 /// - ``MDB_transact_mode/readWrite`` makes the boundary a read/write transaction boundary: it opens write transactions, aborts every one on throw, and COMMITS each on success.
 ///
 /// the mode enum is the ratified pair. child/relationship composition is not a
 /// mode here — Design-B joining (``MDB_transacted(_:)``) composes calls into ONE
-/// transaction instead (see ``MDB_transact(_:environments:)``).
+/// transaction instead (see ``MDB_transact(_:)``).
 public enum MDB_transact_mode:Sendable {
 	case readOnly
 	case readWrite
@@ -36,7 +38,7 @@ public enum MDB_transact_mode:Sendable {
 /// schema assembly for an environment struct: generates a `static func open(at:mapHeadroom:)`
 /// that sizes the memory map, opens the environment, and opens every `Database.X` table in
 /// one setup write-transaction. the generated struct also conforms to ``MDB_environment``,
-/// which is what ``MDB_transact(_:environments:)`` accepts in its `environments:` list.
+/// which is what ``MDB_transact(_:)`` attaches boundaries to.
 ///
 /// - Parameters:
 ///   - file: the name of the environment file (appended to the base path).
@@ -53,6 +55,13 @@ public enum MDB_transact_mode:Sendable {
 ///   - maxReaders: maximum reader slots for the environment.
 ///   - maxDBs: maximum named databases for the environment.
 ///   - mode: file permissions used when creating the environment file.
+///   - encryption: an optional ``MDB_crypto_impl`` conformer. the generated
+///     `open(at:)` gains a REQUIRED `encryptionKey:` parameter when provided
+///     (an encrypted environment cannot be opened keyless, enforced at compile
+///     time) and the environment opens with per-page authenticated encryption.
+///   - checksum: an optional ``MDB_checksum_impl`` conformer for per-page
+///     checksums. without `encryption:`, the generated `open(at:)` keeps its
+///     plain signature.
 ///
 /// the struct must store exactly an `env: Environment` property plus `Database.X` tables.
 ///
@@ -195,6 +204,8 @@ public macro load<E: MDB_environment, DB: MDB_db>(_ env: E.Type, database: KeyPa
 /// duplicate-bearing tables) from the table `database` of environment `env`.
 @freestanding(expression)
 public macro delete<E: MDB_environment, DB: MDB_db>(_ env: E.Type, database: KeyPath<E, DB>, key: DB.MDB_db_key_type) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
+/// deletes the exact `key`/`value` pairing from the table `database` of
+/// environment `env` (duplicate-bearing tables only).
 @freestanding(expression)
 public macro delete<E: MDB_environment, DB: MDB_db>(_ env: E.Type, database: KeyPath<E, DB>, key: DB.MDB_db_key_type, value: DB.MDB_db_val_type) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_verb_error_macro")
 
@@ -252,7 +263,7 @@ public macro MDB_layout() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_l
 
 // - MARK: schema layer — table declaration
 
-/// per-table declaration inside an ``MDB_environment(_:file:flags:maxReaders:maxDBs:mode:)``
+/// per-table declaration inside an ``MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)``
 /// type, attached to a `Database.X` stored property. the environment scan
 /// consumes this attribute when it opens the tables in the setup transaction.
 ///

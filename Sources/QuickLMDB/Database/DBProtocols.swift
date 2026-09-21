@@ -47,12 +47,12 @@ public protocol MDB_db {
 	borrowing func cursor<R, E, M>(tx:borrowing Transaction<M>, _ handler:(consuming MDB_db_cursor_type) throws(E) -> R) throws(E) -> R where E:Swift.Error, M:TransactionMode
 
 	// reading entries in the database
-	/// retrieve an entry from the database. if ``Database/Flags/dupSort`` is set and multiple entries exist for the specified key, the first entry will be returned
+	/// if ``MDB_db_flags/dupSort`` is set and multiple entries exist for the specified key, the first entry will be returned
 	///	- parameters:
 	///		- key: a pointer to the type that conveys the key to search for.
 	///		- as: the value type to return as a conveyance of the value that would be found in the database.
 	///		- tx: a pointer to the lmdb transaction that will be used to retrieve the entry.
-	/// - throws: a corresponding ``LMDBError.notFound`` if the key does not exist, or other ``LMDBError`` for more obscure circumstances.
+	/// - throws: a corresponding `LMDBError.notFound` if the key does not exist, or other `LMDBError` for more obscure circumstances.
 	///	- returns: the decoded value type.
 	@available(*, noasync)
 	borrowing func loadEntry<M:TransactionMode>(key:MDB_db_key_type, as:MDB_db_val_type.Type, tx:borrowing Transaction<M>) throws -> MDB_db_val_type

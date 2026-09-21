@@ -131,67 +131,67 @@ internal func MDB_db_assign_compare_val_static(db:MDB_dbi, compare:MDB_cmp_func_
 
 // - MARK: public functional surface (consuming MDB_val)
 
-// retrieve the value for a key.
+/// retrieve the value for a key.
 @available(*, noasync)
 public func MDB_db_get_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> CLMDB.MDB_val {
 	return try MDB_db_get_entry_static(db:db, key:&key, tx:tx)
 }
 
-// assign an entry. flags carry the LMDB write-flags bitmask (e.g. MDB_NOOVERWRITE).
+/// assign an entry. flags carry the LMDB write-flags bitmask (e.g. MDB_NOOVERWRITE).
 @available(*, noasync)
 public func MDB_db_set_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32, tx:OpaquePointer) throws(LMDBError) {
 	try MDB_db_set_entry_static(db:db, key:&key, value:&value, flags:flags, tx:tx)
 }
 
-// check whether an entry exists for the key.
+/// check whether an entry exists for the key.
 @available(*, noasync)
 public func MDB_db_contains_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) -> Bool {
 	return try MDB_db_contains_entry_static(db:db, key:&key, tx:tx)
 }
 
-// delete all entries matching the key.
+/// delete all entries matching the key.
 @available(*, noasync)
 public func MDB_db_delete_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) {
 	try MDB_db_delete_entry_static(db:db, key:&key, tx:tx)
 }
 
-// delete an exact key/value pairing.
+/// delete an exact key/value pairing.
 @available(*, noasync)
 public func MDB_db_delete_entry(db:MDB_dbi, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, tx:OpaquePointer) throws(LMDBError) {
 	try MDB_db_delete_entry_static(db:db, key:&key, value:&value, tx:tx)
 }
 
-// empty the database.
+/// empty the database.
 @available(*, noasync)
 public func MDB_db_delete_all_entries(db:MDB_dbi, tx:OpaquePointer) throws(LMDBError) {
 	try MDB_db_delete_all_entries_static(db:db, tx:tx)
 }
 
-// delete the database itself from the environment.
+/// delete the database itself from the environment.
 @available(*, noasync)
 public func MDB_db_delete_database(db:MDB_dbi, tx:OpaquePointer) throws(LMDBError) {
 	try MDB_db_delete_database_static(db:db, tx:tx)
 }
 
-// return the database statistics (entry count, depth, page counts).
+/// return the database statistics (entry count, depth, page counts).
 @available(*, noasync)
 public func MDB_db_get_statistics(db:MDB_dbi, tx:OpaquePointer) throws(LMDBError) -> MDB_stat {
 	try MDB_db_get_statistics_static(db:db, tx:tx)
 }
 
-// return the database flags as a raw bitmask.
+/// return the database flags as a raw bitmask.
 @available(*, noasync)
 public func MDB_db_get_flags(db:MDB_dbi, tx:OpaquePointer) throws(LMDBError) -> UInt32 {
 	try MDB_db_get_flags_static(db:db, tx:tx)
 }
 
-// assign the database's key comparison function.
+/// assign the database's key comparison function.
 @available(*, noasync)
 public func MDB_db_assign_compare_key(db:MDB_dbi, compare:MDB_cmp_func_t, tx:OpaquePointer) {
 	MDB_db_assign_compare_key_static(db:db, compare:compare, tx:tx)
 }
 
-// assign the database's duplicate-value comparison function.
+/// assign the database's duplicate-value comparison function.
 @available(*, noasync)
 public func MDB_db_assign_compare_val(db:MDB_dbi, compare:MDB_cmp_func_t, tx:OpaquePointer) {
 	MDB_db_assign_compare_val_static(db:db, compare:compare, tx:tx)

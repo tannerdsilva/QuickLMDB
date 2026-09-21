@@ -7,8 +7,7 @@ import CLMDB
 /// parameters, and cursor writes.
 ///
 /// the mode space is sealed: conforming requires the internal
-/// ``TransactionMode/_mdb_modeReadOnly`` witness, so only ``Read`` and
-/// ``Write`` can ever exist.
+/// `_mdb_modeReadOnly` witness, so only ``Read`` and ``Write`` can ever exist.
 public protocol TransactionMode: Sendable {
 	static var _mdb_modeReadOnly: Bool { get }
 }

@@ -1,4 +1,12 @@
-# Unreleased
+# 16.0.0 (upcoming — the next tag and release)
+
+NOTE ON HISTORY: the changelog previously carried `16.0.0`/`16.1.0` entries
+describing INTERMEDIATE working versions (`@MDB_app`/`@MDB_transact_span`, the
+`environments:` attribute form, the `.readWriteChild` mode) that were never
+tagged or released. their surface is superseded by the typed-environment
+architecture documented below and is NOT in this release; those draft sections
+are removed so the version history matches what actually ships (the prior
+tagged release is 15.0.0).
 
 - **LMDB 1.0 encryption + checksums through the macro layer** (breaking — new
   engine + new surface). QuickLMDB now builds against CLMDB's LMDB 1.0.2 line
@@ -158,32 +166,36 @@
   composite while a concurrent writer mutates it), and cursor-`try` compile
   pins for the non-throwing / `#if` / no-`try` closure shapes.
 
-# 16.1.0
-
-- **Marker-gated verb vocabulary inside `@MDB_transact` boundaries.** the verb macros `#store`, `#load`, `#delete`, `#contains`, `#cursor`, `#clear`, `#stats`, `#drop` are now the only auto-`tx:` surface inside a boundary. the body macro lowers exactly the freestanding verb calls (matched by macro name, nothing else) to their tx-bearing operation form and emits every other line byte-identical — the name-list `tx:` injection is deleted, so a plain `setEntry`/`loadEntry`/`cursor(...)` call inside a boundary must carry `tx:` explicitly or it fails to compile. this is a **breaking change** for the v16.0.0 preview shape: boundary bodies written with omit-`tx:` method calls must migrate to verbs (or pass `tx: tx`).
-  - verb use OUTSIDE a boundary is a compile-time diagnostic (`must only appear inside an @MDB_transact body`).
-  - the pair form `#contains(db, key:, value:)` lowers to the cursor's real `MDB_GET_BOTH` path (a database-level pair check is a silent no-op by key).
-  - `#load(db, key:, as:)` remains for raw `MDB_val` handles; typed handles need no `as:`.
-  - `#stats(db)` lowers to `dbStatistics(tx:)` (metadata read — never marks a span member write); `#drop(db)` lowers to `deleteDatabase(tx:)` (destructive — the handle is consumed, so the receiver must be a locally-owned raw `Database`, not a stored `self.X` table).
-- Added typed-handle companions the verbs lower to: `load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)`, `contains(key:tx:)` on `MDB_db` (one copy inherited by every handle), plus the dupsort pair `delete(key:value:tx:)` on `MDB_db_dupsort`.
-- **Cross-environment span boundaries: `@MDB_app` + `@MDB_transact_span`.** `@MDB_app` marks a struct as an environment container (its stored `@MDB_environment` types become the routing inventory) AND generates a container-level `open(at:mapHeadroom:)` that creates the base + per-environment subdirectories and opens every environment in one call. `@MDB_transact_span` coordinates ALL of them behind one method: one top-level transaction per environment, opened up front; a body throw aborts ALL of them (nothing lands — impossible with two isolated boundaries, the prior shape); write members commit back-to-back in first-touch/declaration order, read members close. bare form infers environments/modes/order from the body's verb calls; the override form (`@MDB_transact_span([.readWrite("calendar")])`) forces them explicitly. honest ceiling (documented): cross-environment commits remain best-effort — a crash between the adjacent commit calls can still split the pair; cross-env atomicity is impossible.
-- **`@MDB_environment`'s generated `open(at:)` now creates the base directory as needed** (previously required it to pre-exist).
-- **Self-scoped committed reads** on `MDB_db` (protocol-extension members, every handle): `readCommitted(key:)`, `containsCommitted(key:)` and (dupsort) `readCommittedDups(key:)` — each opens its own read-only transaction, reads, and closes it. deliberately NOT boundary verbs: a verb's contract is boundary participation, the opposite of a self-scoped verification read. the suite-level `readViaRawTX`/`loadEntryDirect`-style helpers (open txn manually → read → abort) are replaced by these members.
-- Updated docs: the transaction-boundary README + DocC sections now describe the verb contract and the span boundary; examples migrated to verbs/spans.
-
-# 16.0.0
-
-- Added the `@MDB_transact` and `@MDB_environment` macros.
-  - `@MDB_transact(.readWrite | .readOnly | .readWriteChild)` is an attached **body macro**: it rewrites the annotated method's body in place so the method itself owns its transaction scope. There is no ambient storage of any kind (no task-local, no thread-local, no registry). Operation call sites inside the body may omit the `tx:` argument — the expansion appends `tx: tx`, where `tx` is the boundary transaction, and commits once on success / aborts exactly once on error.
-  - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` is schema assembly only: it generates a `static func open(at:mapHeadroom:)` that sizes the memory map, opens the environment, and opens every `Database.X` table in one setup write-transaction.
-  - `@MDB_environment` forces `.noTLS` onto the environment unconditionally: reader slots are bound to the transaction object instead of the thread, which is what makes Swift's task-based concurrency safe and what permits sibling read transactions inside boundaries.
-- Transaction relationship management: boundaries open TOP-LEVEL transactions of their mode, and every parent/child + sibling relationship is the engine's own default, pinned by regression tests (sibling writes under reads, sibling reads under writes/reads, write-child merges, EINVAL/badReaderSlot engine errors). Composition inside a write boundary is explicitly `.readWriteChild(parent:)`; a raw `.readWrite` nested inside another without `parent:` deadlocks on LMDB's non-recursive writer mutex and is a documented forbidden pattern.
-- Removed the internal `_MDBTransactionScope` transaction registry (superseded by the body macro architecture).
-- Dropped all `MDB_RESERVE` support: removed `reserveEntry`, the returning `MDB_db_set_entry` overload (and its internal static), the `Operation.Flags.reserve` case, and the reserve value helpers. reserve-based write-without-initialize is unsupported for now.
-- Removed the `value:` parameter from the DB-level `containsEntry` — the argument was a silent no-op (`mdb_get` resolves by key only), making pair-existence checks answer false-TRUE for any existing key. pair checks now live on cursors only (`cursor.containsEntry(key:value:)`, implemented with `MDB_GET_BOTH`).
-- Fixed `Transaction` so its deinit no longer aborts an already-committed transaction.
-- The transaction-bearing protocol API (`Transaction`, `MDB_db`, `MDB_cursor`, the `Database.X` handles) is unchanged.
-- The database + cursor `MDB_*_static` functions and `LMDBError` moved into a new standalone target `QuickLMDBFunctionalInterop` — a handle-level C bridge with no QuickLMDB types. its public api surface is the `consuming MDB_val` functional layer (`MDB_db_get_entry`/`MDB_db_set_entry`/`MDB_cursor_get_entry`/…); the raw handle functions are module-internal. QuickLMDB bridges through the public surface via `@_exported import`; public behavior is unchanged. covered by a new `QuickLMDBFunctionalInteropTests` target (27 tests driven by raw CLMDB).
+- **the `concord` product** (new): a typed, transport-agnostic negentropy
+  reconciliation engine over QuickLMDB. a reconcile round brings two stores
+  with the same fixed-size-byte-key schema into agreement — range fingerprints
+  over mmap key bytes skip matching regions, mismatches split and recurse, and
+  the resulting have/need diff moves values AS BYTES (never decoded, never
+  re-encoded). the protocol trio `ConcordIndex` / `ConcordTransport` /
+  `ConcordSession` plus the `ConcordLMDBIndex` driver (one long-lived write
+  transaction per round; release the index before the commit). ships as its
+  own library product with its own DocC catalog and test target.
+- **typed-handle companions + self-scoped committed reads** (the surface the
+  verbs lower to, and the verb-less verification reads — consolidated here):
+  `load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)` and the
+  dupsort pair `delete(key:value:tx:)`, `contains(key:tx:)` on
+  `MDB_db`/`MDB_db_dupsort`; `readCommitted(key:)`, `containsCommitted(key:)`
+  and (dupsort) `readCommittedDups(key:)`, each opening its own short-lived
+  read transaction; `@MDB_environment`'s generated `open(at:)` creates the
+  base directory as needed and forces `.noTLS` (reader slots bind to the
+  transaction object, the enabler for sibling reads under task concurrency).
+- **`QuickLMDBFunctionalInterop` target extraction** (breaking for code that
+  reached the raw handle surface directly): `LMDBError` and the handle-level
+  `MDB_db_*` / `MDB_cursor_*` statics moved into a standalone C bridge target
+  (CLMDB-only imports, `consuming MDB_val` public functions, module-internal
+  statics), re-exported via `@_exported import`; public behavior unchanged;
+  covered by a new `QuickLMDBFunctionalInteropTests` target.
+- **reserve / registry cleanup** (breaking): all `MDB_RESERVE` support removed
+  (`reserveEntry`, the returning `setEntry` overload, `Operation.Flags.reserve`);
+  the `value:` parameter of the DB-level `containsEntry` removed (it was a
+  silent no-op — pair-existence checks live on cursors via `MDB_GET_BOTH`);
+  the internal `_MDBTransactionScope` registry removed; `Transaction`'s deinit
+  no longer aborts an already-committed transaction.
 
 # 15.0.0
 

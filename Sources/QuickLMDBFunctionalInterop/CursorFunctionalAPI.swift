@@ -93,59 +93,59 @@ internal func MDB_cursor_compare_values_static(tx:OpaquePointer, db:MDB_dbi, lhs
 
 // - MARK: public functional surface (consuming MDB_val)
 
-// write an entry through the cursor.
+/// write an entry through the cursor.
 @available(*, noasync)
 public func MDB_cursor_set_entry(cursor:OpaquePointer, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val, flags:UInt32) throws(LMDBError) {
 	try MDB_cursor_set_entry_static(cursor:cursor, key:&key, value:&value, flags:flags)
 }
 
-// delete the current entry.
+/// delete the current entry.
 @available(*, noasync)
 public func MDB_cursor_delete_current_entry(cursor:OpaquePointer, flags:UInt32) throws(LMDBError) {
 	try MDB_cursor_delete_current_entry_static(cursor:cursor, flags:flags)
 }
 
-// check whether an entry exists at the specified key (MDB_SET).
+/// check whether an entry exists at the specified key (MDB_SET).
 @available(*, noasync)
 public func MDB_cursor_contains_entry(cursor:OpaquePointer, key:consuming CLMDB.MDB_val) throws(LMDBError) -> Bool {
 	return try MDB_cursor_contains_entry_static(cursor:cursor, key:&key)
 }
 
-// check whether a key/value pair exists (MDB_GET_BOTH).
+/// check whether a key/value pair exists (MDB_GET_BOTH).
 @available(*, noasync)
 public func MDB_cursor_contains_entry(cursor:OpaquePointer, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val) throws(LMDBError) -> Bool {
 	return try MDB_cursor_contains_entry_static(cursor:cursor, key:&key, value:&value)
 }
 
-// position the cursor with the given operation and return the retrieved entry.
-//
-// - for every operation EXCEPT `MDB_SET`, the returned key and value point into
-//   LMDB-owned storage (the memory map, or copy-on-write pages inside a write
-//   transaction) and are valid until the next update operation or the end of the
-//   transaction. callers may not modify that memory.
-// - for `op == MDB_SET`, LMDB leaves the KEY object unchanged (lmdb.h: "the key
-//   object is unchanged") — the returned key aliases the caller's CONSUMED
-//   buffer and must not be retained or treated as LMDB-owned storage. the
-//   returned value does point into LMDB storage.
+/// position the cursor with the given operation and return the retrieved entry.
+///
+/// - for every operation EXCEPT `MDB_SET`, the returned key and value point into
+///   LMDB-owned storage (the memory map, or copy-on-write pages inside a write
+///   transaction) and are valid until the next update operation or the end of the
+///   transaction. callers may not modify that memory.
+/// - for `op == MDB_SET`, LMDB leaves the KEY object unchanged (lmdb.h: "the key
+///   object is unchanged") — the returned key aliases the caller's CONSUMED
+///   buffer and must not be retained or treated as LMDB-owned storage. the
+///   returned value does point into LMDB storage.
 @available(*, noasync)
 public func MDB_cursor_get_entry(cursor:OpaquePointer, op:MDB_cursor_op, key:consuming CLMDB.MDB_val, value:consuming CLMDB.MDB_val) throws(LMDBError) -> (key:CLMDB.MDB_val, value:CLMDB.MDB_val) {
 	try MDB_cursor_get_entry_static(cursor:cursor, op:op, key:&key, value:&value)
 	return (key:key, value:value)
 }
 
-// return the number of duplicate entries at the current cursor position.
+/// return the number of duplicate entries at the current cursor position.
 @available(*, noasync)
 public func MDB_cursor_get_dupcount(cursor:OpaquePointer) throws(LMDBError) -> Int {
 	try MDB_cursor_get_dupcount_static(cursor:cursor)
 }
 
-// compare two keys using the database's key comparison function.
+/// compare two keys using the database's key comparison function.
 @available(*, noasync)
 public func MDB_cursor_compare_keys(tx:OpaquePointer, db:MDB_dbi, lhs:consuming CLMDB.MDB_val, rhs:consuming CLMDB.MDB_val) -> Int32 {
 	return MDB_cursor_compare_keys_static(tx:tx, db:db, lhs:&lhs, rhs:&rhs)
 }
 
-// compare two values using the database's value comparison function.
+/// compare two values using the database's value comparison function.
 @available(*, noasync)
 public func MDB_cursor_compare_values(tx:OpaquePointer, db:MDB_dbi, lhs:consuming CLMDB.MDB_val, rhs:consuming CLMDB.MDB_val) -> Int32 {
 	return MDB_cursor_compare_values_static(tx:tx, db:db, lhs:&lhs, rhs:&rhs)
