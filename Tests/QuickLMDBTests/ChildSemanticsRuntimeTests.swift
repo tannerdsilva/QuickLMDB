@@ -158,13 +158,24 @@ struct ChildSemanticsRuntimeTests {
 	}
 
 	@Test func multiEnvJoinSpawnsChildrenPerEnvironment() throws {
-		let root = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-child-multi-\\(UUID().uuidString)", isDirectory: true)
-		let main = try ChildSemanticsMain.open(at: root.appendingPathComponent("main").path)
-		let side = try ChildSemanticsSide.open(at: root.appendingPathComponent("side").path)
-		try main.joinBoth(TestKey(RAW_native: 4), side: side)
-		let mainV = try main.table.readCommitted(key: TestKey(RAW_native: 4))
-		let sideV = try side.table.readCommitted(key: TestKey(RAW_native: 4))
-		#expect(mainV == TestValue(RAW_native: 1))    // written inside the joined child on Main
-		#expect(sideV == TestValue(RAW_native: 2))    // written inside the joined child on Side
+		let root = FileManager.default.temporaryDirectory.appendingPathComponent("qlmdb-child-multi-\(UUID().uuidString)", isDirectory: true)
+		var step = "open main"
+		do {
+			let main = try ChildSemanticsMain.open(at: root.appendingPathComponent("main").path)
+			step = "open side"
+			let side = try ChildSemanticsSide.open(at: root.appendingPathComponent("side").path)
+			step = "joinBoth"
+			try main.joinBoth(TestKey(RAW_native: 4), side: side)
+			step = "read main"
+			let mainV = try main.table.readCommitted(key: TestKey(RAW_native: 4))
+			step = "read side"
+			let sideV = try side.table.readCommitted(key: TestKey(RAW_native: 4))
+			step = "assert"
+			#expect(mainV == TestValue(RAW_native: 1))    // written inside the joined child on Main
+			#expect(sideV == TestValue(RAW_native: 2))    // written inside the joined child on Side
+		} catch {
+			Issue.record("multiEnv failed at step '\(step)': \(error)")
+			throw error
+		}
 	}
 }

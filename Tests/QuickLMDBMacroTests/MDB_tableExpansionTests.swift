@@ -117,6 +117,147 @@ struct TableSchemaExpansionTests {
 		)
 	}
 
+	@Test func encryptedEnvironmentExpandsWithKeyParameter() {
+		// byte-frozen oracle (actual expansion spliced from the dump harness)
+		assertSchemaExpansion(
+			"""
+			@MDB_environment(file: "test.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8, encryption: QuickLMDB.ChaChaPoly.self, checksum: QuickLMDB.Blake2.self)
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+			}
+			""",
+			expanded: """
+
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+
+			    @available(*, noasync)
+
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, encryptionKey: [UInt8]) throws -> Self {
+
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+
+			    let slash = basePath.hasSuffix("/") ? "" : "/"
+
+			    let targetPath = basePath + slash + "test.mdb"
+
+			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
+
+			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 16, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead], encrypt: QuickLMDB.Environment.EncryptionConfiguration(QuickLMDB.ChaChaPoly.self, key: encryptionKey), checksum: QuickLMDB.Blake2.self)
+
+			    let setupTX = try Transaction<Write>(env: env)
+
+			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
+
+			        try setupTX.commit()
+
+			        return Self(env: env, events: events)
+
+			    }
+			}
+
+			extension Core: MDB_environment {
+			}
+			"""
+		)
+	}
+
+	@Test func encryptOnlyEnvironmentExpandsWithKeyParam() {
+		// byte-frozen oracle (actual expansion spliced from the dump harness)
+		assertSchemaExpansion(
+			"""
+			@MDB_environment(file: "test.mdb", encryption: QuickLMDB.ChaChaPoly.self)
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+			}
+			""",
+			expanded: """
+
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+
+			    @available(*, noasync)
+
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, encryptionKey: [UInt8]) throws -> Self {
+
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+
+			    let slash = basePath.hasSuffix("/") ? "" : "/"
+
+			    let targetPath = basePath + slash + "test.mdb"
+
+			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
+
+			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 32, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead], encrypt: QuickLMDB.Environment.EncryptionConfiguration(QuickLMDB.ChaChaPoly.self, key: encryptionKey))
+
+			    let setupTX = try Transaction<Write>(env: env)
+
+			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
+
+			        try setupTX.commit()
+
+			        return Self(env: env, events: events)
+
+			    }
+			}
+
+			extension Core: MDB_environment {
+			}
+			"""
+		)
+	}
+
+	@Test func checksumOnlyEnvironmentKeepsPlainSignature() {
+		// byte-frozen oracle (actual expansion spliced from the dump harness)
+		assertSchemaExpansion(
+			"""
+			@MDB_environment(file: "test.mdb", checksum: QuickLMDB.Blake2.self)
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+			}
+			""",
+			expanded: """
+
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+
+			    @available(*, noasync)
+
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {
+
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+
+			    let slash = basePath.hasSuffix("/") ? "" : "/"
+
+			    let targetPath = basePath + slash + "test.mdb"
+
+			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
+
+			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 32, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead], checksum: QuickLMDB.Blake2.self)
+
+			    let setupTX = try Transaction<Write>(env: env)
+
+			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
+
+			        try setupTX.commit()
+
+			        return Self(env: env, events: events)
+
+			    }
+			}
+
+			extension Core: MDB_environment {
+			}
+			"""
+		)
+	}
+
 	@Test func tableAttributesOverrideNameAndUnionFlags() {
 		// byte-frozen oracle (actual expansion spliced from the dump harness)
 		assertSchemaExpansion(

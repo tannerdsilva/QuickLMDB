@@ -1,5 +1,40 @@
 # Unreleased
 
+- **LMDB 1.0 encryption + checksums through the macro layer** (breaking — new
+  engine + new surface). QuickLMDB now builds against CLMDB's LMDB 1.0.2 line
+  (branch pin `master`; the 1.0 tag has not been cut yet — tighten the range
+  once CLMDB 1.0.x is tagged), which is the only engine with `mdb_env_set_encrypt`,
+  per-page checksums, and authenticated encryption. the lift of the hacklash
+  `MDB_crypto_impl` / `MDB_checksum_impl` design:
+  - `MDB_crypto_impl` / `ChaChaPoly` — public protocol + a ChaCha20-Poly1305
+    AEAD conformer (rawdog `RAW_chachapoly`); `MDB_checksum_impl` / `Blake2` —
+    an 8-byte keyed/keyless BLAKE2b per-page checksum conformer (rawdog
+    `RAW_blake2`).
+  - `Environment.EncryptionConfiguration` + `Environment.init(..., encrypt:,
+    checksum:)` — registers the callbacks before `mdb_env_open`; the stored
+    `flags` reflect `.encrypt` / `.remapChunks` (which `mdb_env_set_encrypt`
+    sets internally — they must NOT be passed in the open flags). new 1.0
+    `Flags` cases: `.encrypt`, `.remapChunks`, `.previousSnapshot`.
+  - `LMDBError.badChecksum` / `.cryptoFail` (the 1.0 `MDB_BAD_CHECKSUM` /
+    `MDB_CRYPTO_FAIL` codes).
+  - `@MDB_environment(..., encryption: ChaChaPoly.self, checksum: Blake2.self)`
+    (breaking — new optional attribute args). an environment that declares
+    `encryption:` gets a generated `open(at:mapHeadroom:encryptionKey:)` whose
+    `encryptionKey: [UInt8]` parameter is REQUIRED — an encrypted env cannot be
+    opened keyless, enforced at compile time. checksum-only envs keep the plain
+    `open(at:mapHeadroom:)` signature. unencrypted environments expand
+    byte-identically to before.
+  - `@MDB_layout` does not thread per-env keys (it cannot statically see the
+    env types' attributes) — encrypted envs inside a layout remain a documented
+    residual; author a hand-rolled arrangement open for those.
+  - LMDB 1.0 nested-txn semantics differ from 0.9: read-only children of a
+    write parent are now LEGAL (arbitrarily many; 0.9 pinned `MDB_BAD_TXN`). the
+    raw interop probe (`NestedTxnSemanticsProbe`) was re-pinned to the 1.0
+    contract. QuickLMDB's own composition never spawns read children, so the
+    `.readOnly` boundary stays a composition leaf by construction.
+  - on-disk format is now LMDB format v3 — **existing 0.9-format data files
+    will not reopen**; migrate via 0.9 `mdb_dump` → 1.0 `mdb_load`.
+
 - **read-twin redirect + committed-read doctrine** (generated-surface + API
   refinement). a READ boundary's `_child` variant is now a THIN REDIRECT to
   its flat sibling (a joined read threads the caller's transaction; LMDB has

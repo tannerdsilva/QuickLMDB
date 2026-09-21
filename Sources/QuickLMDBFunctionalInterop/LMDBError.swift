@@ -81,6 +81,13 @@ public enum LMDBError:Error {
 	/// The specified database was changed unexpectedly
 	case badDBI
 
+	/// the per-page checksum did not match the stored checksum (LMDB 1.0)
+	case badChecksum
+
+	/// an encryption/decryption operation failed — the supplied key is wrong or
+	/// the data was corrupted (LMDB 1.0)
+	case cryptoFail
+
 	// OS specific errors
 	case invalidParameter
 	case outOfDiskSpace
@@ -116,6 +123,8 @@ public enum LMDBError:Error {
 			case MDB_BAD_TXN: self = .badTransaction
 			case MDB_BAD_VALSIZE: self = .badValueSize
 			case MDB_BAD_DBI: self = .badDBI
+			case MDB_BAD_CHECKSUM: self = .badChecksum
+			case MDB_CRYPTO_FAIL: self = .cryptoFail
 
 			#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case Errno.invalidArgument.rawValue: self = .invalidParameter
@@ -179,6 +188,10 @@ public enum LMDBError:Error {
 				return MDB_BAD_VALSIZE
 			case .badDBI:
 				return MDB_BAD_DBI
+			case .badChecksum:
+				return MDB_BAD_CHECKSUM
+			case .cryptoFail:
+				return MDB_CRYPTO_FAIL
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case .invalidParameter:
 				return Errno.invalidArgument.rawValue
@@ -265,6 +278,10 @@ extension LMDBError:CustomDebugStringConvertible {
 				return "LMDBError.badValueSize"
 			case .badDBI:
 				return "LMDBError.badDBI"
+			case .badChecksum:
+				return "LMDBError.badChecksum"
+			case .cryptoFail:
+				return "LMDBError.cryptoFail"
 			case .invalidParameter:
 				return "LMDBError.invalidParameter"
 			case .outOfDiskSpace:

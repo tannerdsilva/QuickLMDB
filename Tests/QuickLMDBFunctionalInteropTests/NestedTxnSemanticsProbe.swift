@@ -4,26 +4,34 @@ import QuickLMDBFunctionalInterop
 import Testing
 
 // ground truth for THIS liblmdb build's nested-transaction rules — whatever
-// mdb.c's mdb_txn_begin actually enforces. the vendored source is explicit:
-//   /* Nested transactions: Max 1 child, write txns only, no writemap */
-//   if (flags & (MDB_RDONLY|MDB_WRITEMAP|MDB_TXN_BLOCKED))
-//       return (parent->mt_flags & MDB_TXN_RDONLY) ? EINVAL : MDB_BAD_TXN;
+// mdb.c's mdb_txn_begin actually enforces. the vendored 1.0.2 source is explicit:
+//   /* Nested transactions:
+//    * Only write txns may have nested txns;
+//    * if the nested txn is a write txn there may only be 1, no writemap;
+//    * if the nested txn is a read txn there may be arbitrarily many.
+//    */
+//   if (parent->mt_flags & MDB_TXN_RDONLY)
+//       return EINVAL;
+//   if ((parent->mt_flags & MDB_TXN_WRITEMAP) && !(flags & MDB_RDONLY))
+//       return EINVAL;
 // these pins freeze the OBSERVED behavior so a liblmdb upgrade that changes
-// it fails loudly.
+// it fails loudly. (0.9 rejected read-only children with MDB_BAD_TXN — 1.0
+// lifted that restriction; this file tracks the 1.0 contract.)
 
 @Suite("raw nested-transaction semantics (this liblmdb build)")
 struct NestedTxnSemanticsProbe {
 
-	@Test func readOnlyChildOfWriteParentIsRejected() throws {
+	@Test func readOnlyChildOfWriteParentIsLegal() throws {
 		let env = try RawEnv()
 		var parent: OpaquePointer? = nil
 		try throwRaw(mdb_txn_begin(env.env, nil, 0, &parent), "write parent")
 
+		// 1.0 allows arbitrarily many read-only children of a write parent
 		var readChild: OpaquePointer? = nil
-		let rc = mdb_txn_begin(env.env, parent, UInt32(MDB_RDONLY), &readChild)
-		#expect(rc == MDB_BAD_TXN, "a read-only child of a WRITE parent must be MDB_BAD_TXN, got \(rc)")
-		#expect(readChild == nil)
+		try throwRaw(mdb_txn_begin(env.env, parent, UInt32(MDB_RDONLY), &readChild), "read-only child of write parent")
+		#expect(readChild != nil)
 
+		mdb_txn_abort(readChild)
 		mdb_txn_abort(parent)
 	}
 

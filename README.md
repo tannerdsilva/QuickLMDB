@@ -84,6 +84,27 @@ All macros expand to plain calls through the existing public API (`Environment`,
 
 The raw `Transaction` surface stays public for code that deliberately manages its own transactions.
 
+## Encrypted environments (LMDB 1.0)
+
+QuickLMDB builds on the LMDB 1.0 engine, whose authenticated per-page encryption and optional per-page checksums are exposed through the same macro surface. Declare the providers on the environment type — the implementations are compile-time facts, the key is runtime data:
+
+```swift
+@MDB_environment(file: "vault.mdb", encryption: ChaChaPoly.self, checksum: Blake2.self)
+public struct Vault: Sendable {
+    public let env: Environment
+    public let records: Database.Strict<RecordKey, Record>
+}
+
+// the generated open now REQUIRES the key — an encrypted environment
+// cannot be opened keyless, enforced at compile time:
+let vault = try Vault.open(at: "<data-path>", encryptionKey: keyBytes)
+```
+
+- `ChaChaPoly` is an AEAD provider (ChaCha20-Poly1305 via rawdog's `RAW_chachapoly`); `Blake2` is an 8-byte BLAKE2b checksum provider (`RAW_blake2`). Both are protocol conformers — `MDB_crypto_impl` / `MDB_checksum_impl` — so custom providers are a protocol conformance away.
+- A checksum-only environment keeps the plain `open(at:mapHeadroom:)` signature — checksums need no key.
+- Encrypting an environment implicitly enables chunked remapping and the encrypt flag. Existing 0.9-format data files will not reopen on the 1.0 engine — migrate with `mdb_dump` → `mdb_load`.
+- The key is never stored or derived for you: supply the bytes at open time from your own secret storage.
+
 ## Reconcile stores over any transport — the `concord` product
 
 `concord` is a typed, transport-agnostic [negentropy](https://github.com/hoytech/negentropy) reconciliation engine over QuickLMDB. It brings two stores with the same fixed-size-byte-key schema into agreement: range fingerprints (24-byte blake2s over mmap key bytes) skip matching regions, mismatches split and recurse, and the resulting have/need diff moves values **as bytes** — never decoded, never re-encoded.

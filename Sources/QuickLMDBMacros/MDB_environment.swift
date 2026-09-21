@@ -138,6 +138,8 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		var maxDBsArg = "8"
 		var modeArg = "[.ownerReadWriteExecute, .groupRead, .otherRead]"
 		var versionArg:String? = nil   // nil = the version attribute was NOT written (legacy exact file name)
+		var encryptionArg:String? = nil // nil = no LMDB 1.0 encryption (unencrypted environment)
+		var checksumArg:String? = nil   // nil = no per-page checksums
 		if let argList = node.arguments?.as(LabeledExprListSyntax.self) {
 			for arg in argList {
 				guard let label = arg.label?.text else {
@@ -151,6 +153,8 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 					case "maxReaders": maxReadersArg = value
 					case "maxDBs": maxDBsArg = value
 					case "mode": modeArg = value
+					case "encryption": encryptionArg = value
+					case "checksum": checksumArg = value
 					default: break
 				}
 			}
@@ -176,8 +180,20 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		lines.append("/// - parameter basePath: the directory that will contain the environment file (created if")
 		lines.append("///   it does not already exist).")
 		lines.append("/// - parameter mapHeadroom: added to the current file size when sizing the memory map.")
+		if encryptionArg != nil {
+			// the encryption key is runtime data (secrets never ride in source or the
+			// attribute); declaring `encryption:` on the environment forces this
+			// parameter to be REQUIRED so an encrypted environment cannot be opened
+			// without its key.
+			lines.append("/// - parameter encryptionKey: the cipher key bytes for the environment's declared")
+			lines.append("///   encryption implementation. required because this environment declares `encryption:`.")
+		}
 		lines.append("@available(*, noasync)")
-		lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
+		if encryptionArg != nil {
+			lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, encryptionKey: [UInt8]) throws -> Self {")
+		} else {
+			lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
+		}
 		lines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)")
 		lines.append("    let slash = basePath.hasSuffix(\"/\") ? \"\" : \"/\"")
 		if let versionArg {
@@ -191,7 +207,15 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			lines.append("    let targetPath = basePath + slash + \(fileArg)")
 		}
 		lines.append("    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)")
-		lines.append("    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union(\(flagsArg)), mapSize: Int(fileSize + mapHeadroom), maxReaders: \(maxReadersArg), maxDBs: \(maxDBsArg), mode: \(modeArg))")
+		var envInitArgs = "path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union(\(flagsArg)), mapSize: Int(fileSize + mapHeadroom), maxReaders: \(maxReadersArg), maxDBs: \(maxDBsArg), mode: \(modeArg)"
+		if let encryptionArg, let checksumArg {
+			envInitArgs += ", encrypt: QuickLMDB.Environment.EncryptionConfiguration(\(encryptionArg), key: encryptionKey), checksum: \(checksumArg)"
+		} else if let encryptionArg {
+			envInitArgs += ", encrypt: QuickLMDB.Environment.EncryptionConfiguration(\(encryptionArg), key: encryptionKey)"
+		} else if let checksumArg {
+			envInitArgs += ", checksum: \(checksumArg)"
+		}
+		lines.append("    let env = try Environment(\(envInitArgs))")
 		lines.append("    let setupTX = try Transaction<Write>(env: env)")
 		for table in tables {
 			let flagsText = table.extraFlags.map { "QuickLMDB.MDB_db_flags([.create]).union(\($0))" } ?? "[.create]"

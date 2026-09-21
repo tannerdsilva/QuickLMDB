@@ -90,14 +90,15 @@ extension Transaction where M == Write {
 	/// creates a CHILD transaction of `parent` (a WRITE parent on the SAME
 	/// environment). the child sees the parent's uncommitted writes;
 	/// `commit()` FOLDS the child into the parent (nothing is durable until
-	/// the parent commits); `abort()` discards only the child. children are
-	/// ALWAYS write-capable: LMDB has no read-only children (a child opened
-	/// with the read-only flag is rejected — pinned `MDB_BAD_TXN`), so this
-	/// initializer exists exclusively on ``Transaction``/``Write`` and a
-	/// READ-ONLY boundary is a composition LEAF — it can thread its snapshot
-	/// into joined calls (a joined read runs on the CALLER's transaction,
-	/// never a child) or open self-scoped committed reads, but never spawn a
-	/// child.
+	/// the parent commits); `abort()` discards only the child. this
+	/// initializer exists exclusively on ``Transaction``/``Write`` — a
+	/// READ-ONLY boundary is a composition LEAF (it can thread its snapshot
+	/// into joined calls — a joined read runs on the CALLER's transaction,
+	/// never a child — or open self-scoped committed reads, but never spawns
+	/// a child). the engine (LMDB 1.0) allows read-only children of a write
+	/// parent, but QuickLMDB never opens one: children are ALWAYS
+	/// write-capable by construction, and a single write child per parent is
+	/// the guaranteed shape.
 	///
 	/// NOTE: the underlying LMDB build does NOT guard close-order — closing a
 	/// parent while a child is open silently succeeds — so ordering (every

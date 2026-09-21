@@ -62,7 +62,7 @@ public enum MDB_transact_mode:Sendable {
 /// conformance — the macro factory does not parameterize file names.
 @attached(member, names: arbitrary)
 @attached(extension, conformances: MDB_environment)
-public macro MDB_environment(file: Swift.String? = nil, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead]) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
+public macro MDB_environment(file: Swift.String? = nil, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead], encryption: QuickLMDB.MDB_crypto_impl.Type? = nil, checksum: QuickLMDB.MDB_checksum_impl.Type? = nil) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")
 
 @attached(member, names:			named(setEntry(key:value:flags:tx:)),
 								named(deleteEntry(key:value:tx:)),

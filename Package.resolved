@@ -1,13 +1,13 @@
 {
-  "originHash" : "31a8dc1220b2535e1a7fb0bdabd8a30484789f8926ea9cdea70ef3eeb712d8bd",
+  "originHash" : "0422ee54ffe53c4969db158832826e509d1268ff12c519b17784730bf45eb7bf",
   "pins" : [
     {
       "identity" : "clmdb",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tannerdsilva/CLMDB.git",
       "state" : {
-        "revision" : "4ce5826424f8e65f395efc5b4c611479384722b1",
-        "version" : "0.9.30"
+        "branch" : "master",
+        "revision" : "653e73e2fc1b48cec661c740510cabfb53af723d"
       }
     },
     {
