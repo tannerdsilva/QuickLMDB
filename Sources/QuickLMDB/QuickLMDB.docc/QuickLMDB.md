@@ -106,6 +106,30 @@ try booking.addBooking(key, record)
 let record = try booking.slotOn(day)
 ```
 
+### environment file names and configuration state
+
+`file:` is optional. WRITTEN, it is the environment's fixed name. OMITTED, the
+generated `open` takes a REQUIRED `fileName: String` parameter, resolved against
+the base path at open time — so ONE type can own per-tenant files
+(`fiat-usd.mdb`, `fiat-eur.mdb`, …). `version:` derives its suffix from the
+supplied name and `encryption:` composes with it.
+
+a stored property that is neither `env` nor a `Database.X` table must be declared
+``QuickLMDB/MDB_state()``: each marked property becomes one REQUIRED `open`
+parameter, in declaration order, and rides into the instance. a core then owns its
+own logger/config instead of pushing it onto a wrapper type.
+
+```swift
+@MDB_environment(flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
+public struct Tenant: Sendable {
+    public let env: Environment
+    public let records: Database.Strict<SlotKey, SlotRecord>
+    @MDB_state public let log: Logger?
+}
+
+let tenant = try Tenant.open(at: "<data-path>", fileName: "tenant-a.mdb", log: nil)
+```
+
 - **modes** (``QuickLMDB/MDB_transact_mode``): `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. child/relationship composition is NOT a mode — composition is joining (below), and a join is a CHILD transaction.
 - **the environment set is inferred from the verbs and the raw tx labels.** every environment type a verb references — or a raw `tx_<E>` reference names, where `E` resolves as an environment in scope — must be `self` (the boundary is attached to that environment type) or a typed parameter of the method — a multi-environment boundary takes the other environments as typed parameters.
 - the typed verbs used **outside** a boundary, and ``MDB_transacted(_:)`` written anywhere but inside one, are compile-time diagnostics.
@@ -229,6 +253,7 @@ let vault = try Vault.open(at: "<data-path>", encryptionKey: keyBytes)
 - ``QuickLMDB/MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)``
 - ``QuickLMDB/MDB_layout()``
 - ``QuickLMDB/MDB_table(name:flags:)``
+- ``QuickLMDB/MDB_state()``
 - ``QuickLMDB/MDB_comparable()``
 
 ### Protocols and value types

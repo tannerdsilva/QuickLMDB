@@ -19,6 +19,7 @@ struct QuickLMDBMacros:CompilerPlugin {
 		MDB_transact_macro.self,
 		MDB_transacted_macro.self,
 		MDB_verb_error_macro.self,
-		MDB_table_macro.self
+		MDB_table_macro.self,
+		MDB_state_macro.self
 	]
 }

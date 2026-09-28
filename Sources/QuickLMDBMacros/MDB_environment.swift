@@ -22,6 +22,14 @@ import SwiftDiagnostics
 //     does to a fixed one, and `encryption:` composes with it (both parameters
 //     are required, `fileName:` first).
 //
+// configuration state: a stored property that is neither `env` nor a table MUST be
+// marked `@MDB_state`. each marked property becomes one REQUIRED parameter on the
+// generated factory (declaration order, after `fileName:` and before
+// `encryptionKey:`) and is carried into the instance — so an environment core can
+// own its own logger/config instead of pushing them onto a wrapper type. an
+// UNMARKED extra property is a diagnostic: the previous silent skip surfaced as a
+// cryptic memberwise-initializer failure at the generated `Self(...)` call.
+//
 // the generated factory forces `.noTLS` onto the environment REGARDLESS of the declared
 // flags. this is intentional and load-bearing: `.noTLS` binds each read transaction's
 // reader slot to the transaction object instead of the thread, which is what makes
@@ -61,6 +69,10 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		case invalidTableName(String)
 		case duplicateTableName(String)
 		case flagTypeConflict(String, String)
+		case undeclaredProperty(String)
+		case mutableState(String)
+		case stateNeedsType(String)
+		case defaultedState(String)
 
 		var description:String {
 			switch self {
@@ -74,6 +86,14 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 					return "two tables resolve to the same LMDB table name \"\(name)\" — table names must be unique within an environment"
 				case .flagTypeConflict(let prop, let flag):
 					return "@MDB_table(flags: [.\(flag)]) on '\(prop)' contradicts its declared type — the dup-sort flags are expressed by the typed subtype (Strict/DupSort/DupFixed), not by this attribute"
+				case .undeclaredProperty(let prop):
+					return "stored property '\(prop)' is neither the `env` handle nor a `Database.X` table — declare it `@MDB_state` if it is environment configuration, or remove it: the generated initializer cannot carry it"
+				case .mutableState(let prop):
+					return "`@MDB_state` property '\(prop)' must be declared `let` — an environment core is an immutable handle, not a mutable bag"
+				case .stateNeedsType(let prop):
+					return "`@MDB_state` property '\(prop)' requires an explicit type annotation — the generated `open` takes it as a parameter"
+				case .defaultedState(let prop):
+					return "`@MDB_state` property '\(prop)' cannot carry a default value — Swift's implicit memberwise initializer omits `let` properties that already hold one, so the generated `open` could never set it; author the default at the call site instead (e.g. a `static func openForDaemon(...)` alias)"
 			}
 		}
 	}
@@ -90,41 +110,78 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		var flagCases:Set<String> // member-case names for conflict validation
 	}
 
-	// scans an environment's stored properties for the `env` handle + `Database.X`
-	// tables (consuming `@MDB_table`), with the shared table resolution.
-	internal static func scanEnvironment(_ decl: StructDeclSyntax) throws -> (hasEnv: Bool, tables: [ResolvedTable]) {
-		var hasEnv = false
-		var tables:[ResolvedTable] = []
+	// a resolved `@MDB_state` configuration property: the property name (also the
+	// generated `open` parameter label) and its declared type, verbatim.
+	internal struct ResolvedState {
+		let property:String
+		let type:String
+	}
+
+	// the ordered scan of an environment's stored properties. DECLARATION ORDER
+	// matters: the generated `Self(...)` call must match the implicit memberwise
+	// initializer's parameter order, which follows declaration order.
+	internal enum ScannedProperty {
+		case env
+		case table(ResolvedTable)
+		case state(ResolvedState)
+	}
+
+	// scans an environment's stored properties: the `env` handle, `Database.X`
+	// tables (consuming `@MDB_table`), and `@MDB_state` configuration. anything
+	// else is a diagnostic — the generated initializer cannot carry it, and the
+	// previous silent skip surfaced as a cryptic memberwise-init failure.
+	internal static func scanEnvironment(_ decl: StructDeclSyntax) throws -> [ScannedProperty] {
+		var scanned:[ScannedProperty] = []
 		for member in decl.memberBlock.members {
 			guard let prop = member.decl.as(VariableDeclSyntax.self) else {
+				continue
+			}
+			// statics are not instance state; computed properties are not stored state
+			if prop.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }) {
 				continue
 			}
 			guard let binding = prop.bindings.first, let propName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else {
 				continue
 			}
-			guard let typeAnnot = binding.typeAnnotation else {
+			if binding.accessorBlock != nil {
 				continue
 			}
 			if propName == "env" {
-				if typeAnnot.type.trimmedDescription.contains("Environment") {
-					hasEnv = true
+				guard let typeAnnot = binding.typeAnnotation, typeAnnot.type.trimmedDescription.contains("Environment") else {
+					continue
 				}
+				scanned.append(.env)
 				continue
 			}
-			let typeText = typeAnnot.type.trimmedDescription
+			let typeText = binding.typeAnnotation?.type.trimmedDescription
 			let isTable: Bool
 			if typeText == "Database" {
 				isTable = true
-			} else if typeText.hasPrefix("Database.") && (typeText.contains("<") && typeText.hasSuffix(">")) {
+			} else if let typeText, typeText.hasPrefix("Database.") && (typeText.contains("<") && typeText.hasSuffix(">")) {
 				isTable = true
 			} else {
 				isTable = false
 			}
-			if isTable {
-				tables.append(try resolveTable(propertyName:propName, typeText:typeText, attributes:prop.attributes))
+			if isTable, let typeText {
+				scanned.append(.table(try resolveTable(propertyName:propName, typeText:typeText, attributes:prop.attributes)))
+				continue
 			}
+			// everything else is configuration state and must say so
+			guard prop.attributes.contains(where: { ($0.as(AttributeSyntax.self)?.attributeName.trimmedDescription) == "MDB_state" }) else {
+				throw MacroError.undeclaredProperty(propName)
+			}
+			guard prop.bindingSpecifier.text == "let" else {
+				throw MacroError.mutableState(propName)
+			}
+			guard let typeText else {
+				throw MacroError.stateNeedsType(propName)
+			}
+			guard binding.initializer == nil else {
+				throw MacroError.defaultedState(propName)
+			}
+			scanned.append(.state(ResolvedState(property:propName, type:typeText)))
 		}
-		return (hasEnv, tables)
+		return scanned
 	}
 
 	static func expansion(of node:AttributeSyntax, providingMembersOf declaration:some DeclGroupSyntax, conformingTo protocols:[TypeSyntax], in context:some MacroExpansionContext) throws -> [DeclSyntax] {
@@ -161,9 +218,11 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			}
 		}
 
-		// -- scan stored properties: env + tables (consuming @MDB_table)
-		let (hasEnv, tables) = try scanEnvironment(structDecl)
-		guard hasEnv else {
+		// -- scan stored properties: env + tables (consuming @MDB_table) + @MDB_state
+		let scanned = try scanEnvironment(structDecl)
+		let tables:[ResolvedTable] = scanned.compactMap { if case .table(let table) = $0 { return table } else { return nil } }
+		let states:[ResolvedState] = scanned.compactMap { if case .state(let state) = $0 { return state } else { return nil } }
+		guard scanned.contains(where: { if case .env = $0 { return true } else { return false } }) else {
 			throw MacroError.missingEnv
 		}
 
@@ -188,6 +247,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			lines.append("/// - parameter fileName: the environment file name, resolved against `basePath` at open")
 			lines.append("///   time (this environment declares no fixed `file:`).")
 		}
+		for state in states {
+			lines.append("/// - parameter \(state.property): environment configuration state, carried on the instance (`@MDB_state`).")
+		}
 		if encryptionArg != nil {
 			// the encryption key is runtime data (secrets never ride in source or the
 			// attribute); declaring `encryption:` on the environment forces this
@@ -200,6 +262,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		var openParams:[String] = ["at basePath: String", "mapHeadroom: UInt64 = 1073741824"]
 		if runtimeFileName {
 			openParams.append("fileName: String")
+		}
+		for state in states {
+			openParams.append("\(state.property): \(state.type)")
 		}
 		if encryptionArg != nil {
 			openParams.append("encryptionKey: [UInt8]")
@@ -234,9 +299,16 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			lines.append("    let \(table.property) = try \(table.type)(env: env, name: \(nameLiteral), flags: \(flagsText), tx: setupTX)")
 		}
 		lines.append("    try setupTX.commit()")
-		var initArgs:[String] = ["env: env"]
-		for table in tables {
-			initArgs.append("\(table.property): \(table.property)")
+		var initArgs:[String] = []
+		for prop in scanned {
+			switch prop {
+				case .env:
+					initArgs.append("env: env")
+				case .table(let table):
+					initArgs.append("\(table.property): \(table.property)")
+				case .state(let state):
+					initArgs.append("\(state.property): \(state.property)")
+			}
 		}
 		lines.append("    return Self(\(initArgs.joined(separator:", ")))")
 		lines.append("}")

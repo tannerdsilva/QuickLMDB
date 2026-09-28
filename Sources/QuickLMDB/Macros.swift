@@ -311,3 +311,39 @@ public macro MDB_layout() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_l
 /// fixed (unused) name is all the compiler needs to break the cycle.
 @attached(peer, names: named(_MDB_table_marker))
 public macro MDB_table(name: Swift.String? = nil, flags: [QuickLMDB.MDB_db_flags] = []) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_table_macro")
+
+
+// - MARK: schema layer — environment configuration state
+
+/// configuration state on an ``MDB_environment`` type: a stored `let` property that
+/// is neither the environment handle nor a table.
+///
+/// the `@MDB_environment` scan turns each marked property into ONE REQUIRED
+/// parameter on the generated `open` (declaration order, after `fileName:` and
+/// before `encryptionKey:`) and carries it into the instance — so an environment
+/// core owns its own logger/config instead of pushing them onto a wrapper type:
+///
+/// ```swift
+/// @MDB_environment(file: "store.mdb")
+/// struct StoreCore {
+///     let env: Environment
+///     let primary: Database.Strict<Key, Value>
+///     @MDB_state let log: Logger?          // -> open(at:mapHeadroom:log:)
+/// }
+/// ```
+///
+/// rules (each violation is a friendly diagnostic):
+/// - `let` only — a core is a handle, not a mutable bag;
+/// - an explicit type annotation is required (the factory parameter cannot spell an
+///   inferred type);
+/// - NO initializer: Swift's implicit memberwise initializer OMITS `let` properties
+///   that already hold a value, so a defaulted state property could never be set at
+///   `open`. author the default at the call site instead — the same shape as the
+///   documented `static func openForDaemon(...)` alias;
+/// - any stored property that is neither `env`, a table, nor `@MDB_state` is an
+///   error (it previously failed as a cryptic memberwise-initializer error).
+///
+/// state is invisible to ``MDB_transact(_:)`` boundaries and the typed verb family:
+/// it configures the instance, never the transaction.
+@attached(peer, names: named(_MDB_state_marker))
+public macro MDB_state() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_state_macro")

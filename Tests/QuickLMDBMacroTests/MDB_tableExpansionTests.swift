@@ -15,6 +15,7 @@ import Foundation
 private let schemaMacros: [String: Macro.Type] = [
 	"MDB_environment": MDB_environment_macro.self,
 	"MDB_table": MDB_table_macro.self,
+	"MDB_state": MDB_state_macro.self,
 ]
 
 // NOTE: the schema fixtures use seeded file.expand paths below rather than
@@ -590,6 +591,172 @@ struct RuntimeFileNameExpansionTests {
 			extension Core: MDB_environment {
 			}
 			"""
+		)
+	}
+
+}
+
+@Suite("MDB_state — configuration state on an environment")
+struct StateSchemaExpansionTests {
+
+	@Test func stateParameterIsRequiredAndCarriedIntoTheInstance() {
+		// byte-frozen oracle (actual expansion spliced from the dump harness)
+		assertSchemaExpansion(
+			"""
+			@MDB_environment(file: "test.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+				@MDB_state let log: Logger?
+			}
+			""",
+			expanded: """
+			
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+				let log: Logger?
+			
+			    @available(*, noasync)
+			
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, log: Logger?) throws -> Self {
+			
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			
+			    let slash = basePath.hasSuffix("/") ? "" : "/"
+			
+			    let targetPath = basePath + slash + "test.mdb"
+			
+			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
+			
+			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 16, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead])
+			
+			    let setupTX = try Transaction<Write>(env: env)
+			
+			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
+			
+			        try setupTX.commit()
+			
+			        return Self(env: env, events: events, log: log)
+			
+			    }
+			}
+			
+			extension Core: MDB_environment {
+			}
+			"""
+		)
+	}
+
+	@Test func stateKeepsDeclarationOrderAcrossFileNameAndEncryption() {
+		// byte-frozen oracle (actual expansion spliced from the dump harness)
+		assertSchemaExpansion(
+			"""
+			@MDB_environment(flags: [.noSubDir], maxReaders: 16, maxDBs: 8, encryption: QuickLMDB.ChaChaPoly.self, checksum: QuickLMDB.Blake2.self)
+			struct Core {
+				let env: Environment
+				@MDB_state let tenant: TenantRef
+				@MDB_state let log: Logger?
+				let events: Database.Strict<TestKey, TestValue>
+			}
+			""",
+			expanded: """
+			
+			struct Core {
+				let env: Environment
+				let tenant: TenantRef
+				let log: Logger?
+				let events: Database.Strict<TestKey, TestValue>
+			
+			    @available(*, noasync)
+			
+			    public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, fileName: String, tenant: TenantRef, log: Logger?, encryptionKey: [UInt8]) throws -> Self {
+			
+			        _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)
+			
+			    let slash = basePath.hasSuffix("/") ? "" : "/"
+			
+			    let targetPath = basePath + slash + fileName
+			
+			    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)
+			
+			    let env = try Environment(path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union([.noSubDir]), mapSize: Int(fileSize + mapHeadroom), maxReaders: 16, maxDBs: 8, mode: [.ownerReadWriteExecute, .groupRead, .otherRead], encrypt: QuickLMDB.Environment.EncryptionConfiguration(QuickLMDB.ChaChaPoly.self, key: encryptionKey), checksum: QuickLMDB.Blake2.self)
+			
+			    let setupTX = try Transaction<Write>(env: env)
+			
+			    let events = try Database.Strict<TestKey, TestValue>(env: env, name: "events", flags: [.create], tx: setupTX)
+			
+			        try setupTX.commit()
+			
+			        return Self(env: env, tenant: tenant, log: log, events: events)
+			
+			    }
+			}
+			
+			extension Core: MDB_environment {
+			}
+			"""
+		)
+	}
+
+	@Test func anUnmarkedStoredPropertyIsADiagnostic() {
+		assertSchemaError(
+			"""
+			@MDB_environment(file: "test.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+			struct Core {
+				let env: Environment
+				let events: Database.Strict<TestKey, TestValue>
+				let cache: [String]
+			}
+			""",
+			[
+				"stored property 'cache' is neither the `env` handle nor a `Database.X` table — declare it `@MDB_state` if it is environment configuration, or remove it: the generated initializer cannot carry it",
+			]
+		)
+	}
+
+	@Test func mutableStateIsADiagnostic() {
+		assertSchemaError(
+			"""
+			@MDB_environment(file: "test.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+			struct Core {
+				let env: Environment
+				@MDB_state var counter: Int
+			}
+			""",
+			[
+				"`@MDB_state` property 'counter' must be declared `let` — an environment core is an immutable handle, not a mutable bag",
+			]
+		)
+	}
+
+	@Test func aDefaultedStatePropertyIsADiagnostic() {
+		assertSchemaError(
+			"""
+			@MDB_environment(file: "test.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+			struct Core {
+				let env: Environment
+				@MDB_state let log: Logger? = nil
+			}
+			""",
+			[
+				"`@MDB_state` property 'log' cannot carry a default value — Swift's implicit memberwise initializer omits `let` properties that already hold one, so the generated `open` could never set it; author the default at the call site instead (e.g. a `static func openForDaemon(...)` alias)",
+			]
+		)
+	}
+
+	@Test func anUntypedStatePropertyIsADiagnostic() {
+		assertSchemaError(
+			"""
+			@MDB_environment(file: "test.mdb", flags: [.noSubDir], maxReaders: 16, maxDBs: 8)
+			struct Core {
+				let env: Environment
+				@MDB_state let log = 5
+			}
+			""",
+			[
+				"`@MDB_state` property 'log' requires an explicit type annotation — the generated `open` takes it as a parameter",
+			]
 		)
 	}
 

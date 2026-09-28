@@ -18,6 +18,19 @@ tagged release is 15.0.0).
   environments that DO write `file:` expand byte-identically to before. the
   `missingFileArg` diagnostic is retired — omitting `file:` IS the runtime mode.
 
+- **`@MDB_state` — configuration state on an environment core** (additive).
+  a stored property that is neither `env` nor a table is now declared
+  `@MDB_state` and becomes ONE REQUIRED parameter on the generated `open`, in
+  declaration order (after `fileName:`, before `encryptionKey:`), carried into
+  the instance. this is what lets a core own its own logger/tenant identity
+  instead of pushing it onto a facade wrapper. rules, each a friendly
+  diagnostic: `let` only; an explicit type annotation; NO initializer (Swift's
+  implicit memberwise initializer omits `let` properties that already hold a
+  value, so a defaulted state property could never be set at open — author the
+  default at the call site); any other unmarked stored property is an error
+  instead of the previous cryptic memberwise-init failure. state is invisible to
+  boundaries and the verb vocabulary.
+
 - **LMDB 1.0 encryption + checksums through the macro layer** (breaking — new
   engine + new surface). QuickLMDB now builds against CLMDB's LMDB 1.0.2 line
   (branch pin `master`; the 1.0 tag has not been cut yet — tighten the range
