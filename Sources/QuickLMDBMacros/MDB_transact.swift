@@ -55,6 +55,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		case noVerbs
 		case missingEnvironmentInstance(String)
 		case ambiguousEnvironment(String)
+		case reservedTransactionName(String)
 
 		var description: String {
 			switch self {
@@ -75,11 +76,13 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			case .mustBeInstance:
 				return "@MDB_transact methods must be INSTANCE methods — the environments are `self` and typed parameters of the same type"
 			case .noVerbs:
-				return "@MDB_transact body has no database verbs (#store/#load/#delete/#contains/#cursor/#clear/#stats/#drop) — the boundary's environments are inferred from the verbs"
+				return "@MDB_transact body has no database verbs (#store/#load/#delete/#contains/#cursor/#clear/#stats/#drop) and no raw tx_<E> references to an environment in scope — the boundary's environments are inferred from those"
 			case .missingEnvironmentInstance(let env):
 				return "@MDB_transact: no instance of environment type '\(env)' is in scope — attach the boundary to '\(env)' itself, or add a parameter of type '\(env)'"
 			case .ambiguousEnvironment(let env):
 				return "@MDB_transact: more than one instance of environment type '\(env)' is in scope (self + a parameter, or two parameters) — the typed verbs can only address ONE instance per environment type; split the boundary or use the raw `Transaction` surface for the second"
+			case .reservedTransactionName(let name):
+				return "@MDB_transact: '\(name)' is RESERVED — the boundary injects its transactions as tx_<E> (the caller's arrives as parent_tx_<E> in the child twin); rename the local"
 			}
 		}
 	}
@@ -266,18 +269,31 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 	}
 
 	/// the environment types the body touches, in first-appearance order —
-	/// from each verb's E argument.
-	private static func inferredEnvironments(of statements: CodeBlockItemListSyntax) -> [String] {
+	/// from each verb's E argument AND from raw `tx_<E>` references whose
+	/// suffix names an environment in scope. the raw surface is reserved by
+	/// the dialect, so a boundary that only dereferences transactions
+	/// directly still infers its environments (and remains joinable).
+	private static func inferredEnvironments(
+		of statements: CodeBlockItemListSyntax,
+		enclosingType: String?,
+		params: FunctionParameterClauseSyntax?
+	) -> [String] {
 		var seen: [String] = []
 		var seenSet = Set<String>()
-		let visitor = VerbEnvironmentCollector(found: {
-			env in
+		let add: (String) -> Void = { env in
 			if !seenSet.contains(env) {
 				seenSet.insert(env)
 				seen.append(env)
 			}
-		})
+		}
+		let visitor = VerbEnvironmentCollector(found: add)
 		visitor.walk(statements)
+		let rawVisitor = RawTransactionLabelCollector(found: { suffix in
+			if MDB_transact_macro.instanceSourceCount(envName: suffix, enclosingType: enclosingType, params: params) > 0 {
+				add(suffix)
+			}
+		})
+		rawVisitor.walk(statements)
 		return seen
 	}
 
@@ -293,6 +309,54 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				found(env)
 			}
 			// keep descending: verbs can be nested inside other expressions
+			return .visitChildren
+		}
+	}
+
+	/// collects `tx_<E>` identifier references. the prefix is reserved by the
+	/// dialect; the suffix is only ACCEPTED as an environment when it
+	/// resolves in scope (see `inferredEnvironments`), so unrelated
+	/// identifiers that merely share the prefix are ignored.
+	private final class RawTransactionLabelCollector: SyntaxVisitor {
+		let found: (String) -> Void
+		init(found: @escaping (String) -> Void) {
+			self.found = found
+			super.init(viewMode: .sourceAccurate)
+		}
+		override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+			let name = node.baseName.text
+			if name.hasPrefix("tx_") {
+				let suffix = String(name.dropFirst(3))
+				if !suffix.isEmpty {
+					found(suffix)
+				}
+			}
+			return .visitChildren
+		}
+	}
+
+	/// true when the body declares a local variable with the given name.
+	private static func bodyDeclaresLocal(named name: String, in statements: CodeBlockItemListSyntax) -> Bool {
+		var declared = false
+		let visitor = LocalNameCollector(found: { found in
+			if found == name { declared = true }
+		})
+		visitor.walk(statements)
+		return declared
+	}
+
+	private final class LocalNameCollector: SyntaxVisitor {
+		let found: (String) -> Void
+		init(found: @escaping (String) -> Void) {
+			self.found = found
+			super.init(viewMode: .sourceAccurate)
+		}
+		override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+			for binding in node.bindings {
+				if let pattern = binding.pattern.as(IdentifierPatternSyntax.self) {
+					self.found(pattern.identifier.text)
+				}
+			}
 			return .visitChildren
 		}
 	}
@@ -384,9 +448,22 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		let (fn, mode) = try validateMethod(declaration, node: node)
 		let body = fn.body?.statements ?? CodeBlockItemListSyntax([])
 
-		let envNames = inferredEnvironments(of: body)
 		let enclosingType = MDB_transact_macro.enclosingTypeName(from: context)
+		let envNames = inferredEnvironments(of: body, enclosingType: enclosingType, params: fn.signature.parameterClause)
 		guard !envNames.isEmpty else { throw Failure.noVerbs }
+
+		// the transaction labels are RESERVED: an authored local of the same
+		// name would shadow the injected transaction parameter in the sibling
+		// (and the child local in the child twin). checked from the inferred
+		// names — a lexical fact, independent of instance resolution.
+		for envName in envNames {
+			let label = MDB_transact_macro.labelFor(envName)
+			for reserved in [label, "parent_\(label)"] {
+				if MDB_transact_macro.bodyDeclaresLocal(named: reserved, in: body) {
+					throw Failure.reservedTransactionName(reserved)
+				}
+			}
+		}
 
 		let resolutions = try resolveEnvironments(envNames: envNames, enclosingType: enclosingType, params: fn.signature.parameterClause)
 
@@ -456,8 +533,8 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 			return []   // the BODY role owns the diagnostics
 		}
 		let body = fn.body?.statements ?? CodeBlockItemListSyntax([])
-		let envNames = inferredEnvironments(of: body)
 		let enclosingType = MDB_transact_macro.enclosingTypeName(from: context)
+		let envNames = inferredEnvironments(of: body, enclosingType: enclosingType, params: fn.signature.parameterClause)
 		if envNames.isEmpty { return [] }
 
 		let resolutions: [(name: String, label: String, expr: String)]
@@ -478,6 +555,12 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		}
 		let txParamType = mode.isReadWrite ? "Transaction<Write>" : "Transaction<M>"
 		let paramStrs = authorParams + resolutions.map { "\($0.label): borrowing \(txParamType)" }
+		// the CHILD variant's parameters: the author's params + one
+		// `parent_tx_<E>` each. the caller's transaction is RENAMED so the
+		// child's own local can take the canonical `tx_<E>` name — every
+		// authored reference (verb-lowered OR raw) then resolves to the CHILD
+		// transaction, never the blocked parent.
+		let childParamStrs = authorParams + resolutions.map { "parent_\($0.label): borrowing \(txParamType)" }
 
 		let modifiers = fn.modifiers.trimmedDescription
 		var startAttrs = ""
@@ -520,31 +603,37 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		// label (of the tx it was handed — a root at top level, or an outer
 		// join's child), runs the body DIRECTLY INLINE against the child txns
 		// (no closure wrapper), commits each child (folds into the parent) or
-		// aborts them (selective rollback when the caller catches). the
-		// authored `return` statements are re-pointed to a labeled exit
-		// (`__mdb_output = …` + `break childWrapped`) so every path lands AFTER
-		// the commits. a READ variant is byte-identical to flat — the join
-		// site cannot classify read-vs-write, so reads carry the flat twin.
+		// aborts them (selective rollback when the caller catches). the tx it
+		// was handed arrives as `parent_tx_<E>`, and the CHILD LOCAL takes the
+		// canonical `tx_<E>` name — so every authored reference, verb-lowered
+		// or raw, resolves to the child transaction (a raw reference to the
+		// parent would hit MDB_TXN_BLOCKED: a parent with a live child cannot
+		// serve gets/puts/cursors). the authored `return` statements are
+		// re-pointed to a labeled exit (`__mdb_output = …` + `break
+		// childWrapped`) so every path lands AFTER the commits. a READ variant
+		// is a thin redirect to the flat sibling — the join site cannot
+		// classify read-vs-write, so reads carry the flat twin.
 		let childName = name + "_child"
 		let childDecl: String
 		if mode.isReadWrite {
-			let override = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.label, "__child_" + $0.label) })
-			let childRewriter = SiblingRewriter(resolutions: resolutions, txOverride: override)
-			let childBodyText = childRewriter.visit(body).map { $0.trimmedDescription }.joined(separator: "\n")
+			// the child's own local IS `tx_<E>`, so both the verb-lowered
+			// calls and the authored raw references resolve to the child
+			// transaction by construction — one rewriter serves both bodies
+			let childBodyText = rewriter.visit(body).map { $0.trimmedDescription }.joined(separator: "\n")
 			let retType = fn.signature.returnClause?.type.trimmedDescription
 			let hasReturns = MDB_transact_macro.bodyHasReturns(of: body)
-			let abortLines = resolutions.map { "    __child_\($0.label).abort()" }.joined(separator: "\n")
-			let commitLines = resolutions.map { "    try __child_\($0.label).commit()" }.joined(separator: "\n")
+			let abortLines = resolutions.map { "    \($0.label).abort()" }.joined(separator: "\n")
+			let commitLines = resolutions.map { "    try \($0.label).commit()" }.joined(separator: "\n")
 			var childLines: [String] = []
 			for r in resolutions {
-				childLines.append("    let __child_\(r.label) = try Transaction<Write>(env: \(r.expr).env, parent: \(r.label))")
+				childLines.append("    let \(r.label) = try Transaction<Write>(env: \(r.expr).env, parent: parent_\(r.label))")
 			}
 			if let retType {
 				childLines.append("    let __mdb_output: \(retType)")
 				if hasReturns {
 					// lower the body first (verbs + inner joins), THEN re-point
 					// its returns to the labeled exit
-					let lowered = childRewriter.visit(body)
+					let lowered = rewriter.visit(body)
 					let reroute = ChildReturnRewriter(assignTo: "__mdb_output", label: "childWrapped").visit(lowered)
 					let reroutedText = reroute.map { $0.trimmedDescription }.joined(separator: "\n")
 					childLines.append("    childWrapped: do {")
@@ -564,7 +653,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				childLines.append(commitLines)
 				childLines.append("    return __mdb_output")
 			} else if hasReturns {
-				let lowered = childRewriter.visit(body)
+				let lowered = rewriter.visit(body)
 				let reroute = ChildReturnRewriter(assignTo: nil, label: "childWrapped").visit(lowered)
 				let reroutedText = reroute.map { $0.trimmedDescription }.joined(separator: "\n")
 				childLines.append("    childWrapped: do {")
@@ -583,16 +672,16 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				childLines.append("    }")
 				childLines.append(commitLines)
 			}
-			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(childLines.joined(separator: "\n"))\n}"
+			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(childParamStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(childLines.joined(separator: "\n"))\n}"
 		} else {
 			// a READ `_child` twin is a THIN REDIRECT to the flat sibling: a
 			// joined read threads THIS caller's transaction (it NEVER spawns a
 			// child — LMDB has no read-only children, pinned MDB_BAD_TXN), so
 			// the redirect is the entire body. no duplicated body per peer.
 			var redirectArgs = MDB_transact_macro.callArgsText(parameters: fn.signature.parameterClause)
-			for r in resolutions { redirectArgs.append("\(r.label): \(r.label)") }
+			for r in resolutions { redirectArgs.append("\(r.label): parent_\(r.label)") }
 			let redirect = "    try self.\(name)(\(redirectArgs.joined(separator: ", ")))"
-			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(paramStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(redirect)\n}"
+			childDecl = "\(modifierPrefix)func \(childName)\(genericClause)(\(childParamStrs.joined(separator: ", ")))\(effects)\(ret)\(authorWhere) {\n\(redirect)\n}"
 		}
 		return [DeclSyntax(stringLiteral: flatDecl), DeclSyntax(stringLiteral: childDecl)]
 	}
@@ -662,19 +751,11 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 		// env label lookup by type name
 		private let labelBy: [String: String]
 		private let exprBy: [String: String]
-		/// the tx EXPRESSION for a label — the child variant substitutes its
-		/// own child local (`__child_<label>`); flat bodies keep the label.
-		private let txOverride: [String: String]
 
-		init(resolutions: [(name: String, label: String, expr: String)], txOverride: [String: String] = [:]) {
+		init(resolutions: [(name: String, label: String, expr: String)]) {
 			self.resolutions = resolutions
 			self.labelBy = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.name, $0.label) })
 			self.exprBy = Dictionary(uniqueKeysWithValues: resolutions.map { ($0.name, $0.expr) })
-			self.txOverride = txOverride
-		}
-
-		private func txExpr(for label: String) -> String {
-			txOverride[label] ?? label
 		}
 
 		override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
@@ -718,7 +799,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				  let expr = exprBy[envName],
 				  let keyPath = MDB_transact_macro.verbDatabaseKeyPathText(node) else { return nil }
 			let receiver = "\(expr)[keyPath: \(keyPath)]"
-			let txText = txExpr(for: label)
+			let txText = label
 			switch node.macroName.text {
 			case "store":
 				let value = arg(node, "value")?.expression.trimmedDescription ?? ""
@@ -782,7 +863,7 @@ internal struct MDB_transact_macro: BodyMacro, PeerMacro {
 				if s.hasSuffix(",") { s = String(s.dropLast()) }
 				parts.append(s)
 			}
-			for r in resolutions { parts.append("\(r.label): \(txExpr(for: r.label))") }
+			for r in resolutions { parts.append("parent_\(r.label): \(r.label)") }
 			// qualify bare callees with `self.` — the typed verb macros shadow
 			// bare same-named member calls in this scope
 			let calleeText: String

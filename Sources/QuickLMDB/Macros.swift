@@ -104,13 +104,18 @@ internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", t
 // #cursor/#clear/#stats/#drop) is the database-operation vocabulary inside a
 // boundary (environment by `E.Type`, table by `KeyPath<E, Database>`);
 // #MDB_transacted is the join marker. the authored signature carries no
-// transaction parameters, and the tx labels (`tx_<E>`) are implementation
-// detail of the generated shell/sibling pair.
+// transaction parameters: inside a boundary the label `tx_<E>` names that
+// environment's open transaction (usable directly for the raw surface), and
+// the join hands the callee's `_child` twin the caller's transaction as
+// `parent_tx_<E>` so the child local can hold the canonical name. the
+// `tx_`/`parent_tx_` prefixes are reserved.
 
 /// makes the annotated INSTANCE method a transaction boundary.
 ///
-/// the environment set is INFERRED from the typed verb calls in the body:
-/// every environment type referenced by a verb must be `self` (the boundary
+/// the environment set is INFERRED from the typed verb calls in the body AND
+/// from raw `tx_<E>` references whose suffix names an environment in scope:
+/// every environment type referenced by a verb (or by its `tx_<E>` label)
+/// must be `self` (the boundary
 ///   is attached to an ``MDB_environment`` type) or a parameter declared
 /// with that exact type. the method's authored signature carries no
 /// transaction parameters at all.
@@ -129,6 +134,17 @@ internal macro MDB_cursor_dupsort() = #externalMacro(module:"QuickLMDBMacros", t
 ///
 /// the method must be `throws` (the boundary can fail to open, commit, or
 /// abort), must not be `async`, and must be an instance method.
+///
+/// THE RAW TRANSACTION SURFACE: inside a boundary, `tx_<E>` names the
+/// transaction open for environment `E`. the verbs lower onto it, and
+/// authored code may use it directly (`database.loadEntry(…, tx: tx_<E>)`)
+/// for operations the verb vocabulary does not cover. the name resolves to
+/// the boundary's OWN transaction in every generated form — the flat
+/// sibling AND the `_child` twin (where the caller's transaction arrives
+/// renamed as `parent_tx_<E>`) — so a joined callee's raw references always
+/// run on the join's child. the `tx_`/`parent_tx_` prefixes are RESERVED:
+/// an authored local shadowing an in-scope environment's label is rejected
+/// at compile time.
 ///
 /// calling the method is a ROOT-scoped unit entry (it opens its own fresh
 /// transactions per the declared mode and commits-or-aborts alone).
@@ -162,8 +178,10 @@ public macro MDB_transact(_ mode: MDB_transact_mode) = #externalMacro(module:"Qu
 
 /// the call marker for ``MDB_transact(_:)``-wrapped functions (Design B).
 /// inside a boundary the call is rewritten onto the callee's peer'd `_child`
-/// variant, which opens a CHILD transaction of this boundary's CURRENT
-/// transaction per environment: joined reads SEE the boundary's own
+/// variant — the callee's authored parameters plus `parent_tx_<E>: borrowing
+/// Transaction<…>` per environment, carrying THIS boundary's current
+/// transaction — which opens a CHILD transaction of it per environment: joined
+/// reads SEE the boundary's own
 /// uncommitted state — by threading the caller's transaction directly (LMDB
 /// has no read-only children, pinned, so reads never spawn a child); a
 /// joined write FOLDS into the boundary on success

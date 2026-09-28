@@ -107,14 +107,14 @@ let record = try booking.slotOn(day)
 ```
 
 - **modes** (``QuickLMDB/MDB_transact_mode``): `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. child/relationship composition is NOT a mode — composition is joining (below), and a join is a CHILD transaction.
-- **the environment set is inferred from the verbs.** every environment type a verb references must be `self` (the boundary is attached to that environment type) or a typed parameter of the method — a multi-environment boundary takes the other environments as typed parameters.
+- **the environment set is inferred from the verbs and the raw tx labels.** every environment type a verb references — or a raw `tx_<E>` reference names, where `E` resolves as an environment in scope — must be `self` (the boundary is attached to that environment type) or a typed parameter of the method — a multi-environment boundary takes the other environments as typed parameters.
 - the typed verbs used **outside** a boundary, and ``MDB_transacted(_:)`` written anywhere but inside one, are compile-time diagnostics.
 - the annotated method must be an instance method, `throws` (the boundary can fail to open or close), and must not be `async`.
 - typing end to end: `#store(Booking.self, database: \.sheets, key:…, value:…)` type-checks `key`/`value` against the `Database.Strict<SlotKey, SlotRecord>` the keypath names.
 
-### Composition is joining — and a join is a CHILD transaction
+### Transactions are always correct by design
 
-`#MDB_transacted(callee(args))` is rewritten onto the callee's peer'd `_child` variant, which opens a CHILD transaction of *this* boundary's current transaction per environment (a root at top level, or an outer join's child — joins nest to arbitrary depth):
+`#MDB_transacted(callee(args))` is rewritten onto the callee's peer'd `_child` variant, which opens a CHILD transaction of *this* boundary's current transaction per environment (a root at top level, or an outer join's child — joins nest to arbitrary depth). The caller's transaction arrives in the child twin as `parent_tx_<E>`, and the child's own local holds the canonical `tx_<E>` name — so every reference in the authored body, verb-lowered or raw, resolves to the child transaction (a raw reference to the parent would trip LMDB's `MDB_TXN_BLOCKED`: a parent with a live child cannot serve gets, puts, or cursors):
 
 - joined reads see this boundary's own uncommitted state — by threading the caller's transaction directly (LMDB has no read-only children, pinned, so reads never spawn a child; a `.readOnly` boundary is a composition leaf);
 - a joined write **folds into the boundary** on success (durable when the boundary commits) and, on failure, **aborts only the child** — a catching caller keeps its prior writes (selective rollback); an uncaught join failure still aborts the whole boundary (atomicity preserved);
@@ -123,11 +123,15 @@ let record = try booking.slotOn(day)
 - the equal-env-set contract: the rewrite passes the caller's full tx label set, so the callee must reference the same environment-type set (a single-env callee called from a multi-env boundary does not compile — loud and named at the call site);
 - a bare call to a write boundary inside a live boundary is a compile-time error (the `@MDB_environment` write-composition lint) — it would root-scope a SECOND write on a live writer; composition is spelled with the join marker.
 
-### ``QuickLMDB/MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)`` — schema assembly
+### The raw transaction surface, and reserved names
+
+Inside a boundary, `tx_<E>` names the transaction open for environment `E`. The verbs lower onto it, and authored code may use it **directly** (`sheets.loadEntry(…, tx: tx_<E>)`, `mdb_del`-style pair deletes on non-dup tables, cursor `deleteCurrentEntry`) for the corners the verb vocabulary does not cover. Because the child twin's local holds the canonical name, the raw surface is correct under joins as well as at the root. The `tx_`/`parent_tx_` prefixes are **reserved** — an authored local shadowing an in-scope environment's label is rejected at compile time.
+
+### Schema assembly
 
 Generates a `static func open(at:mapHeadroom:)` that creates the directory as needed, sizes the memory map as current file size plus headroom, opens the environment with the macro-declared flags, and opens every `Database.X` table in one setup write-transaction. Table names are derived from the property names. The struct must store exactly `env` plus `Database.X` tables (plain `Database` raw tables are supported). `.noTLS` is forced on every environment (reader slots bind to the transaction object, making Swift task-based concurrency safe and enabling sibling reads). Writing the optional `version:` derives the on-disk name `<stem>-v<N>.mdb` — the schema version rides in the file name (opt-in; bumping ships a fresh file, old data untouched).
 
-### ``QuickLMDB/MDB_layout()`` — the multi-environment arrangement
+### MDB_layout — the multi-environment arrangement
 
 ``QuickLMDB/MDB_layout()`` on a struct owning N ``QuickLMDB/MDB_environment`` types generates a single `open(at:mapHeadroom:)` — each environment opens at `<base>/<property name>` and a fresh instance is assembled — plus a `mdb_environment_names` inventory. no per-environment factories, no statics, no baked path; every environment stays its own type and boundaries live on those types.
 
@@ -205,7 +209,7 @@ let vault = try Vault.open(at: "<data-path>", encryptionKey: keyBytes)
 - ``QuickLMDB/DatabaseDupIterator``
 - ``QuickLMDB/Operation``
 
-### The typed-verb and boundary macro vocabulary
+### Verb macros
 
 - ``QuickLMDB/MDB_transact(_:)``
 - ``QuickLMDB/MDB_transact_mode``
