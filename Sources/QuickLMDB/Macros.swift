@@ -41,7 +41,12 @@ public enum MDB_transact_mode:Sendable {
 /// which is what ``MDB_transact(_:)`` attaches boundaries to.
 ///
 /// - Parameters:
-///   - file: the name of the environment file (appended to the base path).
+///   - file: the name of the environment file, appended to the base path — an
+///     expression, fixed at declaration time. OMIT `file:` for a RUNTIME file name:
+///     the generated factory then takes a required `fileName: String` parameter,
+///     resolved against the base path at open time, so ONE type can own per-tenant
+///     files (`fiat-<base>.mdb`). `version:` derives its suffix from whichever name
+///     is used.
 ///   - version: the schema version, ENGAGED ONLY WHEN WRITTEN. a bare
 ///     environment keeps its exact `file:` name; writing `version:` derives the on-disk
 ///     name `<stem>-v<N>.mdb` (so `version: 0` gives `-v0`). bumping the
@@ -65,10 +70,10 @@ public enum MDB_transact_mode:Sendable {
 ///
 /// the struct must store exactly an `env: Environment` property plus `Database.X` tables.
 ///
-/// the generated factory's file name comes from the `file:` attribute (plus
-/// the optional `version:` suffix). runtime-parameterized file names are the
-/// consumer's own `open(at:)` over a hand-rolled `MDB_environment`
-/// conformance — the macro factory does not parameterize file names.
+/// the generated factory's file name is either the `file:` attribute (plus the
+/// optional `version:` suffix) or — when `file:` is omitted — the required
+/// `fileName:` parameter. the parameter order is `at`, `mapHeadroom`, `fileName`
+/// (runtime mode only), `encryptionKey` (encrypted environments only).
 @attached(member, names: arbitrary)
 @attached(extension, conformances: MDB_environment)
 public macro MDB_environment(file: Swift.String? = nil, version: Swift.UInt = 0, flags: [QuickLMDB.Environment.Flags] = [.noSubDir], maxReaders: Swift.UInt32 = 32, maxDBs: Swift.UInt32 = 8, mode: [SystemPackage.FilePermissions] = [.ownerReadWriteExecute, .groupRead, .otherRead], encryption: QuickLMDB.MDB_crypto_impl.Type? = nil, checksum: QuickLMDB.MDB_checksum_impl.Type? = nil) = #externalMacro(module:"QuickLMDBMacros", type:"MDB_environment_macro")

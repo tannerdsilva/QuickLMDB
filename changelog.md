@@ -8,6 +8,16 @@ architecture documented below and is NOT in this release; those draft sections
 are removed so the version history matches what actually ships (the prior
 tagged release is 15.0.0).
 
+- **runtime environment file names** (additive). `@MDB_environment` no longer
+  requires `file:`: OMITTING it makes the generated factory take a REQUIRED
+  `fileName: String` parameter, resolved against the base path at open time —
+  one type owns per-tenant files (`fiat-<base>.mdb`) without hand-rolling an
+  `MDB_environment` conformance. `version:` derives its suffix from the supplied
+  name, and `encryption:` composes with it, so an encrypted runtime-named
+  environment opens as `open(at:mapHeadroom:fileName:encryptionKey:)`.
+  environments that DO write `file:` expand byte-identically to before. the
+  `missingFileArg` diagnostic is retired — omitting `file:` IS the runtime mode.
+
 - **LMDB 1.0 encryption + checksums through the macro layer** (breaking — new
   engine + new surface). QuickLMDB now builds against CLMDB's LMDB 1.0.2 line
   (branch pin `master`; the 1.0 tag has not been cut yet — tighten the range

@@ -12,11 +12,15 @@ import SwiftDiagnostics
 //
 // which sizes the memory map as current file size + headroom, opens the environment with
 // the macro-declared flags/readers/dbs/mode, and opens every table in one setup
-// write-transaction, deriving each table's name from its property name. runtime
-// parameterized environment file names are out of scope for the macro factory — the
-// migration-stage consumers hand-roll their own `open(at:)` over a raw
-// `MDB_environment` conformance when they need per-tenant file names, and the
-// versioned `version:` attribute covers the fresh-file schema-migration story.
+// write-transaction, deriving each table's name from its property name.
+//
+// the file name has two modes, selected by whether `file:` is written:
+//   - `file:` written -> a FIXED name (an expression, spliced into the factory).
+//   - `file:` OMITTED -> RUNTIME mode: the generated factory takes a REQUIRED
+//     `fileName: String` parameter, so one type can own per-tenant files
+//     (`fiat-<base>.mdb`). `version:` applies to the supplied name exactly as it
+//     does to a fixed one, and `encryption:` composes with it (both parameters
+//     are required, `fileName:` first).
 //
 // the generated factory forces `.noTLS` onto the environment REGARDLESS of the declared
 // flags. this is intentional and load-bearing: `.noTLS` binds each read transaction's
@@ -54,7 +58,6 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 	enum MacroError:Swift.Error, CustomStringConvertible {
 		case notAStruct
 		case missingEnv
-		case missingFileArg
 		case invalidTableName(String)
 		case duplicateTableName(String)
 		case flagTypeConflict(String, String)
@@ -65,8 +68,6 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 					return "@MDB_environment can only be applied to a struct"
 				case .missingEnv:
 					return "@MDB_environment requires the struct to have a stored property named `env` of type `Environment`"
-				case .missingFileArg:
-					return "@MDB_environment requires a `file:` argument naming the environment file (e.g. @MDB_environment(file: \"store.mdb\"))"
 				case .invalidTableName(let name):
 					return "@MDB_table(name: \"\(name)\") is not a valid LMDB table name — the name must be a non-empty string without NUL characters"
 				case .duplicateTableName(let name):
@@ -166,10 +167,13 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			throw MacroError.missingEnv
 		}
 
-		guard let fileArg, fileArg.isEmpty == false else {
-			throw MacroError.missingFileArg
-		}
 		try validateTableNames(tables)
+
+		// -- the file-name mode: `file:` written = a fixed name (spliced as an
+		//    expression); `file:` omitted = RUNTIME mode, where the generated
+		//    factory takes the name as a required `fileName:` parameter.
+		let runtimeFileName = (fileArg == nil)
+		let fileExpr = fileArg ?? "fileName"
 
 		// -- the write-at-depth lint (compile-time, same-type write callees)
 		lintWriteBoundaryCalls(in: structDecl, context: context)
@@ -180,6 +184,10 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 		lines.append("/// - parameter basePath: the directory that will contain the environment file (created if")
 		lines.append("///   it does not already exist).")
 		lines.append("/// - parameter mapHeadroom: added to the current file size when sizing the memory map.")
+		if runtimeFileName {
+			lines.append("/// - parameter fileName: the environment file name, resolved against `basePath` at open")
+			lines.append("///   time (this environment declares no fixed `file:`).")
+		}
 		if encryptionArg != nil {
 			// the encryption key is runtime data (secrets never ride in source or the
 			// attribute); declaring `encryption:` on the environment forces this
@@ -189,11 +197,14 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			lines.append("///   encryption implementation. required because this environment declares `encryption:`.")
 		}
 		lines.append("@available(*, noasync)")
-		if encryptionArg != nil {
-			lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824, encryptionKey: [UInt8]) throws -> Self {")
-		} else {
-			lines.append("public static func open(at basePath: String, mapHeadroom: UInt64 = 1073741824) throws -> Self {")
+		var openParams:[String] = ["at basePath: String", "mapHeadroom: UInt64 = 1073741824"]
+		if runtimeFileName {
+			openParams.append("fileName: String")
 		}
+		if encryptionArg != nil {
+			openParams.append("encryptionKey: [UInt8]")
+		}
+		lines.append("public static func open(\(openParams.joined(separator: ", "))) throws -> Self {")
 		lines.append("    _ = QuickLMDB._MDBEnvironmentSupport.__createDirectory(at: basePath)")
 		lines.append("    let slash = basePath.hasSuffix(\"/\") ? \"\" : \"/\"")
 		if let versionArg {
@@ -202,9 +213,9 @@ internal struct MDB_environment_macro:MemberMacro, ExtensionMacro {
 			// attribute. bump the version to ship a fresh file + stream the
 			// old one; the old file stays untouched and readable by older
 			// binaries (no sentinel, no in-place migration).
-			lines.append("    let targetPath = basePath + slash + (\(fileArg).hasSuffix(\".mdb\") ? String(\(fileArg).dropLast(4)) + \"-v\(versionArg)\" + \".mdb\" : \(fileArg) + \"-v\(versionArg)\")")
+			lines.append("    let targetPath = basePath + slash + (\(fileExpr).hasSuffix(\".mdb\") ? String(\(fileExpr).dropLast(4)) + \"-v\(versionArg)\" + \".mdb\" : \(fileExpr) + \"-v\(versionArg)\")")
 		} else {
-			lines.append("    let targetPath = basePath + slash + \(fileArg)")
+			lines.append("    let targetPath = basePath + slash + \(fileExpr)")
 		}
 		lines.append("    let fileSize = QuickLMDB._MDBEnvironmentSupport.__fileSize(at: targetPath)")
 		var envInitArgs = "path: targetPath, flags: QuickLMDB.Environment.Flags([.noTLS]).union(\(flagsArg)), mapSize: Int(fileSize + mapHeadroom), maxReaders: \(maxReadersArg), maxDBs: \(maxDBsArg), mode: \(modeArg)"
