@@ -21,8 +21,7 @@ let package = Package(
 		.package(url:"https://github.com/tannerdsilva/CLMDB.git", "1.0.2"..<"2.0.0"),
 		.package(url:"https://github.com/tannerdsilva/rawdog.git", "22.0.0"..<"23.0.0"),
 		.package(url:"https://github.com/apple/swift-system.git", "1.0.0"..<"2.0.0"),
-		.package(url:"https://github.com/apple/swift-syntax.git", "603.0.0"..<"605.0.0"),
-		.package(url:"https://github.com/apple/swift-docc-plugin", from:"1.0.0")
+		.package(url:"https://github.com/apple/swift-syntax.git", "603.0.0"..<"605.0.0")
 	],
 	targets: [
 		.target(
