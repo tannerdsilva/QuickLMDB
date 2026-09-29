@@ -20,7 +20,8 @@ import SwiftSyntaxMacros
 //
 // no per-environment factories, no static singletons, no basePath argument — the
 // environments open through each type's own generated `open(at:)`. members are
-// fixed-name only, so there is no arbitrary-name registration.
+// fixed-name, stateless, unencrypted environments — the arrangement call passes
+// only `at:` and `mapHeadroom:`, so there is no arbitrary-name registration.
 //
 // validation: struct only; at least one stored instance property (the environments).
 

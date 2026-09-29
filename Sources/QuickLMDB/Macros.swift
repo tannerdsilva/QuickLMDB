@@ -281,6 +281,13 @@ public macro drop<E: MDB_environment, DB: MDB_db>(_ env: E.Type, database: KeyPa
 ///   declaration order (for docs/tooling).
 ///
 /// no per-environment factories, no static singletons, no baked base path.
+///
+/// members must be FIXED-NAME, STATELESS, UNENCRYPTED environments: the
+/// generated arrangement open passes only `at:` and `mapHeadroom:` to each
+/// member, so an environment whose own generated `open` requires more (a
+/// runtime `fileName:`, `@MDB_state` parameters, or `encryptionKey:`) fails
+/// as a missing-argument error at the generated line — author a hand-rolled
+/// arrangement open for those.
 @attached(member, names: named(open(at:mapHeadroom:)), named(mdb_environment_names))
 public macro MDB_layout() = #externalMacro(module:"QuickLMDBMacros", type:"MDB_layout_macro")
 
