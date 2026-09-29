@@ -122,17 +122,35 @@ instance methods. there is NO transaction vocabulary on the authored surface:
 - `@MDB_layout` — the multi-environment ARRANGEMENT helper (member macro,
   fixed names): opens N `@MDB_environment` types at `<base>/<name>` in one
   call (`open(at:mapHeadroom:)`) plus a `mdb_environment_names` inventory. no
-  per-environment factories, no statics, no baked path.
-- `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` — schema assembly:
-  generates `open(at:mapHeadroom:) throws -> Self` (creates the dir, sizes the
-  map as current file size + headroom, forces `.noTLS`, opens every table in
-  one setup write-transaction). `version:` when WRITTEN derives the on-disk
-  name `<stem>-v<N>.mdb` (opt-in fresh-file migration). the declaration's
-  `file:` stays optional-on-the-declaration; a missing `file:` diagnoses
-  `missingFileArg`. one type = one physical env = one file.
+  per-environment factories, no statics, no baked path. members must be
+  fixed-name, stateless, unencrypted environments — the generated arrangement
+  open passes only `at:` and `mapHeadroom:`, so a member whose own generated
+  `open` requires more (a runtime `fileName:`, `@MDB_state` parameters, or
+  `encryptionKey:`) fails as a missing-argument error at the generated line
+  (author a hand-rolled arrangement open for those).
+- `@MDB_environment(file:version:flags:maxReaders:maxDBs:mode:encryption:checksum:)`
+  — schema assembly: generates `open(at:mapHeadroom:) throws -> Self`
+  (creates the dir, sizes the map as current file size + headroom, forces
+  `.noTLS`, opens every table in one setup write-transaction). the declaration's
+  `file:` is optional: WRITTEN it is the environment's fixed on-disk name;
+  OMITTED the generated factory takes a REQUIRED `fileName: String` parameter,
+  resolved against the base path at open time — one type then owns per-tenant
+  files (the `missingFileArg` diagnostic is retired; omitting `file:` IS the
+  runtime mode). `version:` when WRITTEN derives the on-disk name
+  `<stem>-v<N>.mdb` from the fixed or supplied name (opt-in fresh-file
+  migration). `encryption:` declares the AEAD provider and makes
+  `encryptionKey: [UInt8]` a REQUIRED parameter on the generated open;
+  `checksum:` registers the keyless per-page checksum (no extra parameter).
 - `@MDB_table(name:flags:)` — per-table declaration on a `Database.X` stored
   property inside an environment. name override + extra `MDB_db_flags`. zero
   attributes = identity (name = property name, flags `[.create]`).
+- `@MDB_state` — configuration state on an environment: a stored property that
+  is neither `env` nor a table, marked to ride into the instance. `let` only,
+  explicit type annotation, NO initializer (the generated parameter is
+  REQUIRED — author the default at the call site); an unmarked extra stored
+  property is a diagnostic naming the fix. generated-parameter order:
+  `at`, `mapHeadroom`, `fileName` (runtime mode), state (declaration order),
+  `encryptionKey`. state is invisible to boundaries and the verb vocabulary.
 
 ### macro-mechanics facts (verified, do not relitigate)
 
@@ -188,15 +206,17 @@ instance methods. there is NO transaction vocabulary on the authored surface:
 
 ## 4. what is built vs planned (honest status)
 
-BUILT and verified (full suite green, 0 warnings on a clean build, all three
-DocC catalogs warning-free under `--warnings-as-errors`):
-- `Transaction<M>` capability typing, `@MDB_environment`, `@MDB_table`,
-  `version:`, `@MDB_layout`, `@MDB_transact` (typed-environment boundaries),
-  the typed verb family, `#MDB_transacted` joining, `@MDB_comparable`, the
-  engine surface, typed companions, `readCommitted` family, the LMDB 1.0
-  encryption/checksum providers (`MDB_crypto_impl`/`ChaChaPoly`,
-  `MDB_checksum_impl`/`Blake2`, environment `encrypt:`/`checksum:` linkage),
-  interop, and the `concord` reconciliation product.
+BUILT and verified (full suite green on macOS and linux, 0 warnings on a
+clean build, all three DocC catalogs warning-free under
+`--warnings-as-errors`):
+- `Transaction<M>` capability typing, `@MDB_environment` (fixed and runtime
+  file names), `@MDB_table`, `@MDB_state`, `version:`, `@MDB_layout`,
+  `@MDB_transact` (typed-environment boundaries), the typed verb family,
+  `#MDB_transacted` joining, `@MDB_comparable`, the engine surface, typed
+  companions, `readCommitted` family, the LMDB 1.0 encryption/checksum
+  providers (`MDB_crypto_impl`/`ChaChaPoly`, `MDB_checksum_impl`/`Blake2`,
+  environment `encrypt:`/`checksum:` linkage), interop, and the `concord`
+  reconciliation product.
 
 PLANNED:
 - `@MDB_layout` as the home of application-level convenience beyond the

@@ -84,6 +84,24 @@ All macros expand to plain calls through the existing public API (`Environment`,
 
 The raw `Transaction` surface stays public for code that deliberately manages its own transactions.
 
+## Environment file names and configuration state
+
+`file:` is optional on `@MDB_environment`. Written, it is the environment's fixed on-disk name; omitted, the generated factory takes a **required** `fileName: String` parameter, resolved against the base path at open time — one type can own per-tenant files, and `version:` / `encryption:` compose with the supplied name.
+
+```swift
+@MDB_environment(flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
+public struct Tenant: Sendable {
+    public let env: Environment
+    public let records: Database.Strict<SlotKey, SlotRecord>
+
+    @MDB_state public let log: Logger?   // environment configuration state
+}
+
+let tenant = try Tenant.open(at: "<data-path>", fileName: "tenant-a.mdb", log: nil)
+```
+
+`@MDB_state` declares configuration state ON the environment type: each marked stored property (`let`, explicit type annotation, no initializer — the generated parameter is required, so author defaults at the call site) becomes one required parameter on the generated `open`, in declaration order. The environment owns its own logger/tenant identity instead of a wrapper type owning it; state is invisible to boundaries and the verb vocabulary, and an unmarked extra stored property is a compile-time diagnostic naming the fix.
+
 ## Encrypted environments (LMDB 1.0)
 
 QuickLMDB builds on the LMDB 1.0 engine, whose authenticated per-page encryption and optional per-page checksums are exposed through the same macro surface. Declare the providers on the environment type — the implementations are compile-time facts, the key is runtime data:
