@@ -180,9 +180,6 @@ tagged release is 15.0.0).
   two boundaries over the SAME environment set in different verb orders
   previously produced uncompilable joins. shells, siblings, and joins now all
   emit `tx_<E>` labels in name order.
-- **`scripts/verify-consumers.sh`** — the cross-repo gate: pins each consumer
-  (defaults: the migration-stage pricedb/wiremand) to this tree's HEAD by
-  resyncing its staged QuickLMDB clone, then builds and runs its suite.
 - **new runtime coverage**: multi-environment atomic boundaries + cross-env
   `#MDB_transacted` joins (commit, abort, joined-read-sees-uncommitted), a
   torn-read concurrency test (a boundary repeatedly reading a (key, value)
