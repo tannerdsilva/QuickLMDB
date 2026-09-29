@@ -1,3 +1,219 @@
+# 16.0.0
+
+NOTE ON HISTORY: the changelog previously carried `16.0.0`/`16.1.0` entries
+describing INTERMEDIATE working versions (`@MDB_app`/`@MDB_transact_span`, the
+`environments:` attribute form, the `.readWriteChild` mode) that were never
+tagged or released. their surface is superseded by the typed-environment
+architecture documented below and is NOT in this release; those draft sections
+are removed so the version history matches what actually ships (the prior
+tagged release is 15.0.0).
+
+- **requires a Swift 6.3+ toolchain** (`swift-tools-version: 6.3`; the package
+  previously declared 6.2).
+
+- **runtime environment file names** (additive). `@MDB_environment` no longer
+  requires `file:`: OMITTING it makes the generated factory take a REQUIRED
+  `fileName: String` parameter, resolved against the base path at open time —
+  one type owns per-tenant files (`fiat-<base>.mdb`) without hand-rolling an
+  `MDB_environment` conformance. `version:` derives its suffix from the supplied
+  name, and `encryption:` composes with it, so an encrypted runtime-named
+  environment opens as `open(at:mapHeadroom:fileName:encryptionKey:)`.
+  environments that DO write `file:` expand byte-identically to before. the
+  `missingFileArg` diagnostic is retired — omitting `file:` IS the runtime mode.
+
+- **`@MDB_state` — configuration state on an environment core** (additive).
+  a stored property that is neither `env` nor a table is now declared
+  `@MDB_state` and becomes ONE REQUIRED parameter on the generated `open`, in
+  declaration order (after `fileName:`, before `encryptionKey:`), carried into
+  the instance. this is what lets a core own its own logger/tenant identity
+  instead of pushing it onto a facade wrapper. rules, each a friendly
+  diagnostic: `let` only; an explicit type annotation; NO initializer (Swift's
+  implicit memberwise initializer omits `let` properties that already hold a
+  value, so a defaulted state property could never be set at open — author the
+  default at the call site); any other unmarked stored property is an error
+  instead of the previous cryptic memberwise-init failure. state is invisible to
+  boundaries and the verb vocabulary.
+
+- **LMDB 1.0 encryption + checksums through the macro layer** (breaking — new
+  engine + new surface). QuickLMDB now builds against CLMDB's LMDB 1.0.2 line
+  (range `1.0.2`..<`2.0.0`; the `1.0.2` tag is pushed and matches
+  `Package.resolved`), which is the only engine with `mdb_env_set_encrypt`,
+  per-page checksums, and authenticated encryption. the lift of the hacklash
+  `MDB_crypto_impl` / `MDB_checksum_impl` design:
+  - `MDB_crypto_impl` / `ChaChaPoly` — public protocol + a ChaCha20-Poly1305
+    AEAD conformer (rawdog `RAW_chachapoly`); `MDB_checksum_impl` / `Blake2` —
+    an 8-byte keyed/keyless BLAKE2b per-page checksum conformer (rawdog
+    `RAW_blake2`).
+  - `Environment.EncryptionConfiguration` + `Environment.init(..., encrypt:,
+    checksum:)` — registers the callbacks before `mdb_env_open`; the stored
+    `flags` reflect `.encrypt` / `.remapChunks` (which `mdb_env_set_encrypt`
+    sets internally — they must NOT be passed in the open flags). new 1.0
+    `Flags` cases: `.encrypt`, `.remapChunks`, `.previousSnapshot`.
+  - `LMDBError.badChecksum` / `.cryptoFail` (the 1.0 `MDB_BAD_CHECKSUM` /
+    `MDB_CRYPTO_FAIL` codes).
+  - `@MDB_environment(..., encryption: ChaChaPoly.self, checksum: Blake2.self)`
+    (breaking — new optional attribute args). an environment that declares
+    `encryption:` gets a generated `open(at:mapHeadroom:encryptionKey:)` whose
+    `encryptionKey: [UInt8]` parameter is REQUIRED — an encrypted env cannot be
+    opened keyless, enforced at compile time. checksum-only envs keep the plain
+    `open(at:mapHeadroom:)` signature. unencrypted environments expand
+    byte-identically to before.
+  - `@MDB_layout` does not thread per-env keys (it cannot statically see the
+    env types' attributes) — encrypted envs inside a layout remain a documented
+    residual; author a hand-rolled arrangement open for those.
+  - LMDB 1.0 nested-txn semantics differ from 0.9: read-only children of a
+    write parent are now LEGAL (arbitrarily many; 0.9 pinned `MDB_BAD_TXN`). the
+    raw interop probe (`NestedTxnSemanticsProbe`) was re-pinned to the 1.0
+    contract. QuickLMDB's own composition never spawns read children, so the
+    `.readOnly` boundary stays a composition leaf by construction.
+  - on-disk format is now LMDB format v3 — **existing 0.9-format data files
+    will not reopen**; migrate via 0.9 `mdb_dump` → 1.0 `mdb_load`.
+
+- **read-twin redirect + committed-read doctrine** (generated-surface + API
+  refinement). a READ boundary's `_child` variant is now a THIN REDIRECT to
+  its flat sibling (a joined read threads the caller's transaction; LMDB has
+  no read-only children — pinned `MDB_BAD_TXN` — so reads never spawn a child
+  and a `.readOnly` boundary is a composition LEAF). the demo and docs teach
+  committed-only validation via the verb-less `readCommitted(key:)` instead
+  of a bare boundary call at depth. the invariance itself (children are
+  ALWAYS write-capable; one active child per parent; parent-quiescent while a
+  child is active) is pinned by a raw interop probe and stated positively in
+  the engine + macro docs.
+
+- **`#MDB_transacted(...)` composes by CHILD TRANSACTION** (breaking, Design B
+  re-lift). a joined call runs in a child transaction of the caller's current
+  tx per environment — it sees the caller's uncommitted state; on success it
+  FOLDS into the caller (nothing durable until the caller commits); on failure
+  it aborts ONLY the child — a catching caller keeps its prior writes
+  (selective rollback); an uncaught join failure still aborts the whole
+  boundary (atomicity preserved). joins nest as child-of-child at arbitrary
+  depth; multi-environment joins spawn one child per environment. the channel
+  is the peer'd `<name>_child` sibling (`@attached(peer, names: overloaded,
+  suffixed(_child))`), with the body run INLINE and authored `return`s
+  re-pointed to a labeled exit so every path closes the child before the
+  boundary returns. bare same-env write-in-write stays a compile-time error
+  pointing at the marker (see the lint entry). breaking only for code that
+  observes composed-write failure granularity from inside a `catch`.
+- **`Transaction<Write>.init(env:parent:)`** (engine API): opens a CHILD
+  transaction of a WRITE parent on the same environment — sees the parent's
+  uncommitted writes; `commit()` folds into the parent (not durable until the
+  parent commits); `abort()` discards only the child. the underlying LMDB
+  build does not guard close-order, so closing every child before its parent
+  is a caller contract (the macro's `_child` variants enforce it by
+  construction).
+
+- **write-composition lint** (hardening): `@MDB_environment` emits a
+  compile-time error when a boundary body bare-calls a same-type
+  `@MDB_transact(.readWrite)` boundary — the spell that opens a SECOND root
+  write on a live writer and deadlocks LMDB's writer mutex.
+  `#MDB_transacted(...)` joins, sibling reads, cross-environment callees
+  (typed parameters) and plain methods are unaffected. breaking only for code
+  that previously relied on accidental write composition inside a boundary.
+
+- **the transaction layer is now the typed-environment dialect** (breaking).
+  every environment is its own `@MDB_environment` type, and transaction
+  boundaries are INSTANCE methods on those types. there is no transaction
+  vocabulary on the authored surface:
+  - `@MDB_transact(_ mode: MDB_transact_mode)` — attached body + peer on an
+    instance method. `.readOnly` aborts on throw and on success (a read leaf
+    never commits); `.readWrite` aborts on throw and COMMITS on success. the
+    environment set is INFERRED from the typed verb calls in the body: every
+    environment a verb references must be `self` or a typed parameter of the
+    method. the method becomes a shell (opens/closes its own transactions);
+    the peer emits an INVISIBLE sibling that carries `tx_<E>: borrowing
+    Transaction<…>` per environment (read-only siblings are mode-generic so
+    write boundaries can join reads). the method must be `throws`, not
+    `async`, and instance. a boundary whose body references no environment is
+    a diagnostic.
+  - **the typed verb family** — `#store`, `#load`, `#delete`,
+    `#contains`, `#cursor`, `#clear`, `#stats`, `#drop` — the database
+    operations, typed end to end: `#store(E.self, database: \.table,
+    key:…, value:…)` where `E` is the environment type, `database:` is a
+    `KeyPath<E, Database…>`, and key/value/return types bind through the
+    table's own generics. inside a boundary they lower to the tx-bearing
+    operation on `instance[keyPath: \.table]`; outside a boundary they are
+    compile-time diagnostics.
+  - `#MDB_transacted(call)` — the join marker: rewritten inside a boundary
+    into the callee's sibling, threading this boundary's transactions (one
+    transaction across the composed call; joined reads see the boundary's own
+    uncommitted state; a thrown joined write rolls back the whole boundary).
+    the callee must reference the same environment-type set (the equal-env-set
+    contract, enforced by the rewrite). standalone use is a compile-time
+    diagnostic.
+  - `Transaction<M>` capability typing (mode in the type): `commit()` exists
+    only on `Transaction<Write>`; reads are generic over the mode; cursor
+    write operations carry a `tx: Transaction<Write>` capability proof.
+    writing on a read transaction is a type-checker error — the read-only
+    write lint is retired as a runtime concept.
+  - **`@MDB_layout`** — the multi-environment ARRANGEMENT helper: opens N
+    `@MDB_environment` types at `<base>/<name>` in one call plus a
+    `mdb_environment_names` inventory. no per-environment factories, no statics, no baked
+    path. members must be fixed-name, stateless, unencrypted environments (the
+    generated arrangement open passes only `at:` and `mapHeadroom:`); a member
+    whose own `open` requires more fails as a missing-argument error at the
+    generated line.
+  - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` and
+    `@MDB_table(name:flags:)` unchanged in role (schema assembly + per-table
+    declaration); `version:` on `@MDB_environment` derives
+    `<stem>-v<N>.mdb` when written (opt-in, fresh-file migration).
+  - the prior `environments:` attribute form, the `#MDB_entry_load`/
+    `#MDB_entry_store` trailing verbs, the provider-style container, and
+    per-environment `Root` shells are REMOVED by this change.
+- **`#cursor`'s emitted call never requires a CONDITIONAL `try`.** the
+  trailing closure is lowered with an explicit `throws` annotation when the
+  authored site carries `try` (the recommended spelling) or when the closure
+  contains `#if` — the handler type is `throws(E)`, and an explicitly-throwing
+  closure forces `try` to be always-required and never spurious, so the
+  "no calls to throwing functions occur within 'try' expression" warnings on
+  non-throwing cursor closures are gone and `#if`-gated closures compile
+  identically in every configuration. a bare `#cursor` on a pure non-`#if`
+  closure keeps compiling without `try`. capture lists are preserved under
+  the injection (`{ [weak self] c throws in … }`); signatures the emitter
+  cannot mirror byte-faithfully (attributes, `async`, unexpected parse
+  nodes) fall back to the verbatim closure.
+- **cross-environment joins: the tx labels are canonically ordered by
+  environment type name** (fix). the join rewrites the callee sibling's
+  arguments by label, and Swift requires call arguments in declaration order —
+  two boundaries over the SAME environment set in different verb orders
+  previously produced uncompilable joins. shells, siblings, and joins now all
+  emit `tx_<E>` labels in name order.
+- **new runtime coverage**: multi-environment atomic boundaries + cross-env
+  `#MDB_transacted` joins (commit, abort, joined-read-sees-uncommitted), a
+  torn-read concurrency test (a boundary repeatedly reading a (key, value)
+  composite while a concurrent writer mutates it), and cursor-`try` compile
+  pins for the non-throwing / `#if` / no-`try` closure shapes.
+
+- **the `concord` product** (new): a typed, transport-agnostic negentropy
+  reconciliation engine over QuickLMDB. a reconcile round brings two stores
+  with the same fixed-size-byte-key schema into agreement — range fingerprints
+  over mmap key bytes skip matching regions, mismatches split and recurse, and
+  the resulting have/need diff moves values AS BYTES (never decoded, never
+  re-encoded). the protocol trio `ConcordIndex` / `ConcordTransport` /
+  `ConcordSession` plus the `ConcordLMDBIndex` driver (one long-lived write
+  transaction per round; release the index before the commit). ships as its
+  own library product with its own DocC catalog and test target.
+- **typed-handle companions + self-scoped committed reads** (the surface the
+  verbs lower to, and the verb-less verification reads — consolidated here):
+  `load(key:tx:)`, `store(key:value:flags:tx:)`, `delete(key:tx:)` and the
+  dupsort pair `delete(key:value:tx:)`, `contains(key:tx:)` on
+  `MDB_db`/`MDB_db_dupsort`; `readCommitted(key:)`, `containsCommitted(key:)`
+  and (dupsort) `readCommittedDups(key:)`, each opening its own short-lived
+  read transaction; `@MDB_environment`'s generated `open(at:)` creates the
+  base directory as needed and forces `.noTLS` (reader slots bind to the
+  transaction object, the enabler for sibling reads under task concurrency).
+- **`QuickLMDBFunctionalInterop` target extraction** (breaking for code that
+  reached the raw handle surface directly): `LMDBError` and the handle-level
+  `MDB_db_*` / `MDB_cursor_*` statics moved into a standalone C bridge target
+  (CLMDB-only imports, `consuming MDB_val` public functions, module-internal
+  statics), re-exported via `@_exported import`; public behavior unchanged;
+  covered by a new `QuickLMDBFunctionalInteropTests` target.
+- **reserve / registry cleanup** (breaking): all `MDB_RESERVE` support removed
+  (`reserveEntry`, the returning `setEntry` overload, `Operation.Flags.reserve`);
+  the `value:` parameter of the DB-level `containsEntry` removed (it was a
+  silent no-op — pair-existence checks live on cursors via `MDB_GET_BOTH`);
+  the internal `_MDBTransactionScope` registry removed; `Transaction`'s deinit
+  no longer aborts an already-committed transaction.
+
 # 15.0.0
 
 - Changed relationships of various database and cursor protocols such that the most restrictive of these types are now based on their `XXX_strict` counterparts.

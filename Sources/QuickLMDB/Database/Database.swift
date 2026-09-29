@@ -28,11 +28,11 @@ public struct Database:Sendable, MDB_db_basic {
 	/// initialize a new database instance from the specified environment.
 	/// - parameters:
 	/// 	- env: a pointer to the environment that the database will be based on.
-	/// 	- name: the name of the database. you may pass `nil` for this argument if you plan on storing only one database in the environment.
+	/// 	- name_in: the name of the database (external label `name`). you may pass `nil` for this argument if you plan on storing only one database in the environment.
 	/// 	- flags: the flags that will be used when opening the database.
 	///		- tx: a pointer to the transaction that will be used to open the database.
 	@available(*, noasync)
-    public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+    public init(env:borrowing Environment, name name_in:String?, flags:MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 		self._db_env = copy env
 		self._db_name = name_in
 		var dbHandle = MDB_dbi()
@@ -42,49 +42,6 @@ public struct Database:Sendable, MDB_db_basic {
 		}
 		self._db_handle = dbHandle
     }
-	@available(*, noasync)
-	public borrowing func loadEntry<K, V>(key:borrowing K, as:V.Type, tx:borrowing Transaction) throws(LMDBError) -> V? where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access({ (keyVal:MDB_val) throws(LMDBError) -> V? in 
-			return V(try loadEntry(key:keyVal, as:MDB_val.self, tx:tx))
-		})
-	}
-	@available(*, noasync)
-	public borrowing func containsEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
-			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) -> Bool in
-				return try containsEntry(key:keyVal, value:valueVal, tx:tx)
-			}
-		}
-	}
-	@available(*, noasync)
-	public borrowing func containsEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) -> Bool where K:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) -> Bool in
-			return try containsEntry(key:keyVal, tx:tx)
-		}
-	}
-	@available(*, noasync)
-	public borrowing func setEntry<K, V>(key:borrowing K, value:consuming V, flags:consuming Operation.Flags, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
-		flags.subtract(.reserve)
-		return try key.MDB_access { (keyVal:consuming MDB_val) throws(LMDBError) in
-			return try value.MDB_access { (valueVal:consuming MDB_val) throws(LMDBError) in
-				return try setEntry(key:keyVal, value:valueVal, flags:flags, tx:tx)
-			}
-		}
-	}
-	@available(*, noasync)
-	public borrowing func deleteEntry<K, V>(key:borrowing K, value:consuming V, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible, V:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
-			return try value.MDB_access { (valueVal:MDB_val) throws(LMDBError) in
-				return try deleteEntry(key:keyVal, value:valueVal, tx:tx)
-			}
-		}
-	}
-	@available(*, noasync)
-	public borrowing func deleteEntry<K>(key:borrowing K, tx:borrowing Transaction) throws(LMDBError) where K:MDB_convertible {
-		return try key.MDB_access { (keyVal:MDB_val) throws(LMDBError) in
-			return try deleteEntry(key:keyVal, tx:tx)
-		}
-	}
 }
 
 extension Database {
@@ -121,7 +78,7 @@ extension Database {
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
 		@available(*, noasync)
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 			flags.update(with:.dupSort)
 			
 			self._db_env = copy env
@@ -132,13 +89,13 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
-			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
+			self.assignCompareKey(MDB_db_key_type.MDB_compare_f, tx:tx)
+			self.assignCompareVal(MDB_db_val_type.MDB_compare_f, tx:tx)
 		}
 	}
 
 	@MDB_db_strict_impl()
-	public struct DupFixed<KeyType:RAW_staticbuff & MDB_comparable, ValueType:RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
+	public struct DupFixed<KeyType:MDB_convertible & RAW_staticbuff & MDB_comparable, ValueType:MDB_convertible & RAW_staticbuff & MDB_comparable>:Sendable, MDB_db_dupfixed {
 		/// the key type that the database uses.
 		/// 	- must be MDB_comparable
 		/// 	- must be static length
@@ -175,7 +132,7 @@ extension Database {
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: borrows a transaction that will be used to complete the database initialization.
 		@available(*, noasync)
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 			// configure the correct flags before consuming the variable
 			flags.update(with:.dupFixed)
 			flags.update(with:.dupSort)
@@ -188,8 +145,8 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
-			MDB_db_assign_compare_val_f(db:self, type:MDB_db_val_type.self, tx:tx)
+			self.assignCompareKey(MDB_db_key_type.MDB_compare_f, tx:tx)
+			self.assignCompareVal(MDB_db_val_type.MDB_compare_f, tx:tx)
 		}
 	}
 
@@ -229,7 +186,7 @@ extension Database {
 		/// 	- flags: the flags that will be used when opening the database.
 		///		- tx: a pointer to the transaction that will be used to open the database.
 		@available(*, noasync)
-		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction) throws(LMDBError) {
+		public init(env:borrowing Environment, name:String?, flags:consuming MDB_db_flags, tx:borrowing Transaction<Write>) throws(LMDBError) {
 			
 			self._db_env = copy env
 			self._db_name = name
@@ -239,7 +196,7 @@ extension Database {
 				throw LMDBError(returnCode:openResult)
 			}
 			self._db_handle = dbHandle
-			MDB_db_assign_compare_key_f(db:self, type:MDB_db_key_type.self, tx:tx)
+			self.assignCompareKey(MDB_db_key_type.MDB_compare_f, tx:tx)
 		}
 	}
 }

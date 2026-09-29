@@ -7,11 +7,16 @@ import System
 import Darwin
 #endif
 
-/// a structure used to convey 
+// error translation for the functional interop layer: maps raw LMDB return
+// codes (and POSIX errno on Apple platforms and Linux) to typed cases and back.
+
+// - MARK: error cases
+
+/// an error produced by the LMDB core, translated from a raw return code.
 public enum LMDBError:Error {
 
-	//LMDB specific errors
-	
+	// LMDB specific errors
+
 	/// The key/value pair already exists.
 	case keyExists
 	
@@ -41,6 +46,8 @@ public enum LMDBError:Error {
 	
 	/// Environment maximum reader count has been reached.
 	case readersFull
+
+	/// Environment reader slot table is full.
 	case tlsFull
 	
 	/// Transaction has too many dirty
@@ -56,8 +63,8 @@ public enum LMDBError:Error {
 	case mapResized
 	
 	/// Operation and database incompatible, or database type changed. This can mean...
-	/// - The operation expects an ``QuickLMDB/Database/Flags/dupSort``/``QuickLMDB/Database/Flags/dupFixed`` database.
-	/// - Opening a named database when the unnamed database has ``QuickLMDB/Database/Flags/dupSort`` / ``QuickLMDB/Database/Flags/integerKey``
+	/// - The operation expects an `MDB_db_flags.dupSort`/`MDB_db_flags.dupFixed` database.
+	/// - Opening a named database when the unnamed database has `MDB_db_flags.dupSort` / `MDB_db_flags.integerKey`
 	/// - Accessing a data entry as a database, or vice versa.
 	/// - The database was dropped and recreated with different flags.
 	case incompatible
@@ -68,11 +75,18 @@ public enum LMDBError:Error {
 	/// Transaction must abort, has a child, or is invalid
 	case badTransaction
 	
-	/// Unsupported size of the key/db name/data, or wrong ``QuickLMDB/Database/Flags/dupFixed`` size
+	/// Unsupported size of the key/db name/data, or wrong `MDB_db_flags.dupFixed` size
 	case badValueSize
 	
 	/// The specified database was changed unexpectedly
 	case badDBI
+
+	/// the per-page checksum did not match the stored checksum (LMDB 1.0)
+	case badChecksum
+
+	/// an encryption/decryption operation failed — the supplied key is wrong or
+	/// the data was corrupted (LMDB 1.0)
+	case cryptoFail
 
 	// OS specific errors
 	case invalidParameter
@@ -80,10 +94,13 @@ public enum LMDBError:Error {
 	case outOfMemory
 	case ioError
 	case accessViolation
-	
+
 	// Unknown errors
 	case other(returnCode:Int32)
 
+	// - MARK: return-code interoperability
+
+	/// translate a raw LMDB (or POSIX errno) return code into a typed case.
 	public init(returnCode:Int32) {
 		switch returnCode {
 			case MDB_KEYEXIST: self = .keyExists
@@ -106,6 +123,8 @@ public enum LMDBError:Error {
 			case MDB_BAD_TXN: self = .badTransaction
 			case MDB_BAD_VALSIZE: self = .badValueSize
 			case MDB_BAD_DBI: self = .badDBI
+			case MDB_BAD_CHECKSUM: self = .badChecksum
+			case MDB_CRYPTO_FAIL: self = .cryptoFail
 
 			#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case Errno.invalidArgument.rawValue: self = .invalidParameter
@@ -120,11 +139,12 @@ public enum LMDBError:Error {
 			case Glibc.EIO: self = .ioError
 			case Glibc.EACCES: self = .accessViolation
 			#endif
-			
+
 			default: self = .other(returnCode:returnCode)
 		}
 	}
-	
+
+	/// project a typed case back into its raw LMDB (or POSIX errno) return code.
 	public var returnCode:Int32 {
 		get {
 			switch self {
@@ -168,6 +188,10 @@ public enum LMDBError:Error {
 				return MDB_BAD_VALSIZE
 			case .badDBI:
 				return MDB_BAD_DBI
+			case .badChecksum:
+				return MDB_BAD_CHECKSUM
+			case .cryptoFail:
+				return MDB_CRYPTO_FAIL
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 			case .invalidParameter:
 				return Errno.invalidArgument.rawValue
@@ -196,7 +220,10 @@ public enum LMDBError:Error {
 			}
 		}
 	}
-		
+
+	// - MARK: description
+
+	/// the LMDB-native string for the error's return code.
 	public var description:String {
 		get {
 			let strPtr = mdb_strerror(self.returnCode)!
@@ -204,6 +231,8 @@ public enum LMDBError:Error {
 		}
 	}
 }
+
+// - MARK: custom debug description
 
 extension LMDBError:CustomDebugStringConvertible {
 	public var debugDescription:String {
@@ -249,6 +278,10 @@ extension LMDBError:CustomDebugStringConvertible {
 				return "LMDBError.badValueSize"
 			case .badDBI:
 				return "LMDBError.badDBI"
+			case .badChecksum:
+				return "LMDBError.badChecksum"
+			case .cryptoFail:
+				return "LMDBError.cryptoFail"
 			case .invalidParameter:
 				return "LMDBError.invalidParameter"
 			case .outOfDiskSpace:

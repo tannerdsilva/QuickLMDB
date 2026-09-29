@@ -1,3 +1,4 @@
+.hermes/
 .vscode/
 .DS_Store
 /.build

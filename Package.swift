@@ -1,4 +1,4 @@
-// swift-tools-version:6.2
+// swift-tools-version:6.3
 import PackageDescription
 import CompilerPluginSupport
 
@@ -12,22 +12,42 @@ let package = Package(
             name: "QuickLMDB",
             targets: ["QuickLMDB"]
         ),
+        .library(
+            name: "concord",
+            targets: ["concord"]
+        )
     ],
     dependencies:[
-		.package(url:"https://github.com/tannerdsilva/CLMDB.git", "0.9.26"..<"0.9.31"),
-		.package(url:"https://github.com/tannerdsilva/rawdog.git", "20.0.0"..<"21.0.0"),
+		.package(url:"https://github.com/tannerdsilva/CLMDB.git", "1.0.2"..<"2.0.0"),
+		.package(url:"https://github.com/tannerdsilva/rawdog.git", "22.0.0"..<"23.0.0"),
 		.package(url:"https://github.com/apple/swift-system.git", "1.0.0"..<"2.0.0"),
-		.package(url:"https://github.com/apple/swift-syntax.git", "602.0.0"..<"603.0.0"),
-		.package(url:"https://github.com/apple/swift-log.git", "1.0.0"..<"2.0.0")
-    ],
+		.package(url:"https://github.com/apple/swift-syntax.git", "603.0.0"..<"605.0.0")
+	],
 	targets: [
+		.target(
+			name:"QuickLMDBFunctionalInterop",
+			dependencies:[
+				"CLMDB",
+			],
+		),
 		.target(
 			name:"QuickLMDB",
 			dependencies:[
 				"CLMDB",
 				.product(name:"SystemPackage", package:"swift-system"),
 				.product(name:"RAW", package:"rawdog"),
+				.product(name:"RAW_chachapoly", package:"rawdog"),
+				.product(name:"RAW_blake2", package:"rawdog"),
 				"QuickLMDBMacros",
+				"QuickLMDBFunctionalInterop",
+			],
+		),
+		.target(
+			name:"concord",
+			dependencies:[
+				"QuickLMDB",
+				.product(name:"RAW", package:"rawdog"),
+				.product(name:"RAW_blake2", package:"rawdog"),
 			],
 		),
 		.macro(
@@ -35,16 +55,38 @@ let package = Package(
 			dependencies:[
 				.product(name:"SwiftSyntax", package:"swift-syntax"),
 				.product(name:"SwiftSyntaxMacros", package:"swift-syntax"),
-				.product(name:"SwiftOperators", package:"swift-syntax"),
-				.product(name:"SwiftParser", package:"swift-syntax"),
-				.product(name:"SwiftParserDiagnostics", package:"swift-syntax"),
+				.product(name:"SwiftSyntaxBuilder", package:"swift-syntax"),
+				.product(name:"SwiftDiagnostics", package:"swift-syntax"),
 				.product(name:"SwiftCompilerPlugin", package:"swift-syntax"),
-				.product(name:"Logging", package:"swift-log")
 			]
 		),
 		.testTarget(
 			name: "QuickLMDBTests",
 			dependencies: ["QuickLMDB"]
+		),
+		.testTarget(
+			name: "ConcordTests",
+			dependencies: ["concord"]
+		),
+		.testTarget(
+			name: "QuickLMDBFunctionalInteropTests",
+			dependencies: ["QuickLMDBFunctionalInterop", "CLMDB"]
+		),
+		.testTarget(
+			name: "QuickLMDBMacroTests",
+			dependencies: [
+				"QuickLMDBMacros",
+				"QuickLMDB",
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
+				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
+				.product(name: "SwiftParser", package: "swift-syntax"),
+				.product(name: "SwiftParserDiagnostics", package: "swift-syntax"),
+			]
 		),
 	]
 )

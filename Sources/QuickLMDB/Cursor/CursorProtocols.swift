@@ -58,7 +58,7 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:M
 		
 	/// primary initializer for a cursor. must be based on a valid database and transaction
 	@available(*, noasync)
-	init(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction) throws(LMDBError)
+	init<M:TransactionMode>(db:borrowing MDB_cursor_dbtype, tx:borrowing Transaction<M>) throws(LMDBError)
 	
 	/// returns the cursor handle primitive that LMDB uses to represent the cursor
 	@available(*, noasync)
@@ -101,9 +101,12 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:M
 	borrowing func opSetRange(returning:(key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type).Type, key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> (key:MDB_cursor_dbtype.MDB_db_key_type, value:MDB_cursor_dbtype.MDB_db_val_type)
 	
 	// write entry function
-	/// set an entry in the database with a specified key and value. the operation will be committed with the specified flags.
+	/// set an entry in the database with a specified key and value. the operation
+	/// will be committed with the specified flags. requires a WRITE transaction
+	/// as the capability proof — the cursor's own transaction is what LMDB uses,
+	/// so the passed transaction must be the one this cursor was created from.
 	@available(*, noasync)
-	borrowing func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags) throws(LMDBError)
+	borrowing func setEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type, value:consuming MDB_cursor_dbtype.MDB_db_val_type, flags:Operation.Flags, tx:borrowing Transaction<Write>) throws(LMDBError)
 	
 	// checking for entries
 	@available(*, noasync)
@@ -112,8 +115,11 @@ public protocol MDB_cursor<MDB_cursor_dbtype>:Sequence where MDB_cursor_dbtype:M
 	borrowing func containsEntry(key:borrowing MDB_cursor_dbtype.MDB_db_key_type) throws(LMDBError) -> Bool
 	
 	// delete the current entry
+	/// deletes the entry at the current cursor position (or every indicator-honored
+	/// duplicate set for the current key). requires a WRITE transaction as the
+	/// capability proof — the cursor's own transaction is what LMDB uses.
 	@available(*, noasync)
-	borrowing func deleteCurrentEntry(flags:consuming Operation.Flags) throws(LMDBError)
+	borrowing func deleteCurrentEntry(flags:consuming Operation.Flags, tx:borrowing Transaction<Write>) throws(LMDBError)
 	
 	// comparing
 	@available(*, noasync)

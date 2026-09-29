@@ -1,46 +1,59 @@
 import CLMDB
 
-public struct Transaction:~Copyable {
+/// the phantom transaction-mode marker. a transaction's mode lives in its
+/// type: `Transaction<Read>` can never commit and `Transaction<Write>` can.
+/// write-only members are gated on the mode, so writing on a read transaction
+/// is a type-checker error — across direct verbs, joined callees, helper
+/// parameters, and cursor writes.
+///
+/// the mode space is sealed: conforming requires the internal
+/// `_mdb_modeReadOnly` witness, so only ``Read`` and ``Write`` can ever exist.
+public protocol TransactionMode: Sendable {
+	static var _mdb_modeReadOnly: Bool { get }
+}
+
+/// read-only transaction mode — a transaction that can never commit.
+public struct Read: TransactionMode, Sendable {
+	public static var _mdb_modeReadOnly: Bool { true }
+}
+
+/// read-write transaction mode — a transaction that can commit.
+public struct Write: TransactionMode, Sendable {
+	public static var _mdb_modeReadOnly: Bool { false }
+}
+
+public struct Transaction<M: TransactionMode>: ~Copyable {
 	// the underlying pointer handle that LMDB uses to represent this transaction
 	private let _tx_handle:OpaquePointer
-	
-	// init no parent
+	// whether this instance owns the underlying transaction (always true for values created via the public initializers; kept for the deinit guard)
+	private let _isConsumerOwned:Bool
+	// set to true once the transaction has been committed or aborted. prevents deinit from aborting a closed transaction.
+	private var _didClose:Bool
+
+	// designated initializer shared by all owning creation paths
+	private init(_tx_handle:OpaquePointer, _isConsumerOwned:Bool, _didClose:Bool) {
+		self._tx_handle = _tx_handle
+		self._isConsumerOwned = _isConsumerOwned
+		self._didClose = _didClose
+	}
+
+	/// creates a ROOT transaction. the mode rides on the type:
+	/// `Transaction<Read>(env:)` / `Transaction<Write>(env:)`.
 	@available(*, noasync)
-	public init(env:Environment, readOnly:Bool) throws(LMDBError) {
+	public init(env:Environment) throws(LMDBError) {
 		var startHandle:OpaquePointer? = nil
-		let createResult = mdb_txn_begin(env.envHandle(), nil, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
+		let createResult = mdb_txn_begin(env.envHandle(), nil, (M._mdb_modeReadOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
 		guard createResult == 0 else {
 			let errThrown = LMDBError(returnCode:createResult)
 			throw errThrown
 		}
-		self._tx_handle = startHandle!
-	}
-	
-	// init with parent [LOGGED]
-	@available(*, noasync)
-	public init(env:borrowing Environment, readOnly:Bool, parent:borrowing Transaction) throws(LMDBError) {
-		var startHandle:OpaquePointer? = nil
-		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, (readOnly ? UInt32(MDB_RDONLY) : 0), &startHandle)
-		guard createResult == 0 else {
-			let errThrown = LMDBError(returnCode:createResult)
-			throw errThrown
-		}
-		self._tx_handle = startHandle!
-	}
-	
-	@available(*, noasync)
-	public consuming func commit() throws(LMDBError) {
-		let commitResult = mdb_txn_commit(_tx_handle)
-		guard commitResult == 0 else {
-			discard self
-			throw LMDBError(returnCode:commitResult)
-		}
-		discard self
+		self.init(_tx_handle:startHandle!, _isConsumerOwned:true, _didClose:false)
 	}
 
 	@available(*, noasync)
 	public consuming func abort() {
 		mdb_txn_abort(_tx_handle)
+		self._didClose = true
 		discard self
 	}
 
@@ -49,22 +62,69 @@ public struct Transaction:~Copyable {
 		mdb_txn_reset(_tx_handle)
 	}
 
-	
 	@available(*, noasync)
 	public borrowing func renew() throws(LMDBError) {
 		let renewResult = mdb_txn_renew(_tx_handle)
 		guard renewResult == 0 else {
 			throw LMDBError(returnCode:renewResult)
 		}
-    }
-    
-    /// returns the LMDB primitive type that LMDB uses to reference this transaction
-    @available(*, noasync)
-    internal borrowing func txHandle() -> OpaquePointer {
-    	return _tx_handle
-    }
+	}
+
+	/// returns the LMDB primitive type that LMDB uses to reference this transaction
+	@available(*, noasync)
+	internal borrowing func txHandle() -> OpaquePointer {
+		return _tx_handle
+	}
 
 	deinit {
-		mdb_txn_abort(_tx_handle)
+		// only abort the underlying transaction if this instance owns it and it has not already been closed
+		if _isConsumerOwned && !_didClose {
+			mdb_txn_abort(_tx_handle)
+		}
+	}
+}
+
+extension Transaction where M == Write {
+
+	/// creates a CHILD transaction of `parent` (a WRITE parent on the SAME
+	/// environment). the child sees the parent's uncommitted writes;
+	/// `commit()` FOLDS the child into the parent (nothing is durable until
+	/// the parent commits); `abort()` discards only the child. this
+	/// initializer exists exclusively on ``Transaction``/``Write`` — a
+	/// READ-ONLY boundary is a composition LEAF (it can thread its snapshot
+	/// into joined calls — a joined read runs on the CALLER's transaction,
+	/// never a child — or open self-scoped committed reads, but never spawns
+	/// a child). the engine (LMDB 1.0) allows read-only children of a write
+	/// parent, but QuickLMDB never opens one: children are ALWAYS
+	/// write-capable by construction, and a single write child per parent is
+	/// the guaranteed shape.
+	///
+	/// NOTE: the underlying LMDB build does NOT guard close-order — closing a
+	/// parent while a child is open silently succeeds — so ordering (every
+	/// child closed before its parent) is a caller contract. `@MDB_transact`'s
+	/// `_child` variants enforce it by construction.
+	@available(*, noasync)
+	public init(env:borrowing Environment, parent:borrowing Transaction<Write>) throws(LMDBError) {
+		var startHandle:OpaquePointer? = nil
+		let createResult = mdb_txn_begin(env.envHandle(), parent._tx_handle, 0, &startHandle)
+		guard createResult == 0 else {
+			let errThrown = LMDBError(returnCode:createResult)
+			throw errThrown
+		}
+		self.init(_tx_handle:startHandle!, _isConsumerOwned:true, _didClose:false)
+	}
+
+	/// commits the transaction. write-capable transactions only — a read
+	/// transaction has no `commit()` member at all.
+	@available(*, noasync)
+	public consuming func commit() throws(LMDBError) {
+		let commitResult = mdb_txn_commit(_tx_handle)
+		guard commitResult == 0 else {
+			discard self
+			throw LMDBError(returnCode:commitResult)
+		}
+		// mark closed so deinit does not abort an already-committed transaction
+		self._didClose = true
+		discard self
 	}
 }

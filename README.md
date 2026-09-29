@@ -1,10 +1,144 @@
 # QuickLMDB
 
-QuickLMDB is designed to be a easy, efficient, and uncompromising integration of the LMDB library. QuickLMDB does not hide access to the underlying LMDB core, allowing you to directly utilize the core LMDB API at any time. Likewise, QuickLMDB makes it very easy to write high-level code that is simultaneously memory-safe and high-performance. 
+QuickLMDB is designed to be a easy, efficient, and uncompromising integration of the LMDB library. QuickLMDB does not hide access to the underlying LMDB core, allowing you to directly utilize the core LMDB API at any time. Likewise, QuickLMDB makes it very easy to write high-level code that is simultaneously memory-safe and high-performance.
 
 - QuickLMDB is the only known Swift library to allow full transactional control over an Environment. This is crucial to achieving high performance.
 
 - QuickLMDB allows direct access to the LMDB memorymap without overhead or copies. This is also a unique feature for Swift-based LMDB wrappers.
+
+## Transaction boundaries with macros
+
+QuickLMDB organizes the transaction layer into **method boundaries** with no ambient state of any kind (no task-local, no thread-local, no registry). Every environment is its own `@MDB_environment` **type**, and a boundary is an INSTANCE method on that type: `@MDB_transact(_ mode:)` turns the method into a transactional unit whose transactions are opened, committed, and aborted for it. The authored surface carries NO transaction vocabulary — no `tx:` parameters, no environment lists, no entry suffixes.
+
+Inside a boundary body you write the **typed verb family** — the exact database operations (`#store`/`#load`/`#delete`/`#contains`/`#cursor`/`#clear`/`#stats`/`#drop`), where the first argument is the environment TYPE and `database:` is a `KeyPath` to a `Database.X` handle, so the key/value types are compiler-checked against the table itself. The boundary lowers each verb to the tx-bearing operation.
+
+```swift
+@MDB_environment(file: "booking.mdb", flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
+public struct Booking: Sendable {
+    public let env: Environment
+    public let sheets: Database.Strict<SlotKey, SlotRecord>
+
+    @MDB_transact(.readWrite)
+    public func addBooking(_ key: SlotKey, _ record: SlotRecord) throws {
+        try #store(Booking.self, database: \.sheets, key: key, value: record)
+    }
+
+    @MDB_transact(.readOnly)
+    public func slotOn(_ day: SlotKey) throws -> SlotRecord? {
+        #load(Booking.self, database: \.sheets, key: day)
+    }
+}
+
+let booking = try Booking.open(at: "<data-path>")
+try booking.addBooking(key, record)
+let record = try booking.slotOn(day)
+```
+
+- **`@MDB_transact(_ mode: MDB_transact_mode)`** — the boundary, on an instance method of an `@MDB_environment` type. `.readOnly` opens read transactions that never commit (a read leaf); `.readWrite` commits each on success. The environment set is **inferred from the verbs** — every environment type a verb references must be `self` or a typed parameter of the method. A multi-environment boundary just takes the other environments as typed parameters.
+- **The typed verbs** (`#store(E.self, database: \.table, key:…, value:…)`) — compiler-typed end to end: `E` names the environment, the `KeyPath` names the table on that type, and key/value/return types flow from the table's own generics. A call inside a boundary is lowered to `instance[keyPath: \.table].<op>(…, tx:)`; used outside a boundary it is a compile-time diagnostic.
+- **Composition is joining — and a join is a CHILD transaction.** `#MDB_transacted(callee(args))` is rewritten onto the callee's `_child` variant, which opens a child transaction of *this* boundary's current tx per environment: a joined **read threads this boundary's own transaction directly** (LMDB has no read-only children — pinned — so reads never spawn a child, and a `.readOnly` boundary is a composition leaf); a joined write **folds into the boundary** on success (durable when the boundary commits) and, if it fails, aborts **only the child** — a catching caller keeps its prior writes (selective rollback); an uncaught join failure still aborts the whole boundary (atomicity preserved). joins nest child-of-child at arbitrary depth. a *sibling* read — the last committed state, independent of this boundary — is a plain call `eventOn(day)` (for simple key reads, the verb-less `readCommitted(key:)` is the self-scoped spelling with no boundary call at all).
+- **THE JOIN / SIBLING RULE (deadlock warning):** a bare call to a `.readWrite` boundary inside a live boundary opens a SECOND write transaction, which BLOCKS on LMDB's writer mutex until the outer commits — and the outer can't commit while it blocks: a **DEADLOCK**. composition inside a boundary is spelled with `#MDB_transacted(...)`, always. a bare call to a `.readOnly` boundary inside a boundary is a safe *sibling read* (its own fresh read transaction, committed state only). **this rule is now a compile-time error** (the `@MDB_environment` write-composition lint rejects a bare same-type write-boundary call inside a boundary body — joined calls, sibling reads, and cross-environment callees are exempt).
+
+## Self-scoped committed reads
+
+For verification reads (tests, health checks) that just want "what is the last committed state", the typed handles carry self-scoped read members — each opens its own read-only transaction, performs the read, and closes it internally:
+
+```swift
+let v = try env.primary.readCommitted(key: key)          // -> Value? (nil when absent)
+let present = try env.primary.containsCommitted(key: key) // -> Bool
+let dups = try env.secondary.readCommittedDups(key: key)  // -> [Value] (dupsort)
+```
+
+these are NOT boundary verbs: a verb's contract is boundary participation, the opposite of a self-scoped verification read. they are protocol-extension members of `MDB_db`, so every handle — `Database`, `Database.Strict`, `Database.DupSort`, `Database.DupFixed` — inherits them with no manual `Transaction` ceremony.
+
+## Multi-environment boundaries
+
+The same boundary coordinates MORE than one environment — the other environments flow in as **typed parameters**:
+
+```swift
+public struct ClubCalendar: Sendable { … }   // @MDB_environment: events, invitees
+public struct ClubContacts: Sendable { … }    // @MDB_environment: lastSync
+
+extension ClubCalendar {
+    @MDB_transact(.readWrite)
+    public func scheduleAndMarkSync(_ event: EventID, on day: DayKey,
+                                    contact: ContactID, at timestamp: Timestamp,
+                                    contacts: ClubContacts) throws {
+        try #store(ClubCalendar.self, database: \.events, key: day, value: event)
+        try #store(ClubContacts.self, database: \.lastSync, key: contact, value: timestamp)
+    }
+}
+```
+
+one transaction per referenced environment, all aborted on any body throw (nothing lands), write members committed back-to-back. **honest ceiling:** cross-environment commits are best-effort — a crash between the adjacent commit calls can still split the pair. cross-env atomicity is impossible. (within ONE environment, joined writes are fully atomic — the single transaction.)
+
+## Transaction relationships
+
+- **joined** (via `#MDB_transacted`) — the callee runs on the caller's transaction: reads see the boundary's own uncommitted state; writes are atomic with the boundary.
+- **sibling** (a plain call) — the callee opens its own transaction: reads see the last committed state; sibling writes commit independently.
+- a `.readWrite` boundary's write composition is by joining, never by nesting a second write boundary call without a join — LMDB's writer mutex deadlocks on a second top-level write on one thread, and joining avoids it entirely.
+
+`@MDB_environment` forces `.noTLS` on every environment it opens: reader slots bind to the transaction object rather than the thread, which makes Swift's task-based concurrency safe and enables sibling reads.
+
+All macros expand to plain calls through the existing public API (`Environment`, `Transaction`, `Database.*`, `load(key:tx:)`, `store(key:value:tx:)`, `cursor(tx:_:)`). The raw bridge that backs these calls lives in the standalone `QuickLMDBFunctionalInterop` product, along with `LMDBError`: its public api surface is a layer of functions that take `consuming MDB_val` arguments over raw handles (`MDB_dbi`, pointer handles) — the handle-level `MDB_*_static` implementations are module-internal. The C wrapper layer itself (CLMDB) is untouched.
+
+The raw `Transaction` surface stays public for code that deliberately manages its own transactions.
+
+## Environment file names and configuration state
+
+`file:` is optional on `@MDB_environment`. Written, it is the environment's fixed on-disk name; omitted, the generated factory takes a **required** `fileName: String` parameter, resolved against the base path at open time — one type can own per-tenant files, and `version:` / `encryption:` compose with the supplied name.
+
+```swift
+@MDB_environment(flags: [.noSubDir], maxReaders: 32, maxDBs: 8)
+public struct Tenant: Sendable {
+    public let env: Environment
+    public let records: Database.Strict<SlotKey, SlotRecord>
+
+    @MDB_state public let log: Logger?   // environment configuration state
+}
+
+let tenant = try Tenant.open(at: "<data-path>", fileName: "tenant-a.mdb", log: nil)
+```
+
+`@MDB_state` declares configuration state ON the environment type: each marked stored property (`let`, explicit type annotation, no initializer — the generated parameter is required, so author defaults at the call site) becomes one required parameter on the generated `open`, in declaration order. The environment owns its own logger/tenant identity instead of a wrapper type owning it; state is invisible to boundaries and the verb vocabulary, and an unmarked extra stored property is a compile-time diagnostic naming the fix.
+
+## Encrypted environments (LMDB 1.0)
+
+QuickLMDB builds on the LMDB 1.0 engine, whose authenticated per-page encryption and optional per-page checksums are exposed through the same macro surface. Declare the providers on the environment type — the implementations are compile-time facts, the key is runtime data:
+
+```swift
+@MDB_environment(file: "vault.mdb", encryption: ChaChaPoly.self, checksum: Blake2.self)
+public struct Vault: Sendable {
+    public let env: Environment
+    public let records: Database.Strict<RecordKey, Record>
+}
+
+// the generated open now REQUIRES the key — an encrypted environment
+// cannot be opened keyless, enforced at compile time:
+let vault = try Vault.open(at: "<data-path>", encryptionKey: keyBytes)
+```
+
+- `ChaChaPoly` is an AEAD provider (ChaCha20-Poly1305 via rawdog's `RAW_chachapoly`); `Blake2` is an 8-byte BLAKE2b checksum provider (`RAW_blake2`). Both are protocol conformers — `MDB_crypto_impl` / `MDB_checksum_impl` — so custom providers are a protocol conformance away.
+- A checksum-only environment keeps the plain `open(at:mapHeadroom:)` signature — checksums need no key.
+- Encrypting an environment implicitly enables chunked remapping and the encrypt flag. Existing 0.9-format data files will not reopen on the 1.0 engine — migrate with `mdb_dump` → `mdb_load`.
+- The key is never stored or derived for you: supply the bytes at open time from your own secret storage.
+
+## Reconcile stores over any transport — the `concord` product
+
+`concord` is a typed, transport-agnostic [negentropy](https://github.com/hoytech/negentropy) reconciliation engine over QuickLMDB. It brings two stores with the same fixed-size-byte-key schema into agreement: range fingerprints (24-byte blake2s over mmap key bytes) skip matching regions, mismatches split and recurse, and the resulting have/need diff moves values **as bytes** — never decoded, never re-encoded.
+
+Three protocols and one engine:
+
+- **`ConcordIndex`** — the store contract: streaming key walks, `fingerprint(of:_:)` / `fingerprintAndAdvance(begin:count:end:)`, and the byte-passthrough pair `loadBytes(_:)` (a borrowed view over the mmap — zero copies out) / `storeBytes(_:_:)` (a verbatim write — one copy in). `Value` is a phantom schema marker, never instantiated.
+- **`ConcordTransport`** — the networking contract. Typed `ConcordMessage` values in both directions; concord ships no wire format, no framing, no implementation.
+- **`ConcordSession`** — the pure synchronous engine (initiate / reconcile / split / have/need diff / data transfer), raising a typed `ConcordError` for every malformed input, trapping on nothing.
+
+The driver binds one long-lived `Transaction<Write>` for the whole round — the round is simultaneously the full snapshot and the writable view, which is what makes zero copies possible — opens the database, cursor, and `ConcordLMDBIndex` with it, runs `runRound()`, then commits. Two lifecycle facts the driver owns:
+
+- the index (and its cursor) must be **released before the transaction commits** — closing a cursor after its transaction closed reads freed memory and can trap;
+- a round holds the environment's **writer lock** for its duration — schedule rounds (off-peak, spaced) to bound the writer stall.
+
+See the `concord` module documentation for the driver pattern and the copy accounting.
 
 ## Versioning
 
