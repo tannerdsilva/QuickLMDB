@@ -173,7 +173,14 @@ public final class ConcordLMDBIndex<Key:ConcordKey, Value:MDB_convertible>:Conco
 			if n == 0 {
 				return lhs.count == refPtr.count ? 0 : (lhs.count < refPtr.count ? -1 : 1)
 			}
-			let cmp = memcmp(lhs.baseAddress, refPtr.baseAddress, n)
+			guard let lhsBase = lhs.baseAddress, let refBase = refPtr.baseAddress else {
+				// unreachable while n >= 1: a nil base only accompanies a
+				// zero-length view, handled above. glibc imports memcmp's
+				// pointers as non-optional, so the unwrap must be explicit
+				// for the linux build.
+				return lhs.count == refPtr.count ? 0 : (lhs.count < refPtr.count ? -1 : 1)
+			}
+			let cmp = memcmp(lhsBase, refBase, n)
 			if cmp != 0 { return cmp }
 			return lhs.count == refPtr.count ? 0 : (lhs.count < refPtr.count ? -1 : 1)
 		}
