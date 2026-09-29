@@ -1,4 +1,4 @@
-# 16.0.0 (upcoming — the next tag and release)
+# 16.0.0
 
 NOTE ON HISTORY: the changelog previously carried `16.0.0`/`16.1.0` entries
 describing INTERMEDIATE working versions (`@MDB_app`/`@MDB_transact_span`, the
@@ -7,6 +7,9 @@ tagged or released. their surface is superseded by the typed-environment
 architecture documented below and is NOT in this release; those draft sections
 are removed so the version history matches what actually ships (the prior
 tagged release is 15.0.0).
+
+- **requires a Swift 6.3+ toolchain** (`swift-tools-version: 6.3`; the package
+  previously declared 6.2).
 
 - **runtime environment file names** (additive). `@MDB_environment` no longer
   requires `file:`: OMITTING it makes the generated factory take a REQUIRED
@@ -33,8 +36,8 @@ tagged release is 15.0.0).
 
 - **LMDB 1.0 encryption + checksums through the macro layer** (breaking — new
   engine + new surface). QuickLMDB now builds against CLMDB's LMDB 1.0.2 line
-  (branch pin `master`; the 1.0 tag has not been cut yet — tighten the range
-  once CLMDB 1.0.x is tagged), which is the only engine with `mdb_env_set_encrypt`,
+  (range `1.0.2`..<`2.0.0`; the `1.0.2` tag is pushed and matches
+  `Package.resolved`), which is the only engine with `mdb_env_set_encrypt`,
   per-page checksums, and authenticated encryption. the lift of the hacklash
   `MDB_crypto_impl` / `MDB_checksum_impl` design:
   - `MDB_crypto_impl` / `ChaChaPoly` — public protocol + a ChaCha20-Poly1305
@@ -145,7 +148,10 @@ tagged release is 15.0.0).
   - **`@MDB_layout`** — the multi-environment ARRANGEMENT helper: opens N
     `@MDB_environment` types at `<base>/<name>` in one call plus a
     `mdb_environment_names` inventory. no per-environment factories, no statics, no baked
-    path.
+    path. members must be fixed-name, stateless, unencrypted environments (the
+    generated arrangement open passes only `at:` and `mapHeadroom:`); a member
+    whose own `open` requires more fails as a missing-argument error at the
+    generated line.
   - `@MDB_environment(file:flags:maxReaders:maxDBs:mode:)` and
     `@MDB_table(name:flags:)` unchanged in role (schema assembly + per-table
     declaration); `version:` on `@MDB_environment` derives
@@ -153,15 +159,6 @@ tagged release is 15.0.0).
   - the prior `environments:` attribute form, the `#MDB_entry_load`/
     `#MDB_entry_store` trailing verbs, the provider-style container, and
     per-environment `Root` shells are REMOVED by this change.
-- **`@MDB_environment`'s generated `open(at:)` loses its `fileName:`
-  override** (breaking). the factory's file name comes from the `file:`
-  attribute (plus the optional `version:` suffix) only; runtime-parameterized
-  file names are the consumer's own `open(at:)` over a hand-rolled
-  `MDB_environment` conformance. the `fileName:` surface was built for a
-  pricedb plan whose end-state did not use it.
-- **the raw typed `Database.deleteEntry(key:tx:)` convenience is removed**
-  (breaking). no consumer used it (typed metadata tables delete through
-  `#delete`). the typed raw `setEntry`/`loadEntry` surfaces remain.
 - **`#cursor`'s emitted call never requires a CONDITIONAL `try`.** the
   trailing closure is lowered with an explicit `throws` annotation when the
   authored site carries `try` (the recommended spelling) or when the closure
